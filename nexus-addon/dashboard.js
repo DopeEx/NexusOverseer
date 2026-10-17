@@ -24,6 +24,8 @@ import { initPiratesTab, renderPirateStatsTab, renderPiratesTab, runPirateAutoma
 import { getEventBreakdownForMode, getResourcesLostForMode, getSeriesForMode, getTotalsForMode, populateEventOptions, renderByEventChart, renderCollected, renderEventsChart, renderLost, renderResourceChart, renderTable, setCurrentPage } from './tabs/surveys.js';
 import { renderTechTreeTab } from './tabs/techtree.js';
 import { initDashboardTab } from './tabs/dashboard.js';
+import { initOptionsTab } from './tabs/options.js';
+import { getSetting, loadSettings } from './settings.js';
 
 export async function loadAll() {
   const activeServer = await globalThis.nexusStorage?.getActiveServer?.() || { key: 's0' };
@@ -86,9 +88,9 @@ async function populateServerOptions(select, activeServer) {
   }
 }
 
-// Archived record counts + rough storage size, shown in the footer.
+// Archived record counts + rough storage size, shown in Options > Data.
 export async function updateStorageFooter() {
-  const el = document.getElementById('storage-footer');
+  const el = document.getElementById('storage-info');
   if (!el) return;
   const all = await browser.storage.local.get(null);
   const idx = all.archive_index || {};
@@ -101,7 +103,7 @@ export async function updateStorageFooter() {
   try { bytes = JSON.stringify(all).length; } catch { /* ignore */ }
   const size = bytes > 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.round(bytes / 1024)} KB`;
   const backup = all.last_backup ? new Date(all.last_backup).toLocaleDateString() : 'never';
-  el.textContent = `${reports.toLocaleString()} reports archived · ~${size} stored · last auto-backup: ${backup}`;
+  el.textContent = `${reports.toLocaleString()} reports archived · ~${size} stored · last backup: ${backup}`;
 }
 
 export function updateStatus(lastScrape, lastError) {
@@ -118,7 +120,7 @@ export function updateStatus(lastScrape, lastError) {
   if (store.stats_drift) {
     const warn = appendStatusText(
       el,
-      '⚠ Stats drift detected — click "Rebuild stats".',
+      '⚠ Stats drift detected — use Options > Data > Rebuild stats.',
       'warning',
     );
     if (warn) warn.style.marginLeft = '10px';
@@ -143,6 +145,11 @@ export function updateStatus(lastScrape, lastError) {
 export function renderAll() {
   if (activeTab === 'dashboard') {
     initDashboardTab();
+    return;
+  }
+  if (activeTab === 'options') {
+    initOptionsTab();
+    void updateStorageFooter();
     return;
   }
   if (activeTab === 'global' || activeTab === 'statistics') {
@@ -238,6 +245,7 @@ export function renderAll() {
 
 export const TAB_CONTENT = {
   dashboard: 'dashboard-content',
+  options: 'options-content',
   global: 'global-content',
   surveys: 'main-content',
   pirates: 'pirates-content',
@@ -262,7 +270,7 @@ export const TAB_CONTENT = {
 const EXPERT_MODE_KEY = 'expert_mode_enabled';
 const EXPERT_TABS = new Set(['scouting', 'expeditions', 'xeno']);
 const HIDE_GLOBAL_CONTROLS_TABS = new Set([
-  'dashboard', 'pirates', 'finder', 'asteroids', 'fleets', 'scouting', 'techtree', 'market', 'simulator', 'xeno',
+  'dashboard', 'options', 'pirates', 'finder', 'asteroids', 'fleets', 'scouting', 'techtree', 'market', 'simulator', 'xeno',
 ]);
 let expertModeEnabled = false;
 
@@ -452,14 +460,16 @@ document.getElementById('window-to').addEventListener('change', onViewChange);
 document.getElementById('event-select').addEventListener('change', () => { setCurrentPage(1); renderAll(); });
 
 document.getElementById('btn-reset').addEventListener('click', async function () {
-  if (!confirm('Drop all recorded data? A backup is written to Downloads/NexusOverseer first.')) return;
+  if (!confirm('Delete all recorded stats and reports? Your options are kept. A backup is written to Downloads/NexusOverseer first.')) return;
   await browser.runtime.sendMessage({ type: 'BACKUP_NOW', reason: 'pre-reset' });
   const recordsCap = globalThis.nexusStorage?.get ? (await globalThis.nexusStorage.get('records_cap')).records_cap : undefined;
+  const settings = await globalThis.nexusStorage?.getSettings?.();
   if (globalThis.nexusStorage?.clearAllStorage) {
     await globalThis.nexusStorage.clearAllStorage();
   } else {
     await browser.storage.local.clear();
   }
+  if (settings && Object.keys(settings).length) await globalThis.nexusStorage.setSettings(settings);
   if (recordsCap !== undefined) {
     await browser.storage.local.set({ records_cap: recordsCap });
   }
@@ -489,6 +499,35 @@ document.getElementById('btn-save-cap').addEventListener('click', async function
 });
 
 // ── Rebuild aggregates ─────────────────────────────────────────────────────
+
+document.getElementById('btn-backup-now').addEventListener('click', async function () {
+  this.disabled = true;
+  try {
+    const res = await browser.runtime.sendMessage({ type: 'BACKUP_NOW', reason: 'manual' });
+    if (res?.error) throw new Error(res.error);
+    this.textContent = 'Saved ✓';
+    void updateStorageFooter();
+  } catch {
+    this.textContent = 'Error';
+  } finally {
+    setTimeout(() => { this.disabled = false; this.textContent = 'Back up now'; }, 2000);
+  }
+});
+
+document.getElementById('btn-purge').addEventListener('click', async function () {
+  if (!await confirmDialog('Delete archived reports older than 3 days?\n\nTotals are kept. A backup is written to Downloads/NexusOverseer first.')) return;
+  this.disabled = true;
+  try {
+    await browser.runtime.sendMessage({ type: 'BACKUP_NOW', reason: 'pre-purge' });
+    await browser.runtime.sendMessage({ type: 'PURGE_OLD', days: 3 });
+    await loadAll();
+    this.textContent = 'Purged ✓';
+  } catch {
+    this.textContent = 'Error';
+  } finally {
+    setTimeout(() => { this.disabled = false; this.textContent = 'Purge old reports'; }, 2000);
+  }
+});
 
 document.getElementById('btn-rebuild').addEventListener('click', async function () {
   const s = await browser.storage.local.get([
@@ -645,10 +684,13 @@ registerAutomationTask('expeditions', () => {
   if (expertModeEnabled) return runExpeditionAutomations();
 });
 initExpertModeToggle()
+  .then(() => loadSettings())
   .then(() => initHumanVerificationBanner())
   .then(() => loadAll())
   .then(() => {
     openHashTab();
+    const startTab = getSetting('general.defaultTab');
+    if (!location.hash && startTab !== 'dashboard') document.querySelector(`.main-tab[data-tab="${startTab}"]`)?.click();
     startAutomationScheduler();
     void initExpeditionsTab().catch(error => {
       console.error('[NexusOverseer] Could not initialize expedition automations:', error);

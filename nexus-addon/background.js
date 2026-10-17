@@ -8,7 +8,7 @@ let GAME_ORIGIN = 'https://s0.nexuslegacy.space/';
 
 const UNIVERSE_FALLBACK = [
   { key: 's0', name: 'S0' },
-  { key: 'nf', name: 'New Frontier' },
+  { key: 'beta', name: 'Beta' },
 ];
 const UNIVERSE_CACHE_MAX_AGE = 6 * 60 * 60 * 1000;
 
@@ -1064,6 +1064,7 @@ async function getDashboardOverview({ polite = true } = {}) {
         name: mo.name || `Moon #${mid}`,
         systemName: (planets.find(x => x.id === mo.planetId) || {}).systemName || null,
         isMoon: true,
+        parentPlanetId: mo.planetId ?? null,
         planetType: mo.moonType || mo.type || null,
         population: null,
         maxPopulation: null,
@@ -2885,7 +2886,7 @@ async function rebuildAggregates() {
 // scraping runs, and before every destructive operation (reset, import,
 // schema-fallback wipe). Same format as the manual dashboard export.
 
-const BACKUP_INTERVAL_MS = 7 * 24 * 3600 * 1000;
+const BACKUP_INTERVALS_MS = { daily: 24 * 3600 * 1000, weekly: 7 * 24 * 3600 * 1000 };
 
 async function backupToDownloads(reason) {
   const data = globalThis.nexusStorage?.exportFullStorage ? await globalThis.nexusStorage.exportFullStorage() : await browser.storage.local.get(null);
@@ -2910,8 +2911,11 @@ async function backupToDownloads(reason) {
 }
 
 async function maybeAutoBackup() {
+  const settings = await globalThis.nexusStorage?.getSettings?.() || {};
+  const interval = BACKUP_INTERVALS_MS[settings['data.autoBackup'] || 'weekly'];
+  if (!interval) return;
   const { last_backup } = await browser.storage.local.get('last_backup');
-  if (last_backup && Date.now() - new Date(last_backup).getTime() < BACKUP_INTERVAL_MS) return;
+  if (last_backup && Date.now() - new Date(last_backup).getTime() < interval) return;
   try {
     await backupToDownloads('auto');
   } catch (err) {

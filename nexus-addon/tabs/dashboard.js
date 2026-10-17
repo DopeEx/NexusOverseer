@@ -5,9 +5,9 @@
 // and whenever a countdown reaches zero.
 
 import { fmt } from '../common.js';
+import { getSetting, onSettingsChange } from '../settings.js';
 import { AUTOMATIONS } from '../human-verification.js';
 
-const REFRESH_MS = 60000;
 const CLASS_COLORS = { combat: '#ff7b72', utility: '#58a6ff', civilian: '#e3b341', recon: '#56d364', special: '#bc8cff', other: '#6e7681' };
 const RES_KEYS = [
   ['ore', 'Ore', 'ore'], ['silicates', 'Silicates', 'silicates'],
@@ -178,16 +178,17 @@ function missionsCard(d) {
 
 function storageWarnings(d) {
   const out = [];
+  const limit = getSetting('dashboard.storageThreshold') / 100;
   for (const p of [...d.planets, ...(d.moons || [])]) {
     const near = [];
     for (const [key, label] of RES_KEYS) {
       const cap = p.resources[`${key}Storage`];
-      if (cap && p.resources[key] >= cap * 0.9) near.push([label, p.resources[key], cap]);
+      if (cap && p.resources[key] >= cap * limit) near.push([label, p.resources[key], cap]);
     }
     const rareCap = p.resources.rareStorage;
     if (rareCap) {
       for (const [key, label] of RARE_KEYS) {
-        if (p.resources[key] >= rareCap * 0.9) near.push([label, p.resources[key], rareCap]);
+        if (p.resources[key] >= rareCap * limit) near.push([label, p.resources[key], rareCap]);
       }
     }
     for (const [label, have, cap] of near) {
@@ -199,22 +200,23 @@ function storageWarnings(d) {
 
 // Things that may need the player's action; an entry only appears when it applies.
 function attentionItems(d) {
+  const on = key => getSetting(`dashboard.attention.${key}`);
   const items = [];
   const busyLabs = new Set(d.research.map(r => r.planetId));
-  const idleLabs = d.planets.filter(p => p.hasLab && !busyLabs.has(p.id));
+  const idleLabs = on('labs') ? d.planets.filter(p => p.hasLab && !busyLabs.has(p.id)) : [];
   if (idleLabs.length) {
     items.push({ level: 'warn', text: `${idleLabs.length} research lab${idleLabs.length > 1 ? 's' : ''} idle`, tip: idleLabs.map(p => p.name) });
   }
-  const noBuild = d.planets.filter(p => p.queueMax != null && !p.construction.length);
+  const noBuild = on('construction') ? d.planets.filter(p => p.queueMax != null && !p.construction.length) : [];
   if (noBuild.length) {
     items.push({ level: 'warn', text: `${noBuild.length} planet${noBuild.length > 1 ? 's' : ''} without construction`, tip: noBuild.map(p => p.name) });
   }
-  const full = storageWarnings(d);
+  const full = getSetting('dashboard.attention.storage') ? storageWarnings(d) : [];
   if (full.length) {
     const places = new Set(full.map(f => f.name)).size;
-    items.push({ level: 'error', text: `Storage almost full on ${places} location${places > 1 ? 's' : ''}`, tip: full.map(f => `${f.name} � ${f.text}`) });
+    items.push({ level: 'error', text: `Storage almost full on ${places} location${places > 1 ? 's' : ''}`, tip: full.map(f => `${f.name} - ${f.text}`) });
   }
-  const hurt = [...d.planets, ...(d.moons || [])].filter(p => p.damaged?.length);
+  const hurt = on('damaged') ? [...d.planets, ...(d.moons || [])].filter(p => p.damaged?.length) : [];
   if (hurt.length) {
     const count = hurt.reduce((s, p) => s + p.damaged.reduce((n, x) => n + x.quantity, 0), 0);
     items.push({
@@ -223,12 +225,26 @@ function attentionItems(d) {
       tip: hurt.flatMap(p => p.damaged.map(x => `${p.name}${p.isMoon ? ' (moon)' : ''} · ${x.quantity}× ${x.name}`)),
     });
   }
-  if (d.commander?.missingHull > 0) {
+  if (on('commandRepair') && d.commander?.missingHull > 0) {
     const c = d.commander;
     items.push({ level: 'warn', text: 'Command ship needs repair', tip: [`${c.callsign || 'Command ship'}: ${fmt(c.missingHull)} / ${fmt(c.maxHull)} hull missing`] });
   }
-  if (d.commander?.talentPoints) {
-    items.push({ level: 'warn', text: `${d.commander.talentPoints} unspent talent point${d.commander.talentPoints > 1 ? 's' : ''}`, tip: [d.commander.callsign].filter(Boolean) });
+  if (on('talents') && d.commander?.talentPoints) {
+    items.push({ level: 'warn', text: `${d.commander.talentPoints} unspent command ship talent point${d.commander.talentPoints > 1 ? 's' : ''}`, tip: [d.commander.callsign].filter(Boolean) });
+  }
+  const idleYards = on('shipyards')
+    ? [...d.planets, ...(d.moons || [])].filter(p => (p.shipYards || []).some(y => y.exists && !y.items.length))
+    : [];
+  if (idleYards.length) {
+    items.push({ level: 'warn', text: `${idleYards.length} shipyard location${idleYards.length > 1 ? 's' : ''} idle`, tip: idleYards.map(p => `${p.name}${p.isMoon ? ' (moon)' : ''}`) });
+  }
+  if (on('fleetSlots') && d.maxFleetSlots && d.missions.length < d.maxFleetSlots) {
+    const free = d.maxFleetSlots - d.missions.length;
+    items.push({ level: 'warn', text: `${free} free fleet slot${free > 1 ? 's' : ''}`, tip: [`${d.missions.length} / ${d.maxFleetSlots} in use`] });
+  }
+  if (on('colonySlots') && d.slots) {
+    if (d.slots.colonies > d.planets.length) items.push({ level: 'warn', text: 'Free colony slot', tip: [`${d.planets.length} / ${d.slots.colonies}`] });
+    if (d.slots.moons > (d.moons?.length || 0)) items.push({ level: 'warn', text: 'Free moon slot', tip: [`${d.moons?.length || 0} / ${d.slots.moons}`] });
   }
   return items;
 }
@@ -238,6 +254,14 @@ function attentionCard(d) {
   if (!items.length) return null;
   const card = section('Needs attention');
   card.classList.add('ov-attention');
+  const gear = el('button', 'ov-gear', '⚙');
+  gear.type = 'button';
+  gear.title = 'Choose which hints are shown';
+  gear.addEventListener('click', () => {
+    globalThis.nexusOptionsSection = 'dashboard';
+    document.querySelector('.main-tab[data-tab="options"]')?.click();
+  });
+  card.appendChild(gear);
   const chips = el('div', 'ov-chips');
   for (const it of items) {
     const chip = el('span', `ov-chip ${it.level === 'error' ? 'bad' : 'warn'}`, it.text);
@@ -467,6 +491,16 @@ function syncAutomations() {
   }
 }
 
+// Moons go last, or directly behind their planet (moons without a known parent stay last).
+function cardOrder(d) {
+  const moons = getSetting('dashboard.show.moons') ? d.moons || [] : [];
+  if (!getSetting('dashboard.moonsAfterPlanet')) return [...d.planets, ...moons];
+  const ids = new Set(d.planets.map(p => p.id));
+  const out = [];
+  for (const p of d.planets) out.push(p, ...moons.filter(m => m.parentPlanetId === p.id));
+  return [...out, ...moons.filter(m => !ids.has(m.parentPlanetId))];
+}
+
 function render() {
   const host = root();
   if (!host) return;
@@ -489,13 +523,14 @@ function render() {
   }
 
   host.appendChild(totalsPanel(data));
-  host.appendChild(empireStrip(data));
+  if (getSetting('dashboard.show.empire')) host.appendChild(empireStrip(data));
   const attention = attentionCard(data);
   if (attention) host.appendChild(attention);
-  host.appendChild(missionsCard(data));
+  if (getSetting('dashboard.show.missions')) host.appendChild(missionsCard(data));
 
   const grid = el('div', 'ov-planets');
-  for (const p of [...data.planets, ...(data.moons || [])]) grid.appendChild(planetCard(p, data.research));
+  const places = cardOrder(data);
+  for (const p of places) grid.appendChild(planetCard(p, data.research));
   host.appendChild(grid);
 }
 
@@ -511,7 +546,7 @@ async function load(polite = true) {
     data = { error: err.message };
   }
   loading = false;
-  refreshAt = Date.now() + REFRESH_MS;
+  refreshAt = Date.now() + getSetting('dashboard.refreshSeconds') * 1000;
   render();
 }
 
@@ -529,6 +564,7 @@ function tick() {
 export function initDashboardTab() {
   if (!started) {
     started = true;
+    onSettingsChange(() => { if (data) render(); });
     render();
     setInterval(tick, 1000);
     load();

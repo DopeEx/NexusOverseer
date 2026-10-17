@@ -29,7 +29,7 @@ FILES = [
     'CHANGELOG.md',
     'background-sw.js', 'server-storage.js', 'server-switch.js', 'background.js', 'sidebar-inject.js',
     'galaxy-fetch-hook.js', 'game-api-bridge.js', 'galaxy-fields.js', 'empire-view.js', 'guide-view.js', 'logistics-view.js', 'upgrade-queue.js', 'building-upgrade.js', 'tech-upgrade.js', 'ship-upgrade.js',
-    'dashboard.html', 'dashboard.css', 'dashboard.js', 'automation-scheduler.js', 'common.js', 'pirate-planner.js', 'pirate-plan-cache.js',
+    'dashboard.html', 'dashboard.css', 'dashboard.js', 'automation-scheduler.js', 'common.js', 'settings.js', 'tabs/options.js', 'pirate-planner.js', 'pirate-plan-cache.js',
     'tabs/global.js', 'tabs/dashboard.js', 'tabs/surveys.js', 'tabs/pirates.js', 'tabs/mining.js',
     'tabs/battles.js', 'tabs/debris.js', 'tabs/expeditions.js', 'tabs/wormholes.js', 'tabs/finder.js', 'tabs/asteroids.js', 'tabs/fleets.js', 'tabs/scouting.js', 'tabs/xeno.js', 'tabs/market.js', 'tabs/techtree.js',
     'simulator.html', 'simulator.css', 'simulator.js',

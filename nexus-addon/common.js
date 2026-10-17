@@ -1,6 +1,8 @@
 // Shared state and helpers used by every dashboard tab.
 // Loaded first — all other dashboard scripts depend on it.
 
+import { getSetting } from './settings.js';
+
 export let store = {};   // full storage snapshot
 export function setStore(s) { store = s; }   // setter: other modules can't reassign an import
 
@@ -709,7 +711,13 @@ export function rememberSelection(id, value) {
 
 // Whole numbers only: amounts are never fractional for the player, but the API returns fractions.
 export function fmt(n) {
-  return n == null ? '0' : Math.round(Number(n) || 0).toLocaleString();
+  if (n == null) return '0';
+  const v = Math.round(Number(n) || 0);
+  const format = getSetting('general.numberFormat');
+  if (format === 'compact') {
+    return new Intl.NumberFormat('de-DE', { notation: 'compact', maximumFractionDigits: 1 }).format(v);
+  }
+  return v.toLocaleString(format === 'en' ? 'en-US' : 'de-DE');
 }
 
 // ── In-flight mission progress bars ─────────────────────────────────────────
