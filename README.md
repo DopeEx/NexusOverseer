@@ -16,7 +16,7 @@ Browser extension (Firefox and Chrome) for [Nexus Legacy](https://nexuslegacy.sp
 - **Logistics (Quartermaster)**: resource transfers and outpost collections with selectable transport ships.
 - **Combat Simulator**: uses the game's official combat calculator.
 - **Multiple universes**: data is kept separately for each universe.
-- **Backups**: JSON export and import of your data.
+- **Backups**: JSON export and import of your data and options (Options > Data).
 
 ## How it works
 

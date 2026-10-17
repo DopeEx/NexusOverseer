@@ -53,7 +53,7 @@ const SECTIONS = [
     ['Live Search Belts', 'Start/stop the background asteroid live-search and view its latest matches, with per-row fuel and a one-click mine.'],
   ]],
   ['Good to know', [
-    ['Stats drift', 'If a "Stats drift detected" banner appears, click Rebuild stats once: it recomputes aggregates from the stored records.'],
+    ['Stats drift', 'If a "Stats drift detected" banner appears, click Options > Data > Rebuild stats once: it recomputes aggregates from the stored records.'],
     ['Confirmations', 'Every fleet launch asks for confirmation and shows the exact ships being sent.'],
   ]],
 ];

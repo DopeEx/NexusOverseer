@@ -64,8 +64,8 @@ The extension reads game data and sends state-changing requests only when you us
 
 Data accumulates in local storage as long as the extension is installed. You can:
 
-- **Export** a full JSON backup at any time from the dashboard.
-- **Reset** all stored data from the dashboard (a backup is created first).
+- **Export** a full JSON backup at any time under Options > Data in the dashboard.
+- **Reset** your recorded stats and reports under Options > Data (a backup is created first; your options are kept).
 - **Uninstall** the extension — the browser removes all `storage.local` data on uninstall.
 
 Backup files in your Downloads folder are not deleted automatically; you can delete them manually at any time.
