@@ -40,11 +40,12 @@ test('server storage isolates NX-S0 from NX-NF', async () => {
   });
   assert.deepEqual(globalThis.nexusStorage.serverFromUrl('https://nf.nexuslegacy.space/galaxy'), {
     key: 'nf',
-    id: 'NX-NF',
-    name: 'New Frontier',
+    id: 'NF',
+    name: 'NF',
     hostname: 'nf.nexuslegacy.space',
     origin: 'https://nf.nexuslegacy.space',
   });
+  assert.equal(globalThis.nexusStorage.servers.beta.id, 'NX-BETA');
 
   await globalThis.nexusStorage.setActiveServer('s0');
   await globalThis.browser.storage.local.set({ foo: 's0' });
@@ -61,13 +62,13 @@ test('server storage accepts catalog universes without changing the selected uni
   const store = makeBrowserStub();
   await uniqueImport('../nexus-addon/server-storage.js');
 
-  await globalThis.nexusStorage.setUniverseCatalog([{ key: 'beta', name: 'Beta' }]);
-  assert.deepEqual(globalThis.nexusStorage.serverFromUrl('https://beta.nexuslegacy.space/'), {
-    key: 'beta',
-    id: 'BETA',
-    name: 'Beta',
-    hostname: 'beta.nexuslegacy.space',
-    origin: 'https://beta.nexuslegacy.space',
+  await globalThis.nexusStorage.setUniverseCatalog([{ key: 'gamma', name: 'Gamma' }]);
+  assert.deepEqual(globalThis.nexusStorage.serverFromUrl('https://gamma.nexuslegacy.space/'), {
+    key: 'gamma',
+    id: 'GAMMA',
+    name: 'Gamma',
+    hostname: 'gamma.nexuslegacy.space',
+    origin: 'https://gamma.nexuslegacy.space',
   });
 
   await globalThis.nexusStorage.setActiveServer('nf');
