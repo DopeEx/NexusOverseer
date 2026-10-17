@@ -3,7 +3,7 @@
 // Nexus Accounting used to have one implicit universe (Season 0), so every
 // value lived at an unprefixed storage key. The adapter keeps the existing API
 // while prefixing keys with the selected universe. That prevents report ids,
-// planet caches and preferences from leaking between NX-S0 and NX-NF.
+// planet caches and preferences from leaking between universes.
 (function initNexusServerStorage() {
   'use strict';
 
@@ -12,6 +12,8 @@
   const ACTIVE_SERVER_KEY = 'nexus_active_server';
   const MIGRATION_KEY = 'nexus_server_storage_v1';
   const UNIVERSE_CATALOG_KEY = 'nexus_universe_catalog';
+  // Addon preferences are shared by all universes, so they live outside the server prefix.
+  const SETTINGS_KEY = 'nexus_settings';
   const PREFIX = 'nexus_server:';
   const SERVERS = Object.freeze({
     s0: Object.freeze({
@@ -21,12 +23,12 @@
       hostname: 's0.nexuslegacy.space',
       origin: 'https://s0.nexuslegacy.space',
     }),
-    nf: Object.freeze({
-      key: 'nf',
-      id: 'NX-NF',
-      name: 'New Frontier',
-      hostname: 'nf.nexuslegacy.space',
-      origin: 'https://nf.nexuslegacy.space',
+    beta: Object.freeze({
+      key: 'beta',
+      id: 'NX-BETA',
+      name: 'Beta',
+      hostname: 'beta.nexuslegacy.space',
+      origin: 'https://beta.nexuslegacy.space',
     }),
   });
   let universeCatalog = [];
@@ -217,7 +219,19 @@
 
   function isInternalKey(key) {
     return key === ACTIVE_SERVER_KEY || key === MIGRATION_KEY ||
-      key === UNIVERSE_CATALOG_KEY || key.startsWith(PREFIX);
+      key === UNIVERSE_CATALOG_KEY || key === SETTINGS_KEY || key.startsWith(PREFIX);
+  }
+
+  async function getSettings() {
+    await ensureMigrated();
+    const stored = await rawStorage().get(SETTINGS_KEY);
+    const value = stored[SETTINGS_KEY];
+    return value && typeof value === 'object' && !Array.isArray(value) ? { ...value } : {};
+  }
+
+  async function setSettings(values) {
+    await ensureMigrated();
+    await rawStorage().set({ [SETTINGS_KEY]: values });
   }
 
   async function ensureMigrated() {
@@ -336,7 +350,7 @@
           const forwarded = {};
           const scoped = {};
           for (const [key, change] of Object.entries(changes)) {
-            if (key === ACTIVE_SERVER_KEY || key === MIGRATION_KEY) {
+            if (key === ACTIVE_SERVER_KEY || key === MIGRATION_KEY || key === SETTINGS_KEY) {
               forwarded[key] = change;
             } else if (key.startsWith(prefix)) {
               scoped[key.slice(prefix.length)] = change;
@@ -392,6 +406,8 @@
     exportFullStorage,
     restoreFullStorage,
     clearAllStorage,
+    getSettings,
+    setSettings,
     onChanged,
     servers: SERVERS,
     getActiveServer,

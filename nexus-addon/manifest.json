@@ -19,7 +19,6 @@
   "host_permissions": [
     "https://*.nexuslegacy.space/*",
     "https://s0.nexuslegacy.space/*",
-    "https://nf.nexuslegacy.space/*",
     "https://nexuslegacy.space/*"
   ],
   "background": {
@@ -34,53 +33,53 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://s0.nexuslegacy.space/*", "https://nf.nexuslegacy.space/*", "https://*.nexuslegacy.space/*"],
+      "matches": ["https://s0.nexuslegacy.space/*", "https://*.nexuslegacy.space/*"],
       "js": ["server-storage.js", "sidebar-inject.js"],
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://s0.nexuslegacy.space/*", "https://nf.nexuslegacy.space/*", "https://*.nexuslegacy.space/*"],
+      "matches": ["https://s0.nexuslegacy.space/*", "https://*.nexuslegacy.space/*"],
       "js": ["server-storage.js", "galaxy-fetch-hook.js"],
       "run_at": "document_start",
       "world": "MAIN"
     },
     {
-      "matches": ["https://s0.nexuslegacy.space/*", "https://nf.nexuslegacy.space/*", "https://*.nexuslegacy.space/*"],
+      "matches": ["https://s0.nexuslegacy.space/*", "https://*.nexuslegacy.space/*"],
       "js": ["server-storage.js", "galaxy-fields.js"],
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://s0.nexuslegacy.space/*", "https://nf.nexuslegacy.space/*", "https://*.nexuslegacy.space/*"],
+      "matches": ["https://s0.nexuslegacy.space/*", "https://*.nexuslegacy.space/*"],
       "js": ["server-storage.js", "empire-view.js"],
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://s0.nexuslegacy.space/*", "https://nf.nexuslegacy.space/*", "https://*.nexuslegacy.space/*"],
+      "matches": ["https://s0.nexuslegacy.space/*", "https://*.nexuslegacy.space/*"],
       "js": ["server-storage.js", "guide-view.js"],
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://s0.nexuslegacy.space/*", "https://nf.nexuslegacy.space/*", "https://*.nexuslegacy.space/*"],
+      "matches": ["https://s0.nexuslegacy.space/*", "https://*.nexuslegacy.space/*"],
       "js": ["server-storage.js", "logistics-view.js"],
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://s0.nexuslegacy.space/*", "https://nf.nexuslegacy.space/*", "https://*.nexuslegacy.space/*"],
+      "matches": ["https://s0.nexuslegacy.space/*", "https://*.nexuslegacy.space/*"],
       "js": ["server-storage.js", "upgrade-queue.js"],
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://s0.nexuslegacy.space/*", "https://nf.nexuslegacy.space/*", "https://*.nexuslegacy.space/*"],
+      "matches": ["https://s0.nexuslegacy.space/*", "https://*.nexuslegacy.space/*"],
       "js": ["server-storage.js", "building-upgrade.js"],
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://s0.nexuslegacy.space/*", "https://nf.nexuslegacy.space/*", "https://*.nexuslegacy.space/*"],
+      "matches": ["https://s0.nexuslegacy.space/*", "https://*.nexuslegacy.space/*"],
       "js": ["server-storage.js", "tech-upgrade.js"],
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://s0.nexuslegacy.space/*", "https://nf.nexuslegacy.space/*", "https://*.nexuslegacy.space/*"],
+      "matches": ["https://s0.nexuslegacy.space/*", "https://*.nexuslegacy.space/*"],
       "js": ["server-storage.js", "ship-upgrade.js"],
       "run_at": "document_idle"
     }
@@ -96,7 +95,6 @@
       ],
       "matches": [
         "https://s0.nexuslegacy.space/*",
-        "https://nf.nexuslegacy.space/*",
         "https://*.nexuslegacy.space/*",
         "https://nexuslegacy.space/*"
       ]

@@ -6,7 +6,16 @@
   <link rel="stylesheet" href="dashboard.css" />
 </head>
 <body>
-  <h1>Nexus Overseer</h1>
+  <div class="app-header">
+    <h1>Nexus Overseer</h1>
+    <label class="status-server-field">
+      Server
+      <select id="server-select" class="status-server-select" title="Select the Nexus Legacy server whose data the addon shows. It follows your active game tab automatically.">
+        <option value="s0">NX-S0</option>
+        <option value="beta">NX-BETA</option>
+      </select>
+    </label>
+  </div>
   <button id="expert-toggle" type="button" aria-label="Toggle expert mode"></button>
 
   <nav class="tabs">
@@ -16,12 +25,12 @@
     <button class="tab main-tab" data-tab="asteroids">Asteroids</button>
     <button class="tab main-tab expert-only" data-tab="expeditions">Expeditions</button>
     <button class="tab main-tab" data-tab="pirates">Pirates</button>
-    <button class="tab main-tab expert-only" data-tab="xeno">Xeno</button>
     <button class="tab main-tab" data-tab="fleets">Fleets</button>
     <button class="tab main-tab" data-tab="finder">Galaxy Scout</button>
     <button class="tab main-tab" data-tab="market">Market</button>
     <button class="tab main-tab" data-tab="techtree">Tech Tree</button>
     <button class="tab main-tab" data-tab="simulator">Simulator</button>
+    <button class="tab main-tab" data-tab="options" title="Options" aria-label="Options"></button>
   </nav>
 
   <div id="hv-banner" class="hv-banner" role="alert"></div>
@@ -41,19 +50,7 @@
   <div class="status-bar">
     <span id="status-text">Loading…</span>
     <span id="status-alarm-text" class="status-alarm-hidden"></span>
-    <label class="status-server-field">
-      Server
-      <select id="server-select" class="status-server-select" title="Select the Nexus Legacy server whose storage and scrapes should be used.">
-        <option value="s0">NX-S0</option>
-        <option value="nf">NX-NF</option>
-      </select>
-    </label>
     <button id="btn-scrape">Scrape Now</button>
-    <button id="btn-reset" class="status-danger-button">Reset all data</button>
-    <button id="btn-rebuild" title="Recompute all aggregated stats from the stored report records — repairs drift after partial failures.">Rebuild stats</button>
-    <button id="btn-export">Export JSON</button>
-    <button id="btn-import">Import JSON</button>
-    <input id="import-file" type="file" accept=".json,application/json" style="display:none;" />
   </div>
 
   <div id="simulator-content" style="display:none;">
@@ -94,21 +91,106 @@
       <option value="unknown">Unknown</option>
       </select>
     </label>
-    <div class="toolbar-records-cap">
-      <div class="toolbar-records-label">
-        <span class="toolbar-label">Records cap</span>
-        <span title="Maximum number of individual survey reports stored locally. Older records are dropped when the limit is reached. Set to 0 for unlimited storage."
-          class="toolbar-info-mark">i</span>
-      </div>
-      <div class="toolbar-records-controls">
-        <input id="records-cap" class="toolbar-input toolbar-cap-input" type="text" value="5000" />
-        <span id="cap-warning" class="toolbar-warning">Must be a whole number >= 0</span>
-        <button id="btn-save-cap" class="toolbar-button secondary-button">Save</button>
-      </div>
-    </div>
   </div>
 
   <div id="dashboard-content" class="global-dashboard"></div>
+
+  <div id="options-content" class="global-dashboard" style="display:none;">
+    <section class="dashboard-panel opt-panel" id="opt-dashboard">
+      <div class="opt-head">
+        <div class="section-label dashboard-section-label">Dashboard</div>
+        <button class="opt-link" type="button" data-reset-prefix="dashboard.">Restore defaults</button>
+      </div>
+      <div class="opt-group-label">Show a hint when…</div>
+      <label class="opt-row"><span>A research lab is idle</span><input class="m-switch" type="checkbox" data-setting="dashboard.attention.labs" /></label>
+      <label class="opt-row"><span>A planet has nothing under construction</span><input class="m-switch" type="checkbox" data-setting="dashboard.attention.construction" /></label>
+      <label class="opt-row"><span>Storage is almost full</span><input class="m-switch" type="checkbox" data-setting="dashboard.attention.storage" /></label>
+      <label class="opt-row"><span>Ships are damaged or drills are broken</span><input class="m-switch" type="checkbox" data-setting="dashboard.attention.damaged" /></label>
+      <label class="opt-row"><span>The command ship needs repair</span><input class="m-switch" type="checkbox" data-setting="dashboard.attention.commandRepair" /></label>
+      <label class="opt-row"><span>The command ship has unspent talent points</span><input class="m-switch" type="checkbox" data-setting="dashboard.attention.talents" /></label>
+      <label class="opt-row"><span>A shipyard is idle</span><input class="m-switch" type="checkbox" data-setting="dashboard.attention.shipyards" /></label>
+      <label class="opt-row"><span>A fleet slot is free</span><input class="m-switch" type="checkbox" data-setting="dashboard.attention.fleetSlots" /></label>
+      <label class="opt-row"><span>A colony or moon slot is free</span><input class="m-switch" type="checkbox" data-setting="dashboard.attention.colonySlots" /></label>
+      <div class="opt-group-label">Behavior</div>
+      <label class="opt-row"><span>Storage counts as almost full from</span>
+        <select class="opt-input" data-setting="dashboard.storageThreshold">
+          <option value="70">70 %</option><option value="80">80 %</option><option value="90">90 %</option><option value="95">95 %</option>
+        </select>
+      </label>
+      <label class="opt-row"><span>Refresh data every</span>
+        <select class="opt-input" data-setting="dashboard.refreshSeconds">
+          <option value="30">30 seconds</option><option value="60">1 minute</option><option value="300">5 minutes</option>
+        </select>
+      </label>
+      <div class="opt-group-label">Cards</div>
+      <label class="opt-row"><span>Empire status</span><input class="m-switch" type="checkbox" data-setting="dashboard.show.empire" /></label>
+      <label class="opt-row"><span>Active missions</span><input class="m-switch" type="checkbox" data-setting="dashboard.show.missions" /></label>
+      <label class="opt-row"><span>Moon cards</span><input class="m-switch" type="checkbox" data-setting="dashboard.show.moons" /></label>
+      <label class="opt-row"><span>Show each moon right after its planet</span><input class="m-switch" type="checkbox" data-setting="dashboard.moonsAfterPlanet" /></label>
+    </section>
+
+    <section class="dashboard-panel opt-panel" id="opt-general">
+      <div class="opt-head">
+        <div class="section-label dashboard-section-label">General</div>
+        <button class="opt-link" type="button" data-reset-prefix="general.">Restore defaults</button>
+      </div>
+      <label class="opt-row"><span>Number format</span>
+        <select class="opt-input" data-setting="general.numberFormat">
+          <option value="de">German (1.234.567)</option><option value="en">English (1,234,567)</option><option value="compact">Compact (1,2 Mio.)</option>
+        </select>
+      </label>
+      <label class="opt-row"><span>Open this tab on start</span>
+        <select class="opt-input" data-setting="general.defaultTab">
+          <option value="dashboard">Dashboard</option><option value="statistics">Statistics</option>
+          <option value="asteroids">Asteroids</option><option value="pirates">Pirates</option>
+          <option value="fleets">Fleets</option><option value="finder">Galaxy Scout</option>
+          <option value="market">Market</option><option value="techtree">Tech Tree</option>
+          <option value="simulator">Simulator</option>
+        </select>
+      </label>
+    </section>
+
+    <section class="dashboard-panel opt-panel" id="opt-data">
+      <div class="section-label dashboard-section-label">Data</div>
+      <p id="storage-info" class="opt-note"></p>
+      <div class="opt-group-label">Storage</div>
+      <div class="opt-row">
+        <span>Records cap
+          <span title="Maximum number of individual survey reports stored locally. Older records are dropped when the limit is reached. Set to 0 for unlimited storage."
+            class="toolbar-info-mark">i</span>
+        </span>
+        <span class="toolbar-records-controls">
+          <span id="cap-warning" class="toolbar-warning">Whole number >= 0</span>
+          <input id="records-cap" class="toolbar-input toolbar-cap-input" type="text" value="5000" />
+          <button id="btn-save-cap" class="toolbar-button secondary-button">Save</button>
+        </span>
+      </div>
+      <label class="opt-row"><span>Automatic backup</span>
+        <select class="opt-input" data-setting="data.autoBackup">
+          <option value="weekly">Weekly</option><option value="daily">Daily</option><option value="off">Off</option>
+        </select>
+      </label>
+      <div class="opt-group-label">Backup</div>
+      <p class="opt-note">Backups contain all addon data of every server, including these options.</p>
+      <div class="opt-actions">
+        <button id="btn-backup-now" type="button">Back up now</button>
+        <button id="btn-export">Export JSON</button>
+        <button id="btn-import">Import JSON</button>
+        <input id="import-file" type="file" accept=".json,application/json" style="display:none;" />
+        <button id="btn-export-settings" type="button">Export options only</button>
+        <button id="btn-import-settings" type="button">Import options only</button>
+        <input id="import-settings-file" type="file" accept=".json,application/json" style="display:none;" />
+      </div>
+      <div class="opt-danger">
+        <div class="opt-group-label">Danger zone</div>
+        <div class="opt-actions">
+          <button id="btn-purge" title="Deletes archived reports older than 3 days. Totals are kept.">Purge old reports</button>
+          <button id="btn-rebuild" title="Recompute all aggregated stats from the stored report records — repairs drift after partial failures.">Rebuild stats</button>
+          <button id="btn-reset" class="status-danger-button" title="Deletes recorded stats and reports. Your options are kept.">Reset stats data</button>
+        </div>
+      </div>
+    </section>
+  </div>
 
   <div id="global-content" class="global-dashboard" style="display:none;">
     <section class="dashboard-panel global-overview-panel">
@@ -1283,7 +1365,6 @@
   </div>
 
   <div class="storage-footer footer-bar">
-    <span id="storage-footer"></span>
     <span class="footer-links">
       <a id="footer-version" class="footer-link" href="#" title="Show what's new in this version"></a>
       <a class="footer-link" href="https://github.com/DopeEx/NexusOverseer" target="_blank" rel="noopener noreferrer">GitHub</a>

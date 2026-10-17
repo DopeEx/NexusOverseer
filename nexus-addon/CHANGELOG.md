@@ -16,8 +16,21 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   shipyard queue and hangar fleet by class. It refreshes every minute while visible.
 - The *What's new* dialog is remembered once read and only reappears for a new version.
 - A GitHub link and the version number in the dashboard footer; clicking the version reopens *What's new*.
+- An **Options** tab: choose which "Needs attention" hints appear (including optional ones for
+  idle shipyards and free fleet, colony or moon slots), the storage warning threshold, the
+  refresh interval, visible dashboard cards, moons shown last or right after their planet, the number format and the tab opened on start.
+  Options are shared by all servers and included in the JSON export. Options-only export
+  and import are available too. The automatic backup can be set to weekly, daily or off, and
+  there are buttons to back up right now and to purge reports older than 3 days.
 
 ### Changed
+- Export, import, *Rebuild stats* and the renamed *Reset stats data* moved from the Statistics
+  bar to Options > Data. Resetting keeps your options. The records cap and the storage summary
+  (formerly in the footer) moved there too. (The earlier hint to find **Export JSON**
+  in the dashboard header now applies to Options > Data.)
+- The server selection moved to the top next to the add-on name and applies to all tabs.
+  Beta is now a built-in server; New Frontier is only listed when the server list provides it.
+- Number format defaults to German (1.234.567); English and compact are available in Options.
 - Resource colours are now the same everywhere (stat cards, charts, tables,
   asteroid and fleet views), including a distinct colour per rare resource.
 - Resource amounts are shown as whole numbers throughout the add-on.
