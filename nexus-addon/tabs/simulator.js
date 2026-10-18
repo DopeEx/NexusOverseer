@@ -1,11 +1,12 @@
 // Runs battles through the game's combat calculator, avoiding a parallel
 // simulator that would drift from the server's balance and combat rules.
 
+import { fmt, makeStatCard, setStatusText } from '../common.js';
 import {
   loadIntelReports, populatePlanetPicker, updateDistanceFromCoords,
-} from './simulator-intel.js';
+  shipDefs, shipDefById, shipIdByKey,
+} from '../simulator-intel.js';
 
-export const shipDefs = {};
 let boot = null;
 let initPromise = null;
 
@@ -20,20 +21,6 @@ const BONUS_FIELDS = [
   ['ionAttackBonus', 'Ion attack'], ['bomberAttackBonus', 'Bomber attack'],
   ['dreadnoughtAttackBonus', 'Dreadnought attack'],
 ];
-
-export function fmt(n) {
-  return Math.round(Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
-}
-
-export function shipDefById(id) {
-  return Object.values(shipDefs).find(s => Number(s.id) === Number(id)) || null;
-}
-
-export function shipIdByKey(key) {
-  if (!key) return null;
-  const def = shipDefs[key] || Object.values(shipDefs).find(s => s.reportKey === key);
-  return def?.id ?? null;
-}
 
 function sideType(side) {
   return document.getElementById(`${side}-type`).value;
@@ -102,7 +89,7 @@ function buildBonusInputs(side) {
     wrap.append(`${label}${integer ? '' : ' %'}`);
     const input = document.createElement('input');
     input.type = 'number';
-    input.className = 'tech-input';
+    input.className = 'panel-toolbar-input';
     input.step = integer ? '1' : '0.1';
     input.min = 0;
     input.max = integer ? 5 : undefined;
@@ -124,7 +111,7 @@ function buildDefenseInputs() {
     wrap.append(defense.name || defense.key);
     const input = document.createElement('input');
     input.type = 'number';
-    input.className = 'tech-input';
+    input.className = 'panel-toolbar-input';
     input.min = 0;
     input.value = 0;
     input.dataset.defKey = defense.key;
@@ -280,19 +267,6 @@ async function doInitSimulatorTab() {
   status.textContent = `${Object.keys(shipDefs).length} ship types loaded from the game.`;
 }
 
-export function makeStatCard(label, value, valueClass = '') {
-  const card = document.createElement('div');
-  card.className = 'stat-card';
-  const title = document.createElement('div');
-  title.className = 'label';
-  title.textContent = label;
-  const text = document.createElement('div');
-  text.className = valueClass ? `value ${valueClass}` : 'value';
-  text.textContent = value;
-  card.append(title, text);
-  return card;
-}
-
 export function lossEntries(losses) {
   if (Array.isArray(losses)) return losses;
   return Object.entries(losses || {}).map(([key, value]) =>
@@ -364,7 +338,7 @@ function updateSurvivorInputs(side, losses) {
     if (!quantity) { span.textContent = ''; return; }
     const remain = Math.max(0, quantity - (lost.get(id) || 0));
     span.textContent = `→ ${fmt(remain)} alive`;
-    span.style.color = remain === quantity ? '#56d364' : remain ? '#e3b341' : '#ff7b72';
+    span.style.color = remain === quantity ? 'var(--success)' : remain ? 'var(--warning)' : 'var(--error)';
   });
 }
 
@@ -442,20 +416,24 @@ document.getElementById('btn-load-fleet').addEventListener('click', async functi
     const result = await browser.runtime.sendMessage({
       type: 'GET_FLEET', planetId: document.getElementById('fleet-planet').value,
     });
-    if (result?.error) { status.textContent = `Load fleet failed: ${result.error}`; return; }
+    if (result?.error) { setStatusText(status, `Load fleet failed: ${result.error}`); return; }
+    const classSelect = document.getElementById('fleet-class');
+    let total = 0;
     for (const input of document.querySelectorAll('input[data-side="attacker"][data-ship-id]')) {
-      if (document.getElementById('fleet-class').value &&
-          shipDefById(input.dataset.shipId)?.shipClass !== document.getElementById('fleet-class').value) continue;
-      input.value = result.fleet?.[input.dataset.key] || 0;
+      if (classSelect.value && shipDefById(input.dataset.shipId)?.shipClass !== classSelect.value) continue;
+      const qty = result.fleet?.[input.dataset.key] || 0;
+      input.value = qty;
+      total += qty;
     }
     const selected = document.getElementById('fleet-planet').selectedOptions[0];
-    status.textContent = `Loaded fleet from ${selected?.textContent || 'selected planet'}.`;
+    const typeLabel = classSelect.value ? classSelect.selectedOptions[0]?.textContent : 'all types';
+    setStatusText(status, `Loaded ${fmt(total)} ships (${typeLabel}) from ${selected?.textContent || 'selected planet'}.`);
     if (selected?.dataset.systemName) {
       document.getElementById('atk-system').value = selected.dataset.systemName;
       await updateDistanceFromCoords();
     }
   } catch (error) {
-    status.textContent = `Load fleet failed: ${error.message}`;
+    setStatusText(status, `Load fleet failed: ${error.message}`);
   } finally {
     this.disabled = false;
   }
@@ -495,9 +473,7 @@ document.getElementById('btn-run').addEventListener('click', async function () {
 });
 
 document.getElementById('btn-clear').addEventListener('click', () => {
-  document.querySelectorAll('.fleet-table input').forEach(input => { input.value = 0; });
+  document.querySelectorAll('#simulator-content .fleet-table input').forEach(input => { input.value = 0; });
   document.querySelectorAll('.survivors').forEach(span => { span.textContent = ''; });
   document.getElementById('results').style.display = 'none';
 });
-
-initSimulatorTab();

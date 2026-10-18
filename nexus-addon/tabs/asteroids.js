@@ -8,17 +8,17 @@
 
 import { SCAN_CACHE_MAX, getSystemPlanets } from './finder.js';
 import { loadFleetTemplates } from './fleets.js';
-import { clearAvailStrip, editFleetDialog, fmt, fuelEstimate, rememberSelection, rememberedSelections, renderAvailStrip, setStatusText, ZONE_COLORS, ZONE_DEFS } from '../common.js';
+import { ALL_RES_COLORS, clearAvailStrip, editFleetDialog, fmt, fuelEstimate, rememberSelection, rememberedSelections, renderAvailStrip, setStatusText, ZONE_COLORS, ZONE_DEFS } from '../common.js';
 
 const ICON_BASE = 'https://s0.nexuslegacy.space/images/resources/';
 // asteroid fieldType → resource icon + label
 const FIELD_TYPES = [
-  { type: 'ore', res: 'ore', label: 'ore', color: '#fb923c' },
-  { type: 'gas', res: 'hydrogen', label: 'gas (hydrogen)', color: '#60a5fa' },
-  { type: 'ice', res: 'cryo_ice', label: 'ice (cryo-ice)', color: '#67e8f9' },
-  { type: 'plasma', res: 'plasma_core', label: 'plasma (core)', color: '#f97316' },
-  { type: 'quantum', res: 'quantum_dust', label: 'quantum (dust)', color: '#f472b6' },
-  { type: 'dark', res: 'dark_matter', label: 'dark (matter)', color: '#9333ea' },
+  { type: 'ore', res: 'ore', label: 'ore', color: ALL_RES_COLORS.ore },
+  { type: 'gas', res: 'hydrogen', label: 'gas (hydrogen)', color: ALL_RES_COLORS.hydrogen },
+  { type: 'ice', res: 'cryo_ice', label: 'ice (cryo-ice)', color: ALL_RES_COLORS.cryo_ice },
+  { type: 'plasma', res: 'plasma_core', label: 'plasma (core)', color: ALL_RES_COLORS.plasma_core },
+  { type: 'quantum', res: 'quantum_dust', label: 'quantum (dust)', color: ALL_RES_COLORS.quantum_dust },
+  { type: 'dark', res: 'dark_matter', label: 'dark (matter)', color: ALL_RES_COLORS.dark_matter },
 ];
 const TYPE_COLOR = Object.fromEntries(FIELD_TYPES.map(t => [t.type, t.color]));
 // Ship recommendation per asteroid field type: specialized ship + per-cycle
@@ -162,7 +162,7 @@ export async function initAsteroidsTab() {
   await refreshTemplates();
   const restoredCachedResults = await restoreCachedAsteroidResults(Number(pSel.value));
   // Keep the selector in sync with edits made in the Fleets tab.
-  browser.storage.onChanged.addListener((changes, area) => {
+  browser.storage.local.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
     if (changes.fleet_templates) refreshTemplates();
     // Live search can be stopped from the game-page results window — reflect it.
@@ -376,7 +376,7 @@ function setLsButton() {
 
 async function initLsStatus() {
   ({ live_search_status: lsStatusData } = await browser.storage.local.get('live_search_status'));
-  browser.storage.onChanged.addListener((changes, area) => {
+  browser.storage.local.onChanged.addListener((changes, area) => {
     if (area !== 'local' || !changes.live_search_status) return;
     lsStatusData = changes.live_search_status.newValue || null;
     renderLsStatus();
@@ -698,7 +698,7 @@ function applyMissionMarkers() {
     if (!systemCell) continue;
     const badge = document.createElement('span');
     badge.className = 'af-mission-badge';
-    badge.style.cssText = 'display:inline-block;margin-left:5px;font-size:0.7rem;padding:1px 5px;border-radius:4px;background:#f0883e22;border:1px solid #f0883e;color:#f0883e;vertical-align:middle;';
+    badge.style.cssText = 'display:inline-block;margin-left:5px;font-size:0.7rem;padding:1px 5px;border-radius:4px;background:#f0883e22;border:1px solid var(--orange);color:var(--orange);vertical-align:middle;';
     badge.textContent = missions.length > 1 ? `⛏ ×${missions.length}` : '⛏';
     badge.title = missions.map(mission => {
       const now = Date.now();
@@ -803,8 +803,8 @@ export function renderAsteroids() {
     cells.forEach((v, i) => {
       const td = document.createElement('td');
       td.textContent = v;
-      if (i === 1) td.style.color = TYPE_COLOR[f.type] || '#e6edf3';
-      else if (i === 2 && f.mult != null) td.style.color = '#e3b341';
+      if (i === 1) td.style.color = TYPE_COLOR[f.type] || '#f1f6ff';
+      else if (i === 2 && f.mult != null) td.style.color = '#ffc070';
       else if (i === 5) td.style.color = ZONE_COLORS[f.zone] || ZONE_COLORS.unknown;
       else if (i === 9) td.className = 'af-fuel';
       tr.appendChild(td);
@@ -842,7 +842,7 @@ async function computeFuel() {
     if (gen !== afFuelGen) return;
     if (est.error) { cell.textContent = '—'; cell.title = est.error; continue; }
     cell.textContent = `${est.fuelCost}`;
-    cell.style.color = est.inRange === false ? '#ff7b72' : '';
+    cell.style.color = est.inRange === false ? '#ff6b7a' : '';
     cell.title = est.inRange === false ? 'Out of range' : `distance ${est.distance.toFixed(1)} ly`;
   }
 }

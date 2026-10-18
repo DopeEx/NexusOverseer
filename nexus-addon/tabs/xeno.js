@@ -113,7 +113,7 @@ export function renderXenoStatsTab() {
     appendExtraResourceCards(el, t, periodLabel);
     el.append(
       makeStatCard(`Surveys${periodLabel}`, fmt(t.missions), 'missions'),
-      makeStatCard(`Ships lost${periodLabel}`, fmt(t.ships_lost), '', 'color:#ff7b72'),
+      makeStatCard(`Ships lost${periodLabel}`, fmt(t.ships_lost), '', 'color:var(--error)'),
       makeStatCard(`Fuel spent${periodLabel}`, fmt(fuelForMode('xeno', mode)), 'hydrogen'),
     );
   }
@@ -176,7 +176,7 @@ export async function initXenoTab() {
   }
 
   await refreshTemplates();
-  browser.storage.onChanged.addListener((changes, area) => {
+  browser.storage.local.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes.fleet_templates) refreshTemplates();
     if (area === 'local' && changes.nexus_active_server) {
       resetXenoTab();
@@ -319,7 +319,7 @@ async function renderCooldownTable() {
   if (!rows.length) {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
-    td.colSpan = 3; td.style.color = '#484f58';
+    td.colSpan = 3; td.style.color = '#64748b';
     td.textContent = 'No moons on cooldown.';
     tr.appendChild(td); tbody.appendChild(tr);
     return;

@@ -1,6 +1,6 @@
 // Planet Finder tab: galaxy map, filters, scan loop.
 
-import { setStatusText } from '../common.js';
+import { cssVar, setStatusText } from '../common.js';
 
 // ── Planet Finder tab ──────────────────────────────────────────────────────
 
@@ -137,7 +137,7 @@ export async function initFinderTab() {
     zsel.appendChild(o);
   }
 
-  browser.storage.onChanged.addListener((changes, area) => {
+  browser.storage.local.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes.nexus_active_server) {
       resetFinderTab();
       void initFinderTab();
@@ -197,7 +197,7 @@ export function mapBaseY(canvas, y) {
 export function drawGalaxyMap() {
   const canvas = document.getElementById('f-map');
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#0d1117';
+  ctx.fillStyle = cssVar('--bg-page');
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   if (!galaxySystems) return;
 
@@ -228,9 +228,9 @@ export function drawGalaxyMap() {
     let color, r;
     if (owned || allyOwner) { color = '#7ee787'; r = 3.5; }   // you / alliance — light green
     else if (hit) { color = '#f0883e'; r = 3.5; }
-    else if (inRegion(s)) { color = s.visibility === 'fog' || s.visibility === 'outline' ? '#6e5430' : '#e3b341'; r = 2; }
+    else if (inRegion(s)) { color = s.visibility === 'fog' || s.visibility === 'outline' ? '#6e5430' : '#ffc070'; r = 2; }
     else if (s.visibility === 'full' || s.visibility === 'partial') { color = '#2f5a8f'; r = 1.5; }
-    else { color = '#21262d'; r = 1; }
+    else { color = '#0c182c'; r = 1; }
     const px = sx(s.x), py = sy(s.y);
     if (owned || allyOwner) {
       const grad = ctx.createRadialGradient(px, py, 0, px, py, 12);
@@ -270,7 +270,7 @@ export function drawGalaxyMap() {
   if (selectedSystemId != null) {
     const s = galaxySystems.find(x => x.id === selectedSystemId);
     if (s) {
-      ctx.strokeStyle = '#58a6ff';
+      ctx.strokeStyle = cssVar('--accent');
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(sx(s.x), sy(s.y), 9, 0, Math.PI * 2);
@@ -319,8 +319,8 @@ export function moonSummary(planet, moons) {
 }
 
 const MOON_COLORS = {
-  metallic: '#e3b341', barren: '#8b949e', hollow: '#a5d6ff', crystalline: '#bc8cff',
-  icy: '#79c0ff', frozen: '#79c0ff', volcanic: '#ff7b72', gas: '#a371f7', oceanic: '#56d364',
+  metallic: '#ffc070', barren: '#c0cce0', hollow: '#a5d6ff', crystalline: '#bc8cff',
+  icy: '#79c0ff', frozen: '#79c0ff', volcanic: '#ff6b7a', gas: '#a371f7', oceanic: '#7ed957',
 };
 
 // Fill a moon cell: coloured type + (size) per moon, comma-separated.
@@ -524,7 +524,7 @@ export function renderFinderResults() {
       const td = document.createElement('td');
       if (i === 6) buildMoonCell(td, h.moonList);
       else td.textContent = v;
-      if (i === 4) td.style.color = '#e3b341';
+      if (i === 4) td.style.color = '#ffc070';
       tr.appendChild(td);
     });
     tr.style.cursor = 'pointer';

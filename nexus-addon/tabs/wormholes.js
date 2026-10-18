@@ -88,7 +88,7 @@ export function renderWormholesTab() {
     appendExtraResourceCards(el, t, periodLabel);
     el.append(
       makeStatCard(`Runs${periodLabel}`, fmt(t.missions), 'missions'),
-      makeStatCard(`Ships lost${periodLabel}`, fmt(t.ships_lost), '', 'color:#ff7b72'),
+      makeStatCard(`Ships lost${periodLabel}`, fmt(t.ships_lost), '', 'color:var(--error)'),
       makeStatCard(`Fuel spent${periodLabel}`, fmt(fuelForMode('expedition', mode)), 'hydrogen'),
     );
   }

@@ -89,7 +89,7 @@ function shipImgUrl(name) {
 function imgHtml(name) {
   const url = shipImgUrl(name);
   if (url) return `<img src="${url}" alt="" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;margin-right:3px">`;
-  return `<span title="${name || 'Unknown ship'}" style="display:inline-block;width:16px;height:16px;border:1px solid #30363d;border-radius:3px;color:#8b949e;font-size:10px;line-height:14px;text-align:center;vertical-align:middle;margin-right:3px">?</span>`;
+  return `<span title="${name || 'Unknown ship'}" style="display:inline-block;width:16px;height:16px;border:1px solid var(--border);border-radius:3px;color:var(--text-muted);font-size:10px;line-height:14px;text-align:center;vertical-align:middle;margin-right:3px">?</span>`;
 }
 
 // shipDefId→qty detail → [{ name, qty }] using the ship catalog.
@@ -236,9 +236,9 @@ const OUTCOME_LOSS = /lost|loss|defeat|destroy|attacker|fail/i;
 // ponytail: keyword heuristic; a combat event with no combat word slips through.
 const COMBAT_EVENT = /combat|battle|ambush|attack|raid|pirate|hostile|fight|skirmish|enemy/i;
 function outcomeColor(o) {
-  if (OUTCOME_WIN.test(o)) return '#56d364';
-  if (OUTCOME_LOSS.test(o)) return '#ff7b72';
-  return '#8b949e';
+  if (OUTCOME_WIN.test(o)) return '#7ed957';
+  if (OUTCOME_LOSS.test(o)) return '#ff6b7a';
+  return '#c0cce0';
 }
 
 // Download the given battle rows as CSV (the current filtered/sorted view).
@@ -302,7 +302,7 @@ function fleetLine(label, list) {
   if (!items.length) return null;
   const div = document.createElement('div');
   div.style.cssText = 'margin:2px 0';
-  div.innerHTML = `<span style="color:#8b949e">${label}: </span>` + items.map(shipHtml).join(', ');
+  div.innerHTML = `<span style="color:var(--text-muted)">${label}: </span>` + items.map(shipHtml).join(', ');
   return div;
 }
 const killList = ks => (ks || []).filter(k => k.qty).map(shipHtml).join(', ') || '—';
@@ -317,23 +317,23 @@ function roundsBlock(rounds, youAttacker, yourFleet, enemyFleet) {
   const foe = youAttacker ? 'def' : 'atk';
   const table = document.createElement('table');
   table.style.cssText = 'width:100%;border-collapse:collapse;margin:4px 0 8px';
-  table.innerHTML = `<thead><tr style="text-align:left;color:#8b949e;font-size:0.78rem">
+  table.innerHTML = `<thead><tr style="text-align:left;color:var(--text-muted);font-size:0.78rem">
     <th style="padding:2px 6px">#</th>
     <th style="padding:2px 6px">Your dmg / kills</th>
     <th style="padding:2px 6px">Enemy dmg / kills</th>
     <th style="padding:2px 6px;text-align:right">HP you / enemy</th></tr></thead>`;
   const tb = document.createElement('tbody');
   const pre = document.createElement('tr');
-  pre.style.cssText = 'border-top:1px solid #21262d;background:#161b22';
-  pre.append(td('<span style="color:#8b949e">Fleet</span>'), td(fleetCell(yourFleet)), td(fleetCell(enemyFleet)), td('100% / 100%', 'text-align:right;color:#8b949e'));
+  pre.style.cssText = 'border-top:1px solid var(--bg-raised);background:var(--bg-panel)';
+  pre.append(td('<span style="color:var(--text-muted)">Fleet</span>'), td(fleetCell(yourFleet)), td(fleetCell(enemyFleet)), td('100% / 100%', 'text-align:right;color:var(--text-muted)'));
   tb.appendChild(pre);
   for (const rd of rounds) {
     const tr = document.createElement('tr');
-    tr.style.borderTop = '1px solid #21262d';
+    tr.style.borderTop = '1px solid #0c182c';
     tr.append(
       td(String(rd.round)),
-      td(`${(rd[you + '_dmg'] || 0).toLocaleString()} <span style="color:#8b949e">·</span> <span style="color:#56d364">${killList(rd[you + '_killed'])}</span>`),
-      td(`${(rd[foe + '_dmg'] || 0).toLocaleString()} <span style="color:#8b949e">·</span> <span style="color:#ff7b72">${killList(rd[foe + '_killed'])}</span>`),
+      td(`${(rd[you + '_dmg'] || 0).toLocaleString()} <span style="color:var(--text-muted)">·</span> <span style="color:var(--success)">${killList(rd[you + '_killed'])}</span>`),
+      td(`${(rd[foe + '_dmg'] || 0).toLocaleString()} <span style="color:var(--text-muted)">·</span> <span style="color:var(--error)">${killList(rd[foe + '_killed'])}</span>`),
       td(`${rd[you + '_hp'] ?? '?'}% / ${rd[foe + '_hp'] ?? '?'}%`, 'text-align:right'),
     );
     tb.appendChild(tr);
@@ -406,7 +406,7 @@ export function renderBattlesTab() {
   }
 
   // Summary cards (current selection).
-  const costCard = makeStatCard('Ships lost cost', fmt(weighted(cost)), '', 'color:#ff7b72');
+  const costCard = makeStatCard('Ships lost cost', fmt(weighted(cost)), '', 'color:var(--error)');
   costCard.title = `Ore ${fmt(cost.ore)}, Silicates ${fmt(cost.silicates)}, Hydrogen ${fmt(cost.hydrogen)}, Alloys ${fmt(cost.alloys)} — weighted total.`;
   const cards = document.createElement('div');
   cards.className = 'stats';
@@ -414,11 +414,11 @@ export function renderBattlesTab() {
   fuelCard.title = 'Mean trip fuel per mission type × battles of that type (fuel_log has no per-report id).';
   cards.append(
     makeStatCard('Battles', fmt(view.length), 'missions'),
-    makeStatCard('Ships lost', fmt(view.reduce((s, r) => s + r.lost, 0)), '', 'color:#ff7b72'),
+    makeStatCard('Ships lost', fmt(view.reduce((s, r) => s + r.lost, 0)), '', 'color:var(--error)'),
     costCard,
     fuelCard,
-    makeStatCard('Ships damaged', fmt(view.reduce((s, r) => s + r.damaged, 0)), '', 'color:#e3b341'),
-    makeStatCard('Enemies destroyed', fmt(view.reduce((s, r) => s + (r.killed || 0), 0)), '', 'color:#56d364'),
+    makeStatCard('Ships damaged', fmt(view.reduce((s, r) => s + r.damaged, 0)), '', 'color:var(--warning)'),
+    makeStatCard('Enemies destroyed', fmt(view.reduce((s, r) => s + (r.killed || 0), 0)), '', 'color:var(--success)'),
   );
   document.getElementById('b-stats-combat').append(...cards.children);
 
@@ -435,7 +435,7 @@ export function renderBattlesTab() {
   // Net (won − ship-loss cost), per resource + weighted total.
   const totalNet = weighted(net);
   const netTotalCard = makeStatCard('Total net', (totalNet >= 0 ? '+' : '') + fmt(totalNet), '',
-    totalNet >= 0 ? 'color:#56d364' : 'color:#ff7b72');
+    totalNet >= 0 ? 'color:var(--success)' : 'color:var(--error)');
   netTotalCard.title = 'Weighted: ore×1, silicates×2, hydrogen×3, alloys×5, exotics×10.'
     + (fuel ? ` Includes ${fmt(fuel)} hydrogen fuel (est.).` : '');
   const netCards = document.createElement('div'); netCards.className = 'stats';
@@ -490,7 +490,7 @@ export function renderBattlesTab() {
     if (expanded.has(r.key)) {
       const dtr = document.createElement('tr');
       const dtd = document.createElement('td'); dtd.colSpan = cols.length;
-      dtd.style.cssText = 'background:#0d1117;padding:8px 14px;font-size:0.85rem';
+      dtd.style.cssText = 'background:var(--bg-page);padding:8px 14px;font-size:0.85rem';
       const rb = roundsBlock(r.rounds, r.youAttacker !== false, r.yourFleet, r.enemyFleet);
       // Fleets ride atop their columns inside the rounds table; only fall back to
       // standalone lines when there is no round log to host them.
@@ -501,7 +501,7 @@ export function renderBattlesTab() {
       ].filter(Boolean);
       lines.forEach(l => dtd.appendChild(l));
       if (rb) dtd.appendChild(rb);
-      if (!lines.length && !rb) { const p = document.createElement('div'); p.style.color = '#484f58'; p.textContent = 'No combat detail recorded for this battle.'; dtd.appendChild(p); }
+      if (!lines.length && !rb) { const p = document.createElement('div'); p.style.color = '#64748b'; p.textContent = 'No combat detail recorded for this battle.'; dtd.appendChild(p); }
       dtr.appendChild(dtd); tbody.appendChild(dtr);
     }
   }

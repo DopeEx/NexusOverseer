@@ -1,7 +1,21 @@
-// Simulator: fleet import and intel auto-fill (spy + camp scout reports).
+// Simulator helpers: ship registry, fleet import and intel auto-fill
+// (spy + camp scout reports). Used by tabs/simulator.js.
 
-import { setStatusText } from './common.js';
-import { fmt, shipDefs, shipIdByKey } from './simulator.js';
+import { fmt } from './common.js';
+
+// ── Ship registry (filled by tabs/simulator.js from the game bootstrap) ────
+
+export const shipDefs = {};
+
+export function shipDefById(id) {
+  return Object.values(shipDefs).find(s => Number(s.id) === Number(id)) || null;
+}
+
+export function shipIdByKey(key) {
+  if (!key) return null;
+  const def = shipDefs[key] || Object.values(shipDefs).find(s => s.reportKey === key);
+  return def?.id ?? null;
+}
 
 // ── System coordinates & distance ──────────────────────────────────────────
 
@@ -71,40 +85,6 @@ async function populatePlanetPicker() {
     sel.appendChild(o);
   }
 }
-
-document.getElementById('btn-load-fleet').addEventListener('click', async function () {
-  this.disabled = true;
-  const status = document.getElementById('sim-status');
-  try {
-    const planetId = document.getElementById('fleet-planet').value;
-    const classFilter = document.getElementById('fleet-class').value;
-    const res = await browser.runtime.sendMessage({ type: 'GET_FLEET', planetId });
-    if (res.error) {
-      setStatusText(status, `Load fleet failed: ${res.error}`);
-      return;
-    }
-    let total = 0;
-    document.querySelectorAll('input[data-side="attacker"][data-key]').forEach(input => {
-      const key = input.dataset.key;
-      if (classFilter && shipDefs[key]?.shipClass !== classFilter) return;
-      const qty = res.fleet[key] || 0;
-      input.value = qty;
-      total += qty;
-    });
-    const selOpt = document.getElementById('fleet-planet').selectedOptions[0];
-    const planetLabel = selOpt?.textContent || '';
-    const typeLabel = classFilter
-      ? document.getElementById('fleet-class').selectedOptions[0]?.textContent
-      : 'all types';
-    setStatusText(status, `Loaded ${total} ships (${typeLabel}) from ${planetLabel}.`);
-    if (selOpt?.dataset.systemName) {
-      document.getElementById('atk-system').value = selOpt.dataset.systemName;
-      updateDistanceFromCoords();
-    }
-  } finally {
-    this.disabled = false;
-  }
-});
 
 // ── Intel reports (spy + camp scout) → defender auto-fill ──────────────────
 

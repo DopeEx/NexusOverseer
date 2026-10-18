@@ -8,7 +8,7 @@ import { fmt } from '../common.js';
 import { getSetting, onSettingsChange } from '../settings.js';
 import { AUTOMATIONS } from '../human-verification.js';
 
-const CLASS_COLORS = { combat: '#ff7b72', utility: '#58a6ff', civilian: '#e3b341', recon: '#56d364', special: '#bc8cff', other: '#6e7681' };
+const CLASS_COLORS = { combat: '#ff6b7a', utility: '#7ed4ff', civilian: '#ffc070', recon: '#7ed957', special: '#bc8cff', other: '#8daabe' };
 const RES_KEYS = [
   ['ore', 'Ore', 'ore'], ['silicates', 'Silicates', 'silicates'],
   ['hydrogen', 'Hydrogen', 'hydrogen'], ['alloys', 'Alloys', 'alloys'],
@@ -146,7 +146,7 @@ function missionsCard(d) {
   }
   card.appendChild(next);
   const max = d.maxFleetSlots;
-  card.appendChild(bar(max ? missions.length / max : 0, '#38bdf8'));
+  card.appendChild(bar(max ? missions.length / max : 0, '#7ed4ff'));
   card.appendChild(el('div', 'ov-hint', `${missions.length} / ${max ?? '?'} fleet slots used`));
 
   if (missions.length) {

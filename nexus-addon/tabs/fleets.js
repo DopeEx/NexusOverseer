@@ -2,7 +2,7 @@
 // collecting gas, future jobs). A template is planet-agnostic — ship quantities
 // keyed by shipDefId. Stored under `fleet_templates`.
 
-import { setStatusText, ZONE_COLORS, ZONE_DEFS } from '../common.js';
+import { ALL_RES_COLORS, setStatusText, ZONE_COLORS, ZONE_DEFS } from '../common.js';
 
 let inited = false;
 let templates = [];          // [{ id, name, ships: { shipDefId: qty } }]
@@ -17,11 +17,11 @@ const GROUP_LABELS = { combat: 'Combat', special: 'Special', recon: 'Recon', uti
 // editor shows at a glance which fields each hauler works. Colours match the
 // asteroid field-type palette.
 const MINING_SHIPS = {
-  miner:         { name: 'Mining Vessel', color: '#fb923c', mines: 'Ore, Plasma Core' },
-  gas_collector: { name: 'Gas Collector', color: '#60a5fa', mines: 'Hydrogen, Quantum Dust' },
-  ice_drill:     { name: 'Ice Drill',     color: '#67e8f9', mines: 'Cryo-Ice, Dark Matter' },
-  excavator:     { name: 'Excavator',     color: '#e3b341', mines: '+20% fleet mining yield (all)' },
-  freighter:     { name: 'Freighter',     color: '#8b949e', mines: 'Ore, Cryo-Ice (basic)' },
+  miner:         { name: 'Mining Vessel', color: ALL_RES_COLORS.ore, mines: 'Ore, Plasma Core' },
+  gas_collector: { name: 'Gas Collector', color: ALL_RES_COLORS.hydrogen, mines: 'Hydrogen, Quantum Dust' },
+  ice_drill:     { name: 'Ice Drill',     color: ALL_RES_COLORS.cryo_ice, mines: 'Cryo-Ice, Dark Matter' },
+  excavator:     { name: 'Excavator',     color: '#ffc070', mines: '+20% fleet mining yield (all)' },
+  freighter:     { name: 'Freighter',     color: '#c0cce0', mines: 'Ore, Cryo-Ice (basic)' },
 };
 function statText(s) {
   return `ATK ${s.attack} · HP ${s.hp} · SH ${s.shieldHp}` +
@@ -142,19 +142,32 @@ function fillEditor() {
 // Ship rows for the open template, grouped + styled like the simulator's
 // attacker fleet: name, stat line, quantity input.
 function fillShips() {
-  const tbody = document.getElementById('ft-ships');
-  tbody.textContent = '';
+  const groups = document.getElementById('ft-ships');
+  groups.textContent = '';
   const t = current();
-  if (!t) { tbody.innerHTML = '<tr><td>Create a template to begin.</td></tr>'; return; }
-  if (!shipDefs.length) { tbody.innerHTML = '<tr><td>No ships found on your planets.</td></tr>'; return; }
+  if (!t) { groups.textContent = 'Create a template to begin.'; return; }
+  if (!shipDefs.length) { groups.textContent = 'No ships found on your planets.'; return; }
 
   const ships = shipDefs.slice().sort((a, b) =>
     GROUP_ORDER.indexOf(a.shipClass) - GROUP_ORDER.indexOf(b.shipClass) || a.sortOrder - b.sortOrder);
 
   let lastGroup = null;
+  let tbody;
   for (const s of ships) {
     if (s.shipClass !== lastGroup) {
       lastGroup = s.shipClass;
+      const table = document.createElement('table');
+      table.className = 'fleet-table';
+      const columns = document.createElement('colgroup');
+      for (const name of ['fleet-name-column', 'fleet-stats-column', 'fleet-quantity-column']) {
+        const column = document.createElement('col');
+        column.className = name;
+        columns.appendChild(column);
+      }
+      table.appendChild(columns);
+      tbody = document.createElement('tbody');
+      table.appendChild(tbody);
+      groups.appendChild(table);
       const gtr = document.createElement('tr');
       gtr.className = 'ship-group';
       const gtd = document.createElement('td');
@@ -170,7 +183,7 @@ function fillShips() {
     tdName.textContent = s.name;
     const mine = MINING_SHIPS[s.key];
     if (mine) { tdName.style.color = mine.color; tdName.title = `Mines: ${mine.mines}`; }
-    else if (s.miningCargo) tdName.style.color = '#e3b341';   // any other hauler with mining cargo
+    else if (s.miningCargo) tdName.style.color = '#ffc070';   // any other hauler with mining cargo
 
     const tdStats = document.createElement('td');
     tdStats.className = 'ship-stats';

@@ -1,7 +1,7 @@
 // Global tab: totals aggregated across every source, honouring the View,
 // Zone and Window selectors.
 
-import { EXTRA_RES_KEYS_UI, RARE_WEIGHT, RESOURCE_WEIGHTS, SERIES_GETTERS, appendExtraResourceCards, combinedLost, computeRawLossCost, computeResourcesLost, computeSeries, dayKey, emptyResources, fmt, fuelForMode, getLabelKey, getMode, getWindowRange, getZone, makeResourceDoughnut, windowActive, makeResourceLineChart, makeStatCard, periodLabelFor, renderNetCards, resourceVal, store } from '../common.js';
+import { appendExtraResourceCards, combinedLost, computeRawLossCost, computeResourcesLost, computeSeries, cssVar, dayKey, emptyResources, EXTRA_RES_KEYS_UI, fmt, fuelForMode, getLabelKey, getMode, getWindowRange, getZone, makeResourceDoughnut, makeResourceLineChart, makeStatCard, periodLabelFor, RARE_WEIGHT, renderNetCards, RESOURCE_WEIGHTS, resourceVal, SERIES_GETTERS, store, windowActive } from '../common.js';
 
 export let chartGlobal, chartGlobalPeriod, chartGlobalSrc;
 
@@ -9,8 +9,8 @@ export let chartGlobal, chartGlobalPeriod, chartGlobalSrc;
 export const GLOBAL_RES_KEYS = ['ore', 'silicates', 'hydrogen', ...EXTRA_RES_KEYS_UI];
 
 export const SOURCE_COLORS = {
-  Survey: '#58a6ff', Pirates: '#ff7b72', Mining: '#e3b341',
-  Debris: '#56d364', Expeditions: '#bc8cff', Wormhole: '#39c5cf', Xeno: '#d29922',
+  Survey: '#7ed4ff', Pirates: '#ff6b7a', Mining: '#ffc070',
+  Debris: '#7ed957', Expeditions: '#bc8cff', Wormhole: '#39c5cf', Xeno: '#d29922',
 };
 
 // Weighted value of a resource bag (ore×1 … alloys×5, exotics×10).
@@ -159,12 +159,12 @@ export function renderSourceShare(bySrc) {
         legend: {
           position: 'right',
           labels: {
-            color: '#e6edf3', font: { size: 11 },
+            color: cssVar('--text'), font: { size: 11 },
             generateLabels: () => entries.map(([src, v], i) => ({
               text: `${src} — ${totalV ? ((v / totalV) * 100).toFixed(1) : 0}%`,
               fillStyle: SOURCE_COLORS[src],
               strokeStyle: SOURCE_COLORS[src],
-              fontColor: '#e6edf3',
+              fontColor: '#f1f6ff',
               index: i,
             })),
           },

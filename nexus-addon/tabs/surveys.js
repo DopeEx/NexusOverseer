@@ -1,6 +1,6 @@
 // Surveys tab.
 
-import { EXTRA_RES_KEYS_UI, PER_PAGE, RESOURCE_SERIES, SCALE_OPTS, SERIES_GETTERS, appendExtraResourceCards, computeEventBreakdown, computeResourcesLost, computeSeries, emptyResources, filterZone, fmt, fuelForMode, getMode, inWindowRange, isUnfiltered, makeResourceLineChart, makeStatCard, recordsForMode, renderLostCards, store, windowActive, zoneCell } from '../common.js';
+import { appendExtraResourceCards, computeEventBreakdown, computeResourcesLost, computeSeries, cssVar, emptyResources, EXTRA_RES_KEYS_UI, filterZone, fmt, fuelForMode, getMode, inWindowRange, isUnfiltered, makeResourceLineChart, makeStatCard, PER_PAGE, recordsForMode, renderLostCards, RESOURCE_SERIES, SCALE_OPTS, SERIES_GETTERS, store, windowActive, zoneCell } from '../common.js';
 
 export let chartResources, chartEvents, chartByEvent;
 
@@ -93,7 +93,7 @@ export function renderCollected(t, periodLabel) {
     const a = document.createElement('a');
     a.href = 'https://s0.nexuslegacy.space';
     a.target = '_blank';
-    a.style.color = '#58a6ff';
+    a.style.color = '#7ed4ff';
     a.textContent = 'Nexus Legacy';
     p.append(a, document.createTextNode(' then click Scrape Now.'));
     container.appendChild(p);
@@ -107,7 +107,7 @@ export function renderCollected(t, periodLabel) {
   appendExtraResourceCards(container, t, periodLabel);
   container.append(
     makeStatCard(`Missions${periodLabel}`,   fmt(t.missions),   'missions'),
-    makeStatCard(`Ships lost${periodLabel}`, fmt(t.ships_lost), '', 'color:#ff7b72'),
+    makeStatCard(`Ships lost${periodLabel}`, fmt(t.ships_lost), '', 'color:var(--error)'),
     makeStatCard(`Fuel spent${periodLabel}`, fmt(fuelForMode('survey', getMode())), 'hydrogen'),
   );
 }
@@ -127,7 +127,7 @@ export function renderEventsChart(events) {
     const pct = total ? (e.count / total * 100).toFixed(1) : 0;
     return `${e.event_type.replace(/_/g, ' ')} — ${e.count} (${pct}%)`;
   });
-  const colors = ['#58a6ff','#56d364','#f0883e','#79c0ff','#d2a8ff','#ff7b72','#ffa657','#8b949e','#e3b341'];
+  const colors = ['#7ed4ff','#7ed957','#f0883e','#79c0ff','#d2a8ff','#ff6b7a','#ffa657','#c0cce0','#ffc070'];
   if (chartEvents) chartEvents.destroy();
   chartEvents = new Chart(document.getElementById('chart-events'), {
     type: 'doughnut',
@@ -135,7 +135,7 @@ export function renderEventsChart(events) {
     options: {
       responsive: true,
       plugins: {
-        legend: { position: 'right', labels: { color: '#e6edf3', font: { size: 11 } } },
+        legend: { position: 'right', labels: { color: cssVar('--text'), font: { size: 11 } } },
         tooltip: {
           callbacks: {
             label: ctx => {
@@ -168,7 +168,7 @@ export function renderByEventChart(events) {
     },
     options: {
       responsive: true,
-      plugins: { legend: { labels: { color: '#e6edf3' } } },
+      plugins: { legend: { labels: { color: cssVar('--text') } } },
       scales: SCALE_OPTS,
     },
   });

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { makeBrowserStub, setupDomStub, loadBackground } from './helpers.js';
 
 setupDomStub();
-const simulator = await import('../nexus-addon/simulator.js');
+const simulator = await import('../nexus-addon/tabs/simulator.js');
 
 const report = {
   outcome: 'attacker_won',

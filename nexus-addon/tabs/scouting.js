@@ -108,7 +108,7 @@ function rememberFuelDisplay(key, estimate, fuelCell, timeCell, ships) {
       fuel: String(estimate.fuelCost),
       time: estimate.travelTime != null ? fmtCountdown(estimate.travelTime * 1000) : '—',
       title: estimate.inRange === false ? 'Out of range' : `distance ${estimate.distance.toFixed(1)} ly`,
-      color: estimate.inRange === false ? '#ff7b72' : '',
+      color: estimate.inRange === false ? '#ff6b7a' : '',
       fleet: fleetSignature(ships),
     };
   if (scFuelDisplayCache.size >= 500 && !scFuelDisplayCache.has(key)) {
@@ -252,7 +252,7 @@ async function initializeScoutingTab() {
   drawDebrisZoneToggles();
   await loadInvHistory();
   await refreshTemplates();
-  browser.storage.onChanged.addListener((changes, area) => {
+  browser.storage.local.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes.fleet_templates) refreshTemplates();
     if (area === 'local' && changes.nexus_active_server) {
       resetScoutingTab();
