@@ -121,8 +121,9 @@ function closeEmpire() {
 async function openEmpire() {
   if (overlay) { closeEmpire(); return; }   // toggle
   overlay = document.createElement('div');
+  overlay.className = 'nx-theme';
   overlay.style.cssText = 'position:fixed; inset:0; z-index:2147483646; overflow:auto;' +
-    'background:#080a10; padding:24px; box-sizing:border-box;';
+    'background:var(--bg-modal); padding:24px; box-sizing:border-box;';
   overlay.addEventListener('click', e => { if (e.target === overlay) closeEmpire(); });
 
   const page = document.createElement('div');
@@ -139,8 +140,8 @@ async function openEmpire() {
         style="width:100%; height:100%; object-fit:cover; object-position:center 40%; display:block; opacity:0.85;">
       <div style="position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; padding:0 24px;
         background:linear-gradient(90deg, rgba(8,10,16,0.85) 0%, rgba(8,10,16,0.35) 60%, rgba(8,10,16,0) 100%);">
-        <h1 style="margin:0; font-size:1.9rem; color:#e6edf3;">Empire View</h1>
-        <p class="res-hero-sub" style="margin:5px 0 0; color:#9aa4b2; font-size:0.9rem;">Loading planets…</p>
+        <h1 style="margin:0; font-size:1.9rem; color:var(--text);">Empire View</h1>
+        <p class="res-hero-sub" style="margin:5px 0 0; color:var(--text-dim); font-size:0.9rem;">Loading planets…</p>
       </div>
     </section>`;
 
@@ -149,7 +150,7 @@ async function openEmpire() {
   close.textContent = '✕';
   close.title = 'Close (Esc)';
   close.style.cssText = 'position:fixed; top:16px; right:20px; z-index:1; background:transparent;' +
-    'border:none; color:#8b949e; font-size:1.6rem; cursor:pointer; line-height:1;';
+    'border:none; color:var(--text-muted); font-size:1.6rem; cursor:pointer; line-height:1;';
   close.addEventListener('click', closeEmpire);
   overlay.appendChild(close);
   const onKey = e => { if (e.key === 'Escape') { closeEmpire(); document.removeEventListener('keydown', onKey); } };
@@ -191,16 +192,16 @@ function renderTable(page, planets) {
     if (css) el.style.cssText = css;
     return el;
   };
-  const thBase = 'padding:8px 12px; text-align:right; border-bottom:1px solid #30363d;';
-  const tdBase = 'padding:7px 12px; text-align:right; border-bottom:1px solid #21262d;';
-  const labelCss = 'padding:7px 12px; text-align:left; border-bottom:1px solid #21262d; color:#c9d1d9;';
+  const thBase = 'padding:8px 12px; text-align:right; border-bottom:1px solid var(--border);';
+  const tdBase = 'padding:7px 12px; text-align:right; border-bottom:1px solid var(--bg-raised);';
+  const labelCss = 'padding:7px 12px; text-align:left; border-bottom:1px solid var(--bg-raised); color:var(--text-body);';
 
   // Header: metric | planet names… | Total
   const thead = document.createElement('thead');
   const hr = document.createElement('tr');
   hr.appendChild(cell('th', '', thBase + 'text-align:left;'));
-  for (const p of planets) hr.appendChild(cell('th', p.name, thBase + 'color:#e6edf3;'));
-  hr.appendChild(cell('th', 'Total', thBase + 'color:#f0883e; font-weight:700;'));
+  for (const p of planets) hr.appendChild(cell('th', p.name, thBase + 'color:var(--text);'));
+  hr.appendChild(cell('th', 'Total', thBase + 'color:var(--orange); font-weight:700;'));
   thead.appendChild(hr);
   table.appendChild(thead);
 
@@ -210,7 +211,7 @@ function renderTable(page, planets) {
   // Section divider row.
   const section = title => {
     const tr = document.createElement('tr');
-    const td = cell('td', title, 'padding:12px 12px 6px; text-align:left; color:#8b949e;' +
+    const td = cell('td', title, 'padding:12px 12px 6px; text-align:left; color:var(--text-muted);' +
       'font-size:0.72rem; letter-spacing:0.08em; text-transform:uppercase;');
     td.colSpan = planets.length + 2;
     tr.appendChild(td);
@@ -226,11 +227,11 @@ function renderTable(page, planets) {
     tr.appendChild(ltd);
     for (const p of planets) {
       const td = cell('td', null, tdBase);
-      if (p.error) { td.textContent = '—'; td.title = p.error; td.style.color = '#ff7b72'; }
+      if (p.error) { td.textContent = '—'; td.title = p.error; td.style.color = '#ff6b7a'; }
       else { const v = valueFn(p); if (v instanceof Node) td.appendChild(v); else td.textContent = v; }
       tr.appendChild(td);
     }
-    const tot = cell('td', null, tdBase + 'color:#f0883e; font-weight:600;');
+    const tot = cell('td', null, tdBase + 'color:var(--orange); font-weight:600;');
     const tv = totalFn ? totalFn(planets.filter(p => !p.error)) : '—';
     if (tv instanceof Node) tot.appendChild(tv); else tot.textContent = tv;
     tr.appendChild(tot);
@@ -268,7 +269,7 @@ function renderTable(page, planets) {
   const energyCell = net => {
     const el = document.createElement('span');
     el.textContent = (net >= 0 ? '+' : '') + fmt(net);
-    el.style.color = net >= 0 ? '#56d364' : '#ff7b72';
+    el.style.color = net >= 0 ? '#7ed957' : '#ff6b7a';
     return el;
   };
   row('Energy (net)',
@@ -289,7 +290,7 @@ function renderTable(page, planets) {
         const cur = p.stored(r.k), cap = p.storageCap(r.k);
         const s = document.createElement('span');
         s.textContent = `${fmt(cur)} / ${fmt(cap)}`;
-        if (cap > 0 && cur / cap >= 0.9) s.style.color = '#ff7b72';   // near-full warning
+        if (cap > 0 && cur / cap >= 0.9) s.style.color = '#ff6b7a';   // near-full warning
         return s;
       },
       ps => `${fmt(sum(ps, p => p.stored(r.k)))} / ${fmt(sum(ps, p => p.storageCap(r.k)))}`);
@@ -308,17 +309,17 @@ function renderTable(page, planets) {
     const ltd = cell('td', null, labelCss); ltd.appendChild(label); tr.appendChild(ltd);
     for (const p of planets) {
       const td = cell('td', null, tdBase);
-      if (p.error) { td.textContent = '—'; td.style.color = '#ff7b72'; }
+      if (p.error) { td.textContent = '—'; td.style.color = '#ff6b7a'; }
       else {
         const lvl = p.level(r.bld);
         const prod = p.prod(r.bd);
         const top = lvl != null ? `Lv ${lvl}` : '—';
         td.innerHTML = `<div>${top}</div>` +
-          `<div style="color:#8b949e; font-size:0.8rem;">${fmt(prod)}/h</div>`;
+          `<div style="color:var(--text-muted); font-size:0.8rem;">${fmt(prod)}/h</div>`;
       }
       tr.appendChild(td);
     }
-    const tot = cell('td', null, tdBase + 'color:#f0883e; font-weight:600;');
+    const tot = cell('td', null, tdBase + 'color:var(--orange); font-weight:600;');
     tot.innerHTML = `<div>—</div><div style="font-size:0.8rem;">${fmt(sum(planets.filter(p => !p.error), p => p.prod(r.bd)))}/h</div>`;
     tr.appendChild(tot);
     tbody.appendChild(tr);

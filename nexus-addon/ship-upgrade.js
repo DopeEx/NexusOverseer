@@ -96,31 +96,28 @@ async function openPlanner(shipKey) {
   closePanel();
   const overlay = document.createElement('div');
   panel = overlay;
-  overlay.style.cssText = 'position:fixed; inset:0; z-index:2147483646; background:rgba(0,0,0,.6);' +
-    'display:flex; align-items:center; justify-content:center; font:14px/1.5 system-ui,sans-serif;';
+  overlay.className = 'nx-theme nx-planner-overlay';
   overlay.addEventListener('click', e => { if (e.target === overlay) closePanel(); });
 
   const box = document.createElement('div');
-  box.style.cssText = 'background:#12161f; color:#e6edf3; border:1px solid #d29922; border-radius:10px;' +
-    'width:440px; max-width:92vw; max-height:88vh; overflow:auto; padding:18px 20px;';
+  box.className = 'nx-planner-box';
   overlay.appendChild(box);
   document.body.appendChild(overlay);
   if (window.__nxQueue) window.__nxQueue.mountPanel(overlay);
 
   const title = document.createElement('h2');
-  title.style.cssText = 'margin:0 0 12px; font-size:1.2rem;';
-  title.textContent = 'Shipyard build planner';
+  title.innerHTML = 'Nexus <span>Overseer</span>: Shipyard build planner';
   box.appendChild(title);
 
   if (currentPlanetId == null) {
-    box.innerHTML += '<div style="color:#ff7b72;">Open a planet’s shipyard first.</div>';
+    box.innerHTML += '<div class="nx-err">Open a planet’s shipyard first.</div>';
     return;
   }
 
   const row = (labelText) => {
     const r = document.createElement('div');
-    r.style.cssText = 'display:flex; align-items:center; gap:10px; margin:8px 0;';
-    const l = document.createElement('div'); l.style.cssText = 'width:110px; color:#9aa4b2;'; l.textContent = labelText;
+    r.className = 'nx-planner-field';
+    const l = document.createElement('div'); l.className = 'nx-planner-label'; l.textContent = labelText;
     r.appendChild(l);
     box.appendChild(r);
     return r;
@@ -129,42 +126,42 @@ async function openPlanner(shipKey) {
   // Planet in view — taken from the page's current planet, not chosen by the user.
   const pRow = row('Planet');
   const pName = document.createElement('div');
-  pName.style.cssText = 'flex:1; color:#e6edf3;';
+  pName.className = 'nx-planner-planet';
   pName.textContent = `Planet #${currentPlanetId}`;
   pRow.appendChild(pName);
 
   const info = document.createElement('div');
-  info.style.cssText = 'color:#8b949e; margin:4px 0 10px; min-height:18px;';
+  info.className = 'nx-planner-info';
   box.appendChild(info);
 
   const qtyRow = row('Build qty');
   const qtyInp = document.createElement('input');
   qtyInp.type = 'text'; qtyInp.inputMode = 'numeric';   // text = no spinner arrows
-  qtyInp.style.cssText = 'width:56px; background:#0d1117; border:1px solid #30363d; color:#e6edf3; padding:5px 8px; border-radius:6px; text-align:right;';
+  qtyInp.className = 'nx-input nx-input-num';
   qtyInp.addEventListener('input', () => { const c = qtyInp.value.replace(/[^\d]/g, ''); if (c !== qtyInp.value) qtyInp.value = c; });
   const stepBtn = txt => {
     const b = document.createElement('button'); b.type = 'button'; b.textContent = txt;
-    b.style.cssText = 'background:#21262d; border:1px solid #30363d; color:#e6edf3; border-radius:6px; padding:5px 9px; cursor:pointer; line-height:1;';
+    b.className = 'nx-btn nx-btn-ghost nx-btn-sm';
     return b;
   };
   const setQty = v => { qtyInp.value = String(Math.max(1, v)); recompute(); };
   const minus = stepBtn('−'); minus.onclick = () => setQty((parseInt(qtyInp.value, 10) || 1) - 1);
   const plus = stepBtn('+'); plus.onclick = () => setQty((parseInt(qtyInp.value, 10) || 1) + 1);
   qtyRow.append(minus, qtyInp, plus);
-  const qtyHint = document.createElement('span'); qtyHint.style.cssText = 'color:#6e7681;'; qtyRow.appendChild(qtyHint);
+  const qtyHint = document.createElement('span'); qtyHint.className = 'nx-subtle'; qtyRow.appendChild(qtyHint);
 
   const table = document.createElement('div');
-  table.style.cssText = 'margin:12px 0; border-top:1px solid #21262d; padding-top:10px;';
+  table.className = 'nx-planner-costs';
   box.appendChild(table);
 
   const actions = document.createElement('div');
-  actions.style.cssText = 'display:flex; gap:10px; justify-content:flex-end; margin-top:14px;';
+  actions.className = 'nx-planner-actions';
   const sendBtn = document.createElement('button');
   sendBtn.textContent = 'Send deficit via Quartermaster';
-  sendBtn.style.cssText = 'padding:7px 14px; border-radius:6px; border:1px solid #d29922; background:#9e6a03; color:#fff; cursor:pointer;';
+  sendBtn.type = 'button'; sendBtn.className = 'nx-btn nx-btn-primary';
   const addBtn = document.createElement('button');
   addBtn.textContent = '➕ To-do';
-  addBtn.style.cssText = 'padding:7px 14px; border-radius:6px; border:1px solid #30363d; background:#21262d; color:#e6edf3; cursor:pointer; margin-right:auto;';
+  addBtn.type = 'button'; addBtn.className = 'nx-btn nx-btn-secondary nx-planner-add';
   addBtn.onclick = () => {
     if (!state || !window.__nxQueue) return;
     const qty = parseInt(qtyInp.value, 10) || 1;
@@ -174,7 +171,7 @@ async function openPlanner(shipKey) {
   };
   const closeBtn = document.createElement('button');
   closeBtn.textContent = 'Close';
-  closeBtn.style.cssText = 'padding:7px 14px; border-radius:6px; border:1px solid #30363d; background:#21262d; color:#e6edf3; cursor:pointer;';
+  closeBtn.type = 'button'; closeBtn.className = 'nx-btn nx-btn-ghost';
   closeBtn.onclick = closePanel;
   actions.append(addBtn, closeBtn, sendBtn);
   box.appendChild(actions);
@@ -215,14 +212,10 @@ async function openPlanner(shipKey) {
 
     // Fixed numeric columns so Need/On planet/Deficit align; a vertical rule
     // before each number column and a rule under each row keep them readable.
-    const cols = 'display:grid; grid-template-columns:1fr 86px 86px 86px; align-items:center;';
-    const numCell = 'text-align:right; padding:5px 10px; border-left:1px solid #21262d;';
     const head = document.createElement('div');
-    head.style.cssText = cols + ' color:#8b949e; font-size:.75rem; text-transform:uppercase; letter-spacing:.04em; border-bottom:1px solid #30363d;';
-    head.innerHTML = '<div style="padding:5px 0;"></div>' +
-      `<div style="${numCell}">Need</div>` +
-      `<div style="${numCell}">On planet</div>` +
-      `<div style="${numCell}">Deficit</div>`;
+    head.className = 'nx-planner-cost-row nx-planner-cost-head';
+    head.innerHTML = '<div class="nx-resource-label"></div>' +
+      '<div>Need</div><div>On planet</div><div>Deficit</div>';
     table.appendChild(head);
 
     const deficit = {};
@@ -232,12 +225,12 @@ async function openPlanner(shipKey) {
       const short = Math.max(0, n - have);
       deficit[cargo] = short;
       const line = document.createElement('div');
-      line.style.cssText = cols + ' border-bottom:1px solid #161b22;';
+      line.className = 'nx-planner-cost-row';
       line.innerHTML =
-        `<div style="display:flex; align-items:center; gap:6px; padding:5px 0;"><img src="${IMG}/${cargo}.webp" width="15" height="15" style="width:15px;height:15px;"> ${labelOf(cargo)}</div>` +
-        `<div style="${numCell}">${fmt(n)}</div>` +
-        `<div style="${numCell} color:#8b949e;">${fmt(have)}</div>` +
-        `<div style="${numCell} color:${short > 0 ? '#ff7b72' : '#56d364'};">${short > 0 ? fmt(short) : '—'}</div>`;
+        `<div class="nx-resource-label"><img src="${IMG}/${cargo}.webp" width="15" height="15"> ${labelOf(cargo)}</div>` +
+        `<div>${fmt(n)}</div>` +
+        `<div class="nx-subtle">${fmt(have)}</div>` +
+        `<div class="${short > 0 ? 'nx-err' : 'nx-ok'}">${short > 0 ? fmt(short) : '—'}</div>`;
       table.appendChild(line);
     }
     const totalShort = Object.values(deficit).reduce((s, v) => s + v, 0);
@@ -273,18 +266,18 @@ function injectButtons() {
     if (!card.querySelector('img[src*="/ships/"]')) return;
     const row = findNearbyRow(card, '.ship-build-row');
     if (!row || row.querySelector('.nx-ship-btn')) return;
+    const action = row.querySelector(':scope > .build-btn');
+    if (!action) return;
     const key = keyFromCard(card);
     if (!key) return;
     const btn = document.createElement('button');
-    btn.className = 'nx-ship-btn';
+    btn.className = 'nx-ship-btn nx-theme nx-btn nx-btn-secondary nx-planner-open';
     btn.type = 'button';
     btn.textContent = '🚀';
     btn.title = 'Plan build resources (addon)';
-    btn.style.cssText = 'width:26px; height:26px; padding:0; margin-left:8px; vertical-align:middle;' +
-      'line-height:24px; font-size:16px; border-radius:6px; border:1px solid #d29922; background:#0d1117cc;' +
-      'color:#e3b341; cursor:pointer;';
     btn.addEventListener('click', e => { e.stopPropagation(); e.preventDefault(); openPlanner(key); });
-    row.appendChild(btn);
+    row.classList.add('nx-planner-action-row');
+    action.after(btn);
   });
 }
 
