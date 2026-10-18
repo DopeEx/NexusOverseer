@@ -26,6 +26,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   there are buttons to back up right now and to purge reports older than 3 days.
 
 ### Changed
+- Dashboard and Statistics status controls share a right-aligned header with the
+  menu button on narrow windows.
+- Updated the add-on icon and added the project logo to the README.
 - Dashboard navigation now sits in a left sidebar, with a menu drawer on narrow
   windows. The add-on name, icon and server picker stay together above the navigation.
 - The combat simulator is integrated into the dashboard instead of opening a

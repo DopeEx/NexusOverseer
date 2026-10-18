@@ -427,14 +427,13 @@ function planetCard(p, research) {
   return card;
 }
 
-function actionsBar() {
-  const bar = el('div', 'status-bar show ov-statusbar');
+function renderActionsBar() {
+  const bar = document.getElementById('dashboard-status');
   const stamp = el('span', null, data?.fetchedAt ? `Last refresh: ${new Date(data.fetchedAt).toLocaleString()}` : '');
   const btn = el('button', null, loading ? 'Refreshing…' : 'Refresh');
   btn.disabled = loading;
   btn.addEventListener('click', () => load(false));
-  bar.append(stamp, btn);
-  return bar;
+  bar.replaceChildren(stamp, btn);
 }
 
 // The automation controls live in the expert tabs; this box mirrors their main switch and status.
@@ -506,7 +505,7 @@ function render() {
   if (!host) return;
   tickers = [];
   host.textContent = '';
-  host.appendChild(actionsBar());
+  renderActionsBar();
   host.appendChild(automationsPanel());
   syncAutomations();
 

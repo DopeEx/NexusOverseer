@@ -12,22 +12,29 @@ body {
 @media (max-width: 600px) { body { padding: 8px; } }
 h1 { font-size: 1.4rem; margin-bottom: 4px; color: var(--accent); }
 h3, h4, h5 { color: var(--text-heading); }
-.app-header { display: none; }
+.app-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+.app-header:has(.status-bar.show) { margin-bottom: 12px; }
+.app-header > .status-bar {
+  flex: 1 1 280px;
+  min-width: 0;
+  margin: 0;
+}
 
 #expert-toggle {
-  position: fixed;
-  top: 10px;
-  right: 10px;
-  width: 14px;
-  height: 14px;
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 0;
   background: transparent;
   border: none;
-  opacity: 0;
+  border-radius: 50%;
   cursor: pointer;
-  z-index: 1000;
 }
 #expert-toggle:focus-visible {
-  opacity: 0.2;
   outline: 1px dashed var(--accent);
   outline-offset: 2px;
 }
@@ -241,13 +248,14 @@ body { margin: 0 auto; }
 
 @media (max-width: 900px) {
   html { padding-left: 0; }
-  .app-header { display: flex; align-items: center; margin-bottom: 4px; }
+  .app-header { margin-bottom: 12px; }
   .nav-toggle {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     width: 36px;
     height: 36px;
+    flex-shrink: 0;
     padding: 0;
     border: 1px solid var(--line);
     border-radius: var(--radius-panel);
@@ -279,6 +287,7 @@ body { margin: 0 auto; }
 .status-bar {
   display: none;
   align-items: center;
+  justify-content: flex-end;
   flex-wrap: wrap;
   gap: 6px 10px;
   margin: 4px 0 12px;
