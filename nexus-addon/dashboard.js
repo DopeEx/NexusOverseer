@@ -6,6 +6,7 @@
 
 import { activeTab, appendStatusText, confirmDialog, dayKey, fuelForMode, getLabelKey, getMode, infoDialog, periodLabelFor, renderMarkdown, renderNetCards, setActiveTab, setStore, store } from './common.js';
 import { bindServerSelector } from './server-switch.js';
+import { initSimulatorTab } from './tabs/simulator.js';
 import { renderBattlesTab } from './tabs/battles.js';
 import { renderDebrisTab } from './tabs/debris.js';
 import { initExpeditionsTab, renderExpeditionStatsTab, renderExpeditionsTab, runExpeditionAutomations, setExpPage } from './tabs/expeditions.js';
@@ -25,6 +26,7 @@ import { getEventBreakdownForMode, getResourcesLostForMode, getSeriesForMode, ge
 import { renderTechTreeTab } from './tabs/techtree.js';
 import { initDashboardTab } from './tabs/dashboard.js';
 import { initOptionsTab } from './tabs/options.js';
+import { initGuideTab } from './tabs/guide.js';
 import { getSetting, loadSettings } from './settings.js';
 
 export async function loadAll() {
@@ -152,6 +154,10 @@ export function renderAll() {
     void updateStorageFooter();
     return;
   }
+  if (activeTab === 'guide') {
+    initGuideTab();
+    return;
+  }
   if (activeTab === 'global' || activeTab === 'statistics') {
     renderGlobalTab();
     return;
@@ -221,6 +227,7 @@ export function renderAll() {
     return;
   }
   if (activeTab === 'simulator') {
+    initSimulatorTab();
     return;
   }
   populateEventOptions();
@@ -246,6 +253,7 @@ export function renderAll() {
 export const TAB_CONTENT = {
   dashboard: 'dashboard-content',
   options: 'options-content',
+  guide: 'guide-content',
   global: 'global-content',
   surveys: 'main-content',
   pirates: 'pirates-content',
@@ -270,7 +278,7 @@ export const TAB_CONTENT = {
 const EXPERT_MODE_KEY = 'expert_mode_enabled';
 const EXPERT_TABS = new Set(['scouting', 'expeditions', 'xeno']);
 const HIDE_GLOBAL_CONTROLS_TABS = new Set([
-  'dashboard', 'options', 'pirates', 'finder', 'asteroids', 'fleets', 'scouting', 'techtree', 'market', 'simulator', 'xeno',
+  'dashboard', 'options', 'guide', 'pirates', 'finder', 'asteroids', 'fleets', 'scouting', 'techtree', 'market', 'simulator', 'xeno',
 ]);
 let expertModeEnabled = false;
 
@@ -371,6 +379,20 @@ document.querySelectorAll('.tab').forEach(btn => {
 });
 
 updateTabNavigation();
+
+const navEl = document.getElementById('main-nav');
+const navToggle = document.getElementById('nav-toggle');
+const navBackdrop = document.getElementById('nav-backdrop');
+function setNavOpen(open) {
+  navEl.classList.toggle('open', open);
+  navBackdrop.classList.toggle('show', open);
+  navToggle.setAttribute('aria-expanded', String(open));
+}
+navToggle.addEventListener('click', () => setNavOpen(!navEl.classList.contains('open')));
+navBackdrop.addEventListener('click', () => setNavOpen(false));
+navEl.addEventListener('click', e => { if (e.target.closest('.main-tab')) setNavOpen(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') setNavOpen(false); });
+window.matchMedia('(min-width: 901px)').addEventListener('change', e => { if (e.matches) setNavOpen(false); });
 
 // Keep the shared View/Window/Zone bar at the top of the active tab's content.
 export function positionControls() {
@@ -480,8 +502,8 @@ document.getElementById('records-cap').addEventListener('input', function () {
   const raw = this.value.trim();
   const n = parseInt(raw, 10);
   const invalid = raw === '' || isNaN(n) || n < 0 || String(n) !== raw;
-  this.style.borderColor = invalid ? '#ff7b72' : '#30363d';
-  this.style.color = invalid ? '#ff7b72' : '#e6edf3';
+  this.style.borderColor = invalid ? '#ff6b7a' : '#15263b';
+  this.style.color = invalid ? '#ff6b7a' : '#f1f6ff';
   document.getElementById('cap-warning').style.display = invalid ? '' : 'none';
 });
 
@@ -491,8 +513,8 @@ document.getElementById('btn-save-cap').addEventListener('click', async function
   if (isNaN(raw) || raw < 0) return;
   await browser.storage.local.set({ records_cap: raw });
   input.value = raw;
-  input.style.borderColor = '#30363d';
-  input.style.color = '#e6edf3';
+  input.style.borderColor = '#15263b';
+  input.style.color = '#f1f6ff';
   document.getElementById('cap-warning').style.display = 'none';
   this.textContent = 'Saved ✓';
   setTimeout(() => { this.textContent = 'Save'; }, 1500);
@@ -721,14 +743,25 @@ async function maybeShowWhatsNew() {
   await browser.storage.local.remove('whatsnew_pending');
 }
 
+// Each "### Added/Changed/…" block becomes its own card so wide screens show
+// them side by side instead of one long column.
 async function showWhatsNew(version) {
   let body = 'See CHANGELOG.md for details.';
   try {
     const md = await (await fetch(browser.runtime.getURL('CHANGELOG.md'))).text();
     const m = md.match(/## \[[^\]]+\][^\n]*\n([\s\S]*?)(?=\n## \[|$)/);
-    if (m) body = renderMarkdown(m[1].trim());
+    if (m) {
+      body = document.createElement('div');
+      body.className = 'whatsnew-sections';
+      for (const part of m[1].trim().split(/\n(?=### )/)) {
+        const section = document.createElement('section');
+        section.className = 'whatsnew-section';
+        section.append(renderMarkdown(part.trim()));
+        body.append(section);
+      }
+    }
   } catch { /* keep fallback */ }
-  await infoDialog(`What's new in v${version}`, body);
+  await infoDialog(`What's new in v${version}`, body, { width: 1100 });
 }
 
 const versionLink = document.getElementById('footer-version');

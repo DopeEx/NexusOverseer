@@ -1,12 +1,8 @@
-// Logistics View: a topbar button that opens a body-level overlay with (1) the
-// total of each ship type across all planets and (2) a card per planet/outpost
-// showing its resources and ships. Same overlay pattern as empire-view.js —
-// reuses the game's dark styling, lives in <body> so React re-renders can't wipe
-// it. Data fetched same-origin (cookie), read-only for now.
-//
-// Drag-and-drop transfers between colonies are a follow-up: each move launches a
-// real transport dispatch (POST /fleet/dispatch — cargo ships + fuel + travel),
-// so it needs a per-drop confirmation and is deliberately not wired yet.
+// Logistics View: a topbar button that opens a body-level overlay with a card per
+// planet/moon/outpost showing its resources and ships (drag between cards to
+// transfer). Same overlay pattern as guide-view.js —
+// styled via theme.css (nx-overlay / nx-qm-* classes), lives in <body> so React
+// re-renders can't wipe it. Data fetched same-origin (cookie).
 //
 // IIFE + re-run guard: Firefox can inject a content script twice into the same
 // isolated world; top-level `const`s would then throw "redeclaration of const".
@@ -26,8 +22,8 @@ function setStatusText(el, text, variant) {
   }
   const span = document.createElement('span');
   span.textContent = text;
-  if (variant === 'warning') span.style.color = '#e3b341';
-  else if (variant === 'error') span.style.color = '#ff7b72';
+  if (variant === 'warning') span.className = 'nx-warn';
+  else if (variant === 'error') span.className = 'nx-err';
   el.appendChild(span);
 }
 // Colony resource fields (camelCase, as the planet/outpost APIs return them) →
@@ -147,59 +143,85 @@ let overlay = null;
 function closeView() { stopDragScroll(); if (overlay) { overlay.remove(); overlay = null; } }
 
 // Native drag disables wheel scrolling, so auto-scroll the overlay while the
-// dragged pointer sits near the top/bottom edge.
+// dragged pointer sits in the (visible) top/bottom scroll zones.
+const DRAG_EDGE = 90;
 let dragScrollY = null, dragScrollRAF = null;
 function startDragScroll() {
-  if (dragScrollRAF) return;
-  const step = () => {
-    if (!overlay || dragScrollY == null) { dragScrollRAF = null; return; }
-    const edge = 110, h = window.innerHeight;
-    if (dragScrollY < edge) overlay.scrollTop -= (edge - dragScrollY) * 1.6 + 6;
-    else if (dragScrollY > h - edge) overlay.scrollTop += (dragScrollY - (h - edge)) * 1.6 + 6;
+  if (dragScrollRAF || !overlay) return;
+  overlay.classList.add('nx-qm-dragging-active');
+  // Keep looping until dragend/drop even before the first dragover reports a
+  // position (some browsers fire it only after the first animation frame).
+  // Speed is time-based (px/s, independent of monitor refresh rate): slow when
+  // entering the zone, faster only right at the screen edge.
+  let last = null, carry = 0;
+  const step = now => {
+    if (!overlay) { dragScrollRAF = null; return; }
+    const dt = last == null ? 0 : Math.min(0.05, (now - last) / 1000);
+    last = now;
+    if (dragScrollY != null) {
+      const h = window.innerHeight;
+      const depth = dragScrollY < DRAG_EDGE ? -(DRAG_EDGE - dragScrollY)
+        : dragScrollY > h - DRAG_EDGE ? dragScrollY - (h - DRAG_EDGE) : 0;
+      if (depth) {
+        const t = Math.min(1, Math.abs(depth) / DRAG_EDGE);
+        carry += Math.sign(depth) * (80 + 420 * t * t) * dt;
+        const px = Math.trunc(carry);
+        if (px) { overlay.scrollTop += px; carry -= px; }
+      } else carry = 0;
+    }
     dragScrollRAF = requestAnimationFrame(step);
   };
   dragScrollRAF = requestAnimationFrame(step);
 }
-function stopDragScroll() { if (dragScrollRAF) cancelAnimationFrame(dragScrollRAF); dragScrollRAF = null; dragScrollY = null; }
+function stopDragScroll() {
+  if (dragScrollRAF) cancelAnimationFrame(dragScrollRAF);
+  dragScrollRAF = null; dragScrollY = null;
+  if (overlay) overlay.classList.remove('nx-qm-dragging-active');
+}
 
 async function openView() {
   if (overlay) { closeView(); return; }   // toggle
   overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed; inset:0; z-index:2147483646; overflow:auto;' +
-    'background:#080a10; padding:24px; box-sizing:border-box;';
+  overlay.className = 'nx-theme nx-overlay';
   overlay.addEventListener('click', e => { if (e.target === overlay) closeView(); });
   // Edge auto-scroll during a drag (drag events bubble from the chips).
   overlay.addEventListener('dragstart', startDragScroll);
   overlay.addEventListener('dragover', e => { dragScrollY = e.clientY; });
   overlay.addEventListener('dragend', stopDragScroll);
+  // The source chip can be re-rendered away before dragend reaches the overlay.
+  overlay.addEventListener('drop', stopDragScroll);
+  for (const dir of ['up', 'down']) {
+    const zone = document.createElement('div');
+    zone.className = `nx-qm-scrollzone nx-qm-scrollzone-${dir}`;
+    zone.innerHTML = `<span>${dir === 'up' ? '\u25B2 scroll up' : '\u25BC scroll down'}</span>`;
+    overlay.appendChild(zone);
+  }
 
   const page = document.createElement('div');
-  page.style.cssText = 'max-width:1900px; margin:0 auto; color:#c9d1d9;';
+  page.className = 'nx-overlay-page nx-qm-page';
   overlay.appendChild(page);
   document.body.appendChild(overlay);
-  page.innerHTML = `<h1 style="margin:0 0 4px; font-size:1.6rem; color:#e6edf3;">Quartermaster</h1>
-    <p class="lv-sub" style="margin:0 0 16px; color:#9aa4b2; font-size:0.9rem;">Loading colonies…</p>`;
+  page.innerHTML = `<div class="nx-overlay-head"><div><h1>Nexus <span>Overseer</span>: Quartermaster</h1>
+    <p class="lv-sub">Loading colonies…</p></div></div>`;
 
   const close = document.createElement('button');
   close.textContent = '✕'; close.title = 'Close (Esc)';
-  close.style.cssText = 'position:fixed; top:16px; right:20px; z-index:1; background:transparent;' +
-    'border:none; color:#8b949e; font-size:1.6rem; cursor:pointer; line-height:1;';
+  close.type = 'button'; close.className = 'nx-overlay-close';
   close.addEventListener('click', closeView);
   overlay.appendChild(close);
   const onKey = e => { if (e.key === 'Escape') { closeView(); document.removeEventListener('keydown', onKey); } };
   document.addEventListener('keydown', onKey);
 
-  let colonies, missions;
+  let colonies;
   try {
-    const [planetList, outpostData, missionsData, meData] = await Promise.all([
-      jget('/api/planets'), jget('/api/outposts').catch(() => ({})), jget('/api/fleet/missions').catch(() => ({ missions: [] })), jget('/api/auth/me').catch(() => ({})),
+    const [planetList, outpostData, meData] = await Promise.all([
+      jget('/api/planets'), jget('/api/outposts').catch(() => ({})), jget('/api/auth/me').catch(() => ({})),
     ]);
     const planets = (planetList.planets || []).filter(p => p.id != null);
     const details = await Promise.all(planets.map(p => Promise.all([
       jget(`/api/planets/${p.id}`).catch(() => null),
       jget(`/api/planets/${p.id}/fleet`).catch(() => ({ fleet: [] })),
     ])));
-    missions = missionsData.missions || [];
     const outposts = outpostData.outposts || (Array.isArray(outpostData) ? outpostData : []);
 
     // Colonized moons have their own /api/moons/{id} endpoints; find their ids via
@@ -230,7 +252,7 @@ async function openView() {
     return;
   }
   if (!overlay) return;
-  render(page, colonies, missions);
+  render(page, colonies);
   applyPendingDeliver();
 }
 
@@ -287,72 +309,28 @@ async function applyPendingDeliver() {
   if (builderEl) builderEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-// A titled box of ship chips (qty × name) — used for stationed + in-flight totals.
-function shipBox(title, list, emptyMsg) {
-  const sec = document.createElement('div');
-  sec.style.cssText = 'background:#0d1117; border:1px solid #21262d; border-radius:10px; padding:14px 16px; margin-bottom:14px;';
-  sec.innerHTML = `<div style="color:#f0883e; font-size:0.9rem; margin-bottom:8px;">${title}</div>`;
-  const chips = document.createElement('div');
-  chips.style.cssText = 'display:flex; flex-wrap:wrap; gap:8px 14px;';
-  if (!list.length) chips.innerHTML = `<span style="color:#484f58;">${emptyMsg}</span>`;
-  for (const s of list) {
-    const chip = document.createElement('span'); chip.style.cssText = 'font-size:0.88rem;';
-    chip.innerHTML = `<b style="color:#e6edf3;">${fmt(s.qty)}</b>&times; <span style="color:#9aa4b2;">${esc(s.name)}</span>`;
-    chips.appendChild(chip);
-  }
-  sec.appendChild(chips);
-  return sec;
-}
-
-function render(page, colonies, missions = []) {
+function render(page, colonies) {
   page.querySelector('.lv-sub').innerHTML =
     `${colonies.length} colonies (${colonies.filter(c => c.kind === 'Planet').length} planets, ${colonies.filter(c => c.kind === 'Moon').length} moons, ${colonies.filter(c => c.kind === 'Outpost').length} outposts)` +
-    ` · <span style="color:#6e7681;">drag a resource or ship onto another colony to send it (confirm before dispatch)</span>`;
+    ` · <span class="nx-faint">drag a resource or ship onto another colony to send it (confirm before dispatch)</span>`;
 
   allColonies = colonies;
   // Transfer builder card (populated on drop, hidden otherwise), pinned on top.
   builder = null;
   builderEl = document.createElement('div');
-  builderEl.style.cssText = 'display:none; position:sticky; top:0; z-index:2; margin-bottom:16px;';
+  builderEl.className = 'nx-qm-builder';
+  builderEl.style.display = 'none';
   page.appendChild(builderEl);
 
-  // ── Total ships stationed (summed across colonies) ──
-  const totals = new Map();   // shipDefId → { name, sortOrder, qty }
-  for (const c of colonies) {
-    for (const f of (c.ships || [])) {
-      const def = f.definition || {};
-      const cur = totals.get(f.shipDefId) || { name: def.name || `#${f.shipDefId}`, sortOrder: def.sortOrder || 0, qty: 0 };
-      cur.qty += f.quantity || 0;
-      totals.set(f.shipDefId, cur);
-    }
-  }
-  const totalList = [...totals.values()].filter(s => s.qty > 0).sort((a, b) => a.sortOrder - b.sortOrder);
-  page.appendChild(shipBox('Total ships (stationed)', totalList, 'No ships stationed.'));
-
-  // ── In flight: ships on active missions (fleetComposition per mission) ──
-  const flight = new Map();
-  for (const m of missions) {
-    for (const f of (m.fleetComposition || [])) {
-      const cur = flight.get(f.shipDefId) || { name: f.shipName || `#${f.shipDefId}`, qty: 0 };
-      cur.qty += f.quantity || 0;
-      flight.set(f.shipDefId, cur);
-    }
-  }
-  const flightList = [...flight.values()].filter(s => s.qty > 0).sort((a, b) => b.qty - a.qty);
-  page.appendChild(shipBox(`In flight (${missions.length} mission${missions.length === 1 ? '' : 's'})`, flightList, 'None in flight.'));
-
-  // ── Colony columns: moons (left) · planets (centre) · outposts (right) ──
-  const makeCol = (label, list, opts) => {
+  // ── Colony columns: moons + outposts stacked (left) · planets grid (right) ──
+  const makeGroup = (label, list, grow) => {
     const wrap = document.createElement('div');
-    wrap.style.cssText = opts.grow ? 'flex:1; min-width:0;' : `flex:0 0 ${opts.width};`;
     const lbl = document.createElement('div');
-    lbl.style.cssText = 'color:#8b949e; font-size:0.78rem; text-transform:uppercase; letter-spacing:0.06em; margin:0 0 8px;';
+    lbl.className = 'nx-sub-label';
     lbl.textContent = `${label} (${list.length})`;
     wrap.appendChild(lbl);
     const inner = document.createElement('div');
-    inner.style.cssText = opts.grow
-      ? 'display:grid; grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); gap:14px;'
-      : 'display:flex; flex-direction:column; gap:14px;';
+    inner.className = grow ? 'nx-qm-grid' : 'nx-qm-stack';
     for (const c of list) inner.appendChild(colonyCard(c));
     wrap.appendChild(inner);
     return wrap;
@@ -360,10 +338,17 @@ function render(page, colonies, missions = []) {
   const moons = colonies.filter(c => c.kind === 'Moon');
   const outposts = colonies.filter(c => c.kind === 'Outpost');
   const cols = document.createElement('div');
-  cols.style.cssText = 'display:flex; gap:28px; align-items:flex-start;';
-  if (moons.length) cols.appendChild(makeCol('Moons', moons, { width: '235px' }));
-  cols.appendChild(makeCol('Planets', colonies.filter(c => c.kind === 'Planet'), { grow: true }));
-  if (outposts.length) cols.appendChild(makeCol('Outposts', outposts, { width: '235px' }));
+  cols.className = 'nx-qm-cols';
+  if (moons.length || outposts.length) {
+    const side = document.createElement('div');
+    side.className = 'nx-qm-col';
+    if (moons.length) side.appendChild(makeGroup('Moons', moons));
+    if (outposts.length) side.appendChild(makeGroup('Outposts', outposts));
+    cols.appendChild(side);
+  }
+  const main = makeGroup('Planets', colonies.filter(c => c.kind === 'Planet'), true);
+  main.className = 'nx-qm-col-grow';
+  cols.appendChild(main);
   page.appendChild(cols);
 }
 
@@ -378,32 +363,31 @@ function validCombo(item, tgt) {
 
 function colonyCard(c) {
   const card = document.createElement('div');
-  card.style.cssText = 'background:#0d1117; border:1px solid #21262d; border-radius:10px; padding:12px 14px;';
+  card.className = 'nx-qm-card';
   // Drop target: accept only valid source→target combos (outpost/moon exports go
   // to a planet; planets export anywhere).
   const accepts = () => dragItem && dragItem.src !== c && c.id != null && validCombo(dragItem, c);
-  card.addEventListener('dragover', e => { if (accepts()) { e.preventDefault(); card.style.outline = '2px dashed #58a6ff'; } });
-  card.addEventListener('dragleave', () => { card.style.outline = ''; });
+  card.addEventListener('dragover', e => { if (accepts()) { e.preventDefault(); card.classList.add('nx-qm-drop'); } });
+  card.addEventListener('dragleave', () => { card.classList.remove('nx-qm-drop'); });
   card.addEventListener('drop', e => {
-    e.preventDefault(); card.style.outline = '';
+    e.preventDefault(); card.classList.remove('nx-qm-drop');
     const it = dragItem; dragItem = null;
     if (!it || it.src === c || c.id == null || !validCombo(it, c)) return;
     if (it.type === 'resource' && it.src.kind === 'Outpost') { stageCollectResource(it.src, c, it.resKey); return; }
     stageTransfer(it, c);
   });
   const head = document.createElement('div');
-  head.style.cssText = 'display:flex; align-items:baseline; gap:8px; margin-bottom:8px;';
-  head.innerHTML = `<b style="color:#e6edf3;">${esc(c.name)}</b>` +
-    `<span style="color:#8b949e; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.05em;">${c.kind}</span>`;
+  head.className = 'nx-qm-card-head';
+  head.innerHTML = `<span class="nx-qm-card-name">${esc(c.name)}</span><span class="nx-qm-kind">${c.kind}</span>`;
   // Outposts extract exactly one resource at a time — whichever `{k}Rate`
   // field is nonzero (mirrors its asteroid field's fieldType).
   if (c.kind === 'Outpost' && c.res) {
     const mining = RESOURCES.find(r => (c.res[`${r.k}Rate`] || 0) > 0);
     if (mining) {
       const badge = document.createElement('span');
-      badge.style.cssText = 'display:inline-flex; align-items:center; gap:4px; margin-left:auto; color:#8b949e; font-size:0.75rem;';
+      badge.className = 'nx-qm-rate';
       badge.title = `Mining ${mining.label}`;
-      badge.innerHTML = `<img src="${IMG}/${mining.icon}" width="13" height="13" style="width:13px;height:13px;">${fmt(c.res[`${mining.k}Rate`])}/h`;
+      badge.innerHTML = `<img src="${IMG}/${mining.icon}" width="13" height="13" alt="">${fmt(c.res[`${mining.k}Rate`])}/h`;
       head.appendChild(badge);
     }
   }
@@ -411,65 +395,59 @@ function colonyCard(c) {
 
   // Resources
   const resWrap = document.createElement('div');
-  resWrap.style.cssText = 'display:flex; flex-direction:column; gap:3px; font-size:0.82rem;';
+  resWrap.className = 'nx-qm-res';
   for (const r of RESOURCES) {
     const v = c.res ? c.res[r.k] : 0;
     if (!v) continue;
     const cap = storageCap(c, r.k);
     const row = document.createElement('div');
-    row.style.cssText = 'display:flex; align-items:center; gap:6px; padding:3px 5px; border-radius:6px; border:1px solid transparent;';
-    row.innerHTML = `<img src="${IMG}/${r.icon}" width="15" height="15" style="width:15px;height:15px;" alt="">` +
-      `<span style="color:#9aa4b2; flex:1;">${r.label}</span>` +
-      `<span style="color:#e6edf3;">${fmt(v)}${cap ? `<span style="color:#6e7681;"> / ${fmt(cap)}</span>` : ''}</span>`;
+    row.className = 'nx-qm-row';
+    row.innerHTML = `<img src="${IMG}/${r.icon}" width="15" height="15" alt="">` +
+      `<span class="nx-qm-row-label">${r.label}</span>` +
+      `<span class="nx-text">${fmt(v)}${cap ? `<span class="nx-subtle"> / ${fmt(cap)}</span>` : ''}</span>`;
     // Draggable: planet resources → deliver/supply anywhere; outpost resources →
     // drop on a planet to collect them there.
     if (c.id != null) {
-      row.draggable = true; row.style.cursor = 'grab';
+      row.draggable = true; row.classList.add('nx-qm-drag');
       row.title = c.kind === 'Outpost' ? 'Drag to a planet to collect' : c.kind === 'Moon' ? 'Drag to a planet to transfer' : 'Drag to another colony to send';
-      row.style.border = '1px solid #30363d'; row.style.background = '#161b22';
       const grip = document.createElement('span'); grip.textContent = '⠿';
-      grip.style.cssText = 'color:#484f58; font-size:0.8rem; cursor:grab;';
+      grip.className = 'nx-qm-grip';
       row.insertBefore(grip, row.firstChild);
-      row.addEventListener('mouseenter', () => { row.style.borderColor = '#58a6ff'; });
-      row.addEventListener('mouseleave', () => { row.style.borderColor = '#30363d'; });
-      row.addEventListener('dragstart', () => { dragItem = { type: 'resource', src: c, resKey: r.k, max: v }; row.style.opacity = '0.5'; });
-      row.addEventListener('dragend', () => { row.style.opacity = '1'; });
+      row.addEventListener('dragstart', () => { dragItem = { type: 'resource', src: c, resKey: r.k, max: v }; row.classList.add('nx-qm-dragging'); });
+      row.addEventListener('dragend', () => { row.classList.remove('nx-qm-dragging'); });
     }
     resWrap.appendChild(row);
   }
-  if (!resWrap.childElementCount) resWrap.innerHTML = '<span style="color:#484f58;">No resources.</span>';
+  if (!resWrap.childElementCount) resWrap.innerHTML = '<span class="nx-faint">No resources.</span>';
   card.appendChild(resWrap);
 
   // Ships
   const shipHead = document.createElement('div');
-  shipHead.style.cssText = 'color:#8b949e; font-size:0.72rem; margin:10px 0 4px; text-transform:uppercase; letter-spacing:0.05em;';
+  shipHead.className = 'nx-sub-label nx-qm-ships-label';
   shipHead.textContent = 'Ships';
   card.appendChild(shipHead);
   const shipWrap = document.createElement('div');
-  shipWrap.style.cssText = 'display:flex; flex-wrap:wrap; gap:4px 12px; font-size:0.8rem;';
+  shipWrap.className = 'nx-qm-ships';
   if (c.ships == null) {
-    shipWrap.innerHTML = `<span style="color:#9aa4b2;">${c.deployed ? `${fmt(c.deployed)} deployed` : 'none'}</span>`;
+    shipWrap.innerHTML = `<span class="nx-dim">${c.deployed ? `${fmt(c.deployed)} deployed` : 'none'}</span>`;
   } else {
     const ships = c.ships.filter(f => (f.quantity || 0) > 0)
       .sort((a, b) => (a.definition?.sortOrder || 0) - (b.definition?.sortOrder || 0));
-    if (!ships.length) shipWrap.innerHTML = '<span style="color:#484f58;">none</span>';
+    if (!ships.length) shipWrap.innerHTML = '<span class="nx-faint">none</span>';
     for (const f of ships) {
       const sp = document.createElement('span');
       const nm = (f.definition || {}).name || '#' + f.shipDefId;
-      sp.style.cssText = 'display:inline-flex; align-items:center; gap:5px; padding:2px 8px; border-radius:6px; border:1px solid transparent;';
-      sp.innerHTML = `<b style="color:#e6edf3;">${fmt(f.quantity)}</b>&times; <span style="color:#9aa4b2;">${esc(nm)}</span>`;
+      sp.className = 'nx-qm-ship';
+      sp.innerHTML = `<b class="nx-strong">${fmt(f.quantity)}</b>&times; <span class="nx-dim">${esc(nm)}</span>`;
       // Draggable → relocate these ships to another colony.
       const avail = (f.quantity || 0) - (f.damagedQuantity || 0);
       if (c.id != null && avail > 0) {
-        sp.draggable = true; sp.style.cursor = 'grab'; sp.title = c.kind === 'Moon' ? 'Drag to a planet to recall' : 'Drag to another colony to relocate';
-        sp.style.border = '1px solid #30363d'; sp.style.background = '#161b22';
+        sp.draggable = true; sp.classList.add('nx-qm-drag'); sp.title = c.kind === 'Moon' ? 'Drag to a planet to recall' : 'Drag to another colony to relocate';
         const grip = document.createElement('span'); grip.textContent = '⠿';
-        grip.style.cssText = 'color:#484f58; font-size:0.75rem;';
+        grip.className = 'nx-qm-grip';
         sp.insertBefore(grip, sp.firstChild);
-        sp.addEventListener('mouseenter', () => { sp.style.borderColor = '#58a6ff'; });
-        sp.addEventListener('mouseleave', () => { sp.style.borderColor = '#30363d'; });
-        sp.addEventListener('dragstart', () => { dragItem = { type: 'ship', src: c, shipDefId: f.shipDefId, name: nm, max: avail }; sp.style.opacity = '0.5'; });
-        sp.addEventListener('dragend', () => { sp.style.opacity = '1'; });
+        sp.addEventListener('dragstart', () => { dragItem = { type: 'ship', src: c, shipDefId: f.shipDefId, name: nm, max: avail }; sp.classList.add('nx-qm-dragging'); });
+        sp.addEventListener('dragend', () => { sp.classList.remove('nx-qm-dragging'); });
       }
       shipWrap.appendChild(sp);
     }
@@ -541,32 +519,25 @@ async function cargoShipsOf(colony, wantKeys) {
 
 function cargoPicker(haulers, onChange, status) {
   const wrap = document.createElement('div');
-  wrap.style.cssText = 'display:flex; flex-wrap:wrap; gap:6px; margin:2px 0 8px;';
+  wrap.className = 'nx-qm-cargo-pick';
   for (const h of haulers) {
     const on = cargoSel.has(h.key);
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.title = `${h.name} — ${fmt(h.cap)} cargo each${on ? '' : ' (not used)'}`;
     btn.setAttribute('aria-pressed', String(on));
-    btn.style.cssText = `padding:2px; border-radius:6px; cursor:pointer; line-height:0; opacity:${on ? '1' : '0.45'};` +
-      `border:2px solid ${on ? '#2ea043' : '#30363d'}; background:${on ? '#193b22' : 'transparent'};`;
     if (h.imageUrl) {
       const img = document.createElement('img');
       img.src = h.imageUrl;
       img.alt = h.name;
-      img.style.cssText = 'width:28px; height:28px; object-fit:contain;';
       img.onerror = () => {
         btn.textContent = h.name;
-        btn.style.lineHeight = '';
-        btn.style.padding = '3px 8px';
-        btn.style.color = '#e6edf3';
+        btn.classList.add('nx-qm-cargo-text');
       };
       btn.appendChild(img);
     } else {
       btn.textContent = h.name;
-      btn.style.lineHeight = '';
-      btn.style.padding = '3px 8px';
-      btn.style.color = '#e6edf3';
+      btn.classList.add('nx-qm-cargo-text');
     }
     btn.onclick = async () => {
       for (const pickerButton of wrap.querySelectorAll('button')) pickerButton.disabled = true;
@@ -607,12 +578,12 @@ function stageCollectResource(outpost, planet, resKey) {
 
 function fieldRow(labelHtml, input, onRemove) {
   const row = document.createElement('div');
-  row.style.cssText = 'display:flex; align-items:center; gap:8px; margin:4px 0;';
-  const l = document.createElement('div'); l.style.cssText = 'flex:1; display:flex; align-items:center; gap:6px;'; l.innerHTML = labelHtml;
+  row.className = 'nx-qm-field';
+  const l = document.createElement('div'); l.className = 'nx-qm-field-label'; l.innerHTML = labelHtml;
   row.append(l, input);
   if (onRemove) {
     const x = document.createElement('button'); x.textContent = '✕';
-    x.style.cssText = 'background:transparent; border:none; color:#8b949e; cursor:pointer;';
+    x.type = 'button'; x.className = 'nx-icon-btn'; x.title = 'Remove';
     x.onclick = onRemove; row.appendChild(x);
   }
   return row;
@@ -622,7 +593,7 @@ function numInput(value) {
   const i = document.createElement('input');
   i.type = 'text'; i.inputMode = 'numeric';
   i.value = String(value);
-  i.style.cssText = 'width:76px; background:#0d1117; border:1px solid #30363d; color:#e6edf3; padding:4px 7px; border-radius:6px; text-align:right;';
+  i.className = 'nx-input nx-input-num';
   i.addEventListener('input', () => { const c = i.value.replace(/[^\d]/g, ''); if (c !== i.value) i.value = c; });
   return i;
 }
@@ -631,10 +602,10 @@ function numInput(value) {
 // caps the value and enables the Max button.
 function withStepper(inp, max) {
   const wrap = document.createElement('div');
-  wrap.style.cssText = 'display:flex; align-items:center; gap:4px;';
+  wrap.className = 'nx-qm-stepper';
   const mkBtn = txt => {
     const b = document.createElement('button'); b.type = 'button'; b.textContent = txt;
-    b.style.cssText = 'background:#21262d; border:1px solid #30363d; color:#e6edf3; border-radius:6px; padding:4px 8px; cursor:pointer; line-height:1;';
+    b.className = 'nx-btn nx-btn-ghost nx-btn-sm';
     return b;
   };
   const commit = v => {
@@ -660,17 +631,17 @@ async function renderBuilder() {
   const b = builder;
   const toOutpost = b.mode !== 'collect' && b.target.kind === 'Outpost';
   const box = document.createElement('div');
-  box.style.cssText = 'background:#12161f; border:1px solid #2ea043; border-radius:10px; padding:14px 16px;';
+  box.className = 'nx-qm-builder-box';
   const head = document.createElement('div');
-  head.style.cssText = 'display:flex; align-items:baseline; gap:8px; margin-bottom:10px;';
+  head.className = 'nx-qm-builder-head';
   box.appendChild(head);
 
-  const status = document.createElement('div'); status.style.cssText = 'color:#8b949e; font-size:0.82rem; min-height:16px; margin-top:6px;';
-  const fuelLine = document.createElement('div'); fuelLine.style.cssText = 'color:#9aa4b2; font-size:0.85rem; margin-top:8px;';
+  const status = document.createElement('div'); status.className = 'nx-qm-status';
+  const fuelLine = document.createElement('div'); fuelLine.className = 'nx-qm-fuel';
   const send = document.createElement('button'); send.textContent = 'Send';
-  send.style.cssText = 'padding:6px 16px; border-radius:6px; border:1px solid #2ea043; background:#238636; color:#fff; cursor:pointer;';
+  send.type = 'button'; send.className = 'nx-btn nx-btn-primary';
   const clear = document.createElement('button'); clear.textContent = 'Clear';
-  clear.style.cssText = 'padding:6px 14px; border-radius:6px; border:1px solid #30363d; background:#21262d; color:#e6edf3; cursor:pointer;';
+  clear.type = 'button'; clear.className = 'nx-btn nx-btn-ghost';
   clear.onclick = () => { builder = null; renderBuilder(); };
 
   let getShips = () => [];
@@ -683,21 +654,21 @@ async function renderBuilder() {
   if (b.mode === 'collect') {
     const planets = allColonies.filter(c => c.kind === 'Planet');
     const srcPlanet = planets.find(c => c.id === b.srcPlanetId) || planets[0];
-    head.innerHTML = `<b style="color:#e6edf3;">Collect resources</b>` +
-      `<span style="color:#f0883e;">${srcPlanet ? esc(srcPlanet.name) : '?'} → ${esc(b.outpost.name)} → back</span>`;
+    head.innerHTML = `<span class="nx-qm-builder-title">Collect resources</span>` +
+      `<span class="nx-qm-route">${srcPlanet ? esc(srcPlanet.name) : '?'} → ${esc(b.outpost.name)} → back</span>`;
     // Source planet picker.
     const sel = document.createElement('select');
-    sel.style.cssText = 'background:#0d1117; border:1px solid #30363d; color:#e6edf3; padding:4px 7px; border-radius:6px;';
+    sel.className = 'nx-input';
     for (const p of planets) { const o = document.createElement('option'); o.value = p.id; o.textContent = p.name; if (p.id === b.srcPlanetId) o.selected = true; sel.appendChild(o); }
     sel.addEventListener('change', () => { b.srcPlanetId = Number(sel.value); b.cargoManual = {}; renderBuilder(); });
-    box.appendChild(fieldRow('<span style="color:#9aa4b2;">From planet</span>', sel));
+    box.appendChild(fieldRow('<span class="nx-dim">From planet</span>', sel));
     // Resource types to collect (present on the outpost).
     const typeWrap = document.createElement('div');
-    typeWrap.style.cssText = 'display:flex; flex-wrap:wrap; gap:6px 14px; margin:8px 0;';
+    typeWrap.className = 'nx-qm-types';
     for (const r of RESOURCES) {
       const have = (b.outpost.res && b.outpost.res[r.k]) || 0;
       if (have <= 0) continue;
-      const lbl = document.createElement('label'); lbl.style.cssText = 'display:inline-flex; align-items:center; gap:5px; font-size:0.82rem; cursor:pointer;';
+      const lbl = document.createElement('label'); lbl.className = 'nx-qm-type';
       const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = b.filter.has(r.k);
       cb.addEventListener('change', () => { if (cb.checked) b.filter.add(r.k); else b.filter.delete(r.k); b.cargoManual = {}; renderBuilder(); });
       lbl.append(cb, Object.assign(document.createElement('img'), { src: `${IMG}/${r.icon}`, width: 14, height: 14 }), document.createTextNode(`${r.label} (${fmt(have)})`));
@@ -727,31 +698,31 @@ async function renderBuilder() {
       b.cargoManual = planFleetMulti(collectAmounts(), cargoShips).plan;
       renderBuilder();
     });
-    box.appendChild(fieldRow('<span style="color:#9aa4b2;">Target amount (auto-plan ships)</span>', withStepper(targetInp, availableOf())));
-    const cw = document.createElement('div'); cw.style.cssText = 'border-top:1px solid #21262d; margin-top:6px; padding-top:8px;';
-    cw.innerHTML = '<div style="color:#8b949e; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">Transport ships</div>';
+    box.appendChild(fieldRow('<span class="nx-dim">Target amount (auto-plan ships)</span>', withStepper(targetInp, availableOf())));
+    const cw = document.createElement('div'); cw.className = 'nx-qm-section';
+    cw.innerHTML = '<div class="nx-sub-label">Transport ships</div>';
     cw.appendChild(cargoPicker(allHaulers, () => { b.cargoManual = {}; renderBuilder(); }, status));
     box.appendChild(cw);
-    const capLine = document.createElement('div'); capLine.style.cssText = 'font-size:0.82rem; margin-top:4px;';
+    const capLine = document.createElement('div'); capLine.className = 'nx-qm-cap';
     const updateSend = () => {
       const avail = availableOf();
       const cap = cargoShips.reduce((s, cs) => s + (b.cargoManual[cs.shipDefId] || 0) * cs.cap, 0);
       // Resource-aware: a ship can only carry resources its allowedCargo permits.
       const collected = avail - residualAfter(b.cargoManual, availAll(), cargoShips);
       const pct = avail > 0 ? Math.min(100, Math.round(collected / avail * 100)) : 0;
-      capLine.innerHTML = `Available <b style="color:#e6edf3">${fmt(avail)}</b> · capacity <b style="color:#e6edf3">${fmt(cap)}</b> · ` +
-        `~<b style="color:${collected >= avail && avail > 0 ? '#56d364' : '#e3b341'}">${pct}%</b> collected (≈${fmt(collected)})`;
+      capLine.innerHTML = `Available <b class="nx-strong">${fmt(avail)}</b> · capacity <b class="nx-strong">${fmt(cap)}</b> · ` +
+        `~<b class="${collected >= avail && avail > 0 ? 'nx-ok' : 'nx-warn'}">${pct}%</b> collected (≈${fmt(collected)})`;
       send.disabled = !getShips().length || b.filter.size === 0;
       refreshFuel();
     };
     for (const cs of cargoShips) {
       const inp = numInput(b.cargoManual[cs.shipDefId] || 0, cs.avail);
       inp.addEventListener('input', () => { b.cargoManual[cs.shipDefId] = Math.min(cs.avail, Math.max(0, parseInt(inp.value, 10) || 0)); updateSend(); });
-      cw.appendChild(fieldRow(`${esc(cs.name)} <span style="color:#6e7681;">/ ${fmt(cs.avail)} · ${fmt(cs.cap)} ea</span>`, withStepper(inp, cs.avail)));
+      cw.appendChild(fieldRow(`${esc(cs.name)} <span class="nx-subtle">/ ${fmt(cs.avail)} · ${fmt(cs.cap)} ea</span>`, withStepper(inp, cs.avail)));
     }
     if (!cargoShips.length) {
       const warn = document.createElement('span');
-      warn.style.cssText = 'color:#ff7b72; font-size:0.82rem;';
+      warn.className = 'nx-err nx-qm-cap';
       warn.textContent = allHaulers.length ? 'No transport type selected.' : 'No cargo ships on this planet.';
       cw.appendChild(warn);
     }
@@ -762,26 +733,26 @@ async function renderBuilder() {
     updateSend();
   } else if (b.mode === 'resource') {
     const rVerb = b.src.kind === 'Moon' ? 'Transfer resources' : b.target.kind === 'Moon' ? 'Send resources' : toOutpost ? 'Supply outpost' : 'Deliver resources';
-    head.innerHTML = `<b style="color:#e6edf3;">${rVerb}</b>` +
-      `<span style="color:#f0883e;">${esc(b.src.name)} → ${esc(b.target.name)}</span>` +
-      `<span style="color:#6e7681; font-size:0.8rem; margin-left:6px;">drag more onto ${esc(b.target.name)} to add</span>`;
+    head.innerHTML = `<span class="nx-qm-builder-title">${rVerb}</span>` +
+      `<span class="nx-qm-route">${esc(b.src.name)} → ${esc(b.target.name)}</span>` +
+      `<span class="nx-qm-hint">drag more onto ${esc(b.target.name)} to add</span>`;
     // Mission switch (planet → planet only): deliver = haulers drop cargo and
     // return; transfer = haulers stay at the destination. Other endpoints (moon/
     // outpost) don't take this choice.
     if (b.src.kind === 'Planet' && b.target.kind === 'Planet') {
       if (!b.deliverMode) b.deliverMode = 'deliver';
       const seg = document.createElement('div');
-      seg.style.cssText = 'display:inline-flex; border:1px solid #30363d; border-radius:7px; overflow:hidden;';
+      seg.className = 'nx-qm-seg';
       const mk = (mode, label, title) => {
         const btn = document.createElement('button'); btn.type = 'button'; btn.textContent = label; btn.title = title;
-        btn.__paint = () => { btn.style.cssText = `padding:4px 12px; border:none; cursor:pointer; font-size:0.85rem; ${b.deliverMode === mode ? 'background:#1f6feb; color:#fff;' : 'background:#161b22; color:#9aa4b2;'}`; };
+        btn.__paint = () => { btn.setAttribute('aria-pressed', String(b.deliverMode === mode)); };
         btn.__paint();
         btn.onclick = () => { b.deliverMode = mode; seg.querySelectorAll('button').forEach(x => x.__paint()); };
         return btn;
       };
       seg.append(mk('deliver', 'Deliver', 'Haulers drop the cargo and return'),
                  mk('transfer', 'Transfer', 'Haulers stay at the destination'));
-      box.appendChild(fieldRow('<span style="color:#9aa4b2;">Mission</span>', seg));
+      box.appendChild(fieldRow('<span class="nx-dim">Mission</span>', seg));
     }
     // Source picker — swap which planet the resources ship from (defaults to the
     // auto-chosen one). Changing it re-caps each amount to the new stock and
@@ -789,7 +760,7 @@ async function renderBuilder() {
     const srcOpts = allColonies.filter(c => c.id !== b.target.id && c.kind !== 'Outpost' && validCombo({ type: 'resource', src: c }, b.target));
     if (srcOpts.length > 1) {
       const sel = document.createElement('select');
-      sel.style.cssText = 'background:#0d1117; border:1px solid #30363d; color:#e6edf3; padding:4px 7px; border-radius:6px;';
+      sel.className = 'nx-input';
       for (const c of srcOpts) { const o = document.createElement('option'); o.value = c.id; o.textContent = c.name; if (c.id === b.src.id) o.selected = true; sel.appendChild(o); }
       sel.addEventListener('change', () => {
         const ns = srcOpts.find(c => c.id === Number(sel.value)); if (!ns) return;
@@ -798,7 +769,7 @@ async function renderBuilder() {
         b.cargoManual = null; b.capRatio = null;
         renderBuilder();
       });
-      box.appendChild(fieldRow('<span style="color:#9aa4b2;">From planet</span>', sel));
+      box.appendChild(fieldRow('<span class="nx-dim">From planet</span>', sel));
     }
     for (const [k, ent] of Object.entries(b.res)) {
       const r = RES_BY_K[k];
@@ -806,10 +777,10 @@ async function renderBuilder() {
       inp.addEventListener('input', () => { ent.amount = Math.min(ent.max, Math.max(0, parseInt(inp.value, 10) || 0)); refreshCargo(); });
       // Re-plan the fleet to match the new amount (on blur/enter, so focus isn't lost mid-typing).
       inp.addEventListener('change', () => { b.cargoManual = planFleetMulti(amountsOf(), cargoShips).plan; renderBuilder(); });
-      const ctl = document.createElement('div'); ctl.style.cssText = 'display:flex; align-items:center; gap:4px;';
+      const ctl = document.createElement('div'); ctl.className = 'nx-qm-stepper';
       const fill = document.createElement('button'); fill.type = 'button'; fill.textContent = 'Fill';
       fill.title = 'Set to the most the fleet can still carry, given the other goods';
-      fill.style.cssText = 'background:#21262d; border:1px solid #30363d; color:#e6edf3; border-radius:6px; padding:4px 8px; cursor:pointer; line-height:1;';
+      fill.className = 'nx-btn nx-btn-ghost nx-btn-sm';
       fill.onclick = () => {
         const test = a => fits(Object.fromEntries(Object.entries(b.res).map(([kk, e]) => [RES_BY_K[kk].cargo, kk === k ? a : e.amount])));
         let lo = 0, hi = ent.max;
@@ -818,16 +789,16 @@ async function renderBuilder() {
         ent.amount = lo; b.cargoManual = null; renderBuilder();
       };
       ctl.append(withStepper(inp, ent.max), fill);
-      box.appendChild(fieldRow(`<img src="${IMG}/${r.icon}" width="15" height="15" style="width:15px;height:15px;"> ${r.label} <span style="color:#6e7681;">/ ${fmt(ent.max)}</span>`,
+      box.appendChild(fieldRow(`<img src="${IMG}/${r.icon}" width="15" height="15" alt=""> ${r.label} <span class="nx-subtle">/ ${fmt(ent.max)}</span>`,
         ctl, () => { delete b.res[k]; b.cargoManual = null; if (!Object.keys(b.res).length) builder = null; renderBuilder(); }));
     }
     const allHaulers = await cargoShipsOf(b.src, Object.keys(b.res).map(k => RES_BY_K[k].cargo));
     const cargoShips = allHaulers.filter(s => cargoSel.has(s.key));
-    const cw = document.createElement('div'); cw.style.cssText = 'border-top:1px solid #21262d; margin-top:10px; padding-top:8px;';
-    cw.innerHTML = '<div style="color:#8b949e; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">Transport ships</div>';
+    const cw = document.createElement('div'); cw.className = 'nx-qm-section';
+    cw.innerHTML = '<div class="nx-sub-label">Transport ships</div>';
     cw.appendChild(cargoPicker(allHaulers, () => { b.cargoManual = null; renderBuilder(); }, status));
     box.appendChild(cw);
-    const capLine = document.createElement('div'); capLine.style.cssText = 'font-size:0.82rem; margin-top:4px;';
+    const capLine = document.createElement('div'); capLine.className = 'nx-qm-cap';
     const amountsOf = () => Object.fromEntries(Object.entries(b.res).map(([k, e]) => [RES_BY_K[k].cargo, e.amount]));
     const totalCargo = () => Object.values(b.res).reduce((s, e) => s + e.amount, 0);
     getCargoNeed = () => totalCargo();
@@ -842,7 +813,8 @@ async function renderBuilder() {
     };
     const fitBtn = document.createElement('button'); fitBtn.type = 'button'; fitBtn.textContent = 'Fit to fleet';
     fitBtn.title = 'Scale all goods down proportionally so they fit the fleet';
-    fitBtn.style.cssText = 'display:none; margin-top:6px; padding:4px 12px; border-radius:6px; border:1px solid #1f6feb; background:#1f6feb; color:#fff; cursor:pointer; font-size:0.85rem;';
+    fitBtn.className = 'nx-btn nx-btn-secondary nx-btn-sm';
+    fitBtn.style.cssText = 'display:none; margin-top:6px;';
     fitBtn.onclick = () => {
       const scaled = f => Object.fromEntries(Object.entries(b.res).map(([k, e]) => [RES_BY_K[k].cargo, Math.min(e.max, Math.floor(e.amount * f))]));
       let lo = 0, hi = 1;
@@ -857,19 +829,19 @@ async function renderBuilder() {
       const need = totalCargo();
       const short = residualAfter(b.cargoManual, amountsOf(), cargoShips);
       fitState.short = short > 0; updateFitBtn();
-      capLine.innerHTML = `Carrying <b style="color:${short <= 0 ? '#56d364' : '#ff7b72'}">${fmt(need - short)}</b> / ${fmt(need)}` +
-        (short > 0 ? ` <span style="color:#ff7b72;">· short ${fmt(short)}</span>` : '');
+      capLine.innerHTML = `Carrying <b class="${short <= 0 ? 'nx-ok' : 'nx-err'}">${fmt(need - short)}</b> / ${fmt(need)}` +
+        (short > 0 ? ` <span class="nx-err">· short ${fmt(short)}</span>` : '');
       send.disabled = need <= 0 || short > 0;
       refreshFuel();
     };
     for (const cs of cargoShips) {
       const inp = numInput(b.cargoManual[cs.shipDefId] || 0, cs.avail);
       inp.addEventListener('input', () => { b.cargoManual[cs.shipDefId] = Math.min(cs.avail, Math.max(0, parseInt(inp.value, 10) || 0)); refreshCargo(); });
-      cw.appendChild(fieldRow(`${esc(cs.name)} <span style="color:#6e7681;">/ ${fmt(cs.avail)} · ${fmt(cs.cap)} ea</span>`, withStepper(inp, cs.avail)));
+      cw.appendChild(fieldRow(`${esc(cs.name)} <span class="nx-subtle">/ ${fmt(cs.avail)} · ${fmt(cs.cap)} ea</span>`, withStepper(inp, cs.avail)));
     }
     if (!cargoShips.length) {
       const warn = document.createElement('span');
-      warn.style.cssText = 'color:#ff7b72; font-size:0.82rem;';
+      warn.className = 'nx-err nx-qm-cap';
       warn.textContent = allHaulers.length ? 'No transport type selected.' : 'No cargo ships on this colony.';
       cw.appendChild(warn);
     }
@@ -880,13 +852,13 @@ async function renderBuilder() {
     refreshCargo();
   } else {   // ship
     const sVerb = b.src.kind === 'Moon' ? 'Recall ships' : b.target.kind === 'Moon' ? 'Send ships' : toOutpost ? 'Deploy ships' : 'Relocate ships';
-    head.innerHTML = `<b style="color:#e6edf3;">${sVerb}</b>` +
-      `<span style="color:#f0883e;">${esc(b.src.name)} → ${esc(b.target.name)}</span>` +
-      `<span style="color:#6e7681; font-size:0.8rem; margin-left:6px;">drag more onto ${esc(b.target.name)} to add</span>`;
+    head.innerHTML = `<span class="nx-qm-builder-title">${sVerb}</span>` +
+      `<span class="nx-qm-route">${esc(b.src.name)} → ${esc(b.target.name)}</span>` +
+      `<span class="nx-qm-hint">drag more onto ${esc(b.target.name)} to add</span>`;
     for (const [id, ent] of Object.entries(b.ships)) {
       const inp = numInput(ent.qty, ent.max);
       inp.addEventListener('input', () => { ent.qty = Math.min(ent.max, Math.max(0, parseInt(inp.value, 10) || 0)); refreshFuel(); send.disabled = !getShips().length; });
-      box.appendChild(fieldRow(`${esc(ent.name)} <span style="color:#6e7681;">/ ${fmt(ent.max)}</span>`, withStepper(inp, ent.max),
+      box.appendChild(fieldRow(`${esc(ent.name)} <span class="nx-subtle">/ ${fmt(ent.max)}</span>`, withStepper(inp, ent.max),
         () => { delete b.ships[id]; if (!Object.keys(b.ships).length) builder = null; renderBuilder(); }));
     }
     getShips = () => Object.entries(b.ships).map(([id, e]) => ({ shipDefId: Number(id), quantity: e.qty })).filter(s => s.quantity > 0);
@@ -954,7 +926,7 @@ async function renderBuilder() {
   };
 
   const foot = document.createElement('div');
-  foot.style.cssText = 'display:flex; gap:10px; justify-content:flex-end; align-items:center; margin-top:10px;';
+  foot.className = 'nx-qm-foot';
   foot.append(status, clear, send);
   box.appendChild(foot);
   builderEl.appendChild(box);
@@ -968,10 +940,9 @@ function injectButton() {
   const btn = document.createElement('button');
   btn.id = 'nx-logistics-btn';
   btn.type = 'button';
+  btn.className = 'nx-theme nx-btn nx-btn-ghost nx-qm-topbar-btn';
   btn.title = 'Quartermaster — fleet & resources overview (addon)';
   btn.textContent = '📦 Quartermaster';
-  btn.style.cssText = 'margin:0 10px; padding:7px 14px; border-radius:7px; cursor:pointer;' +
-    'font-size:0.92rem; font-weight:600; border:1px solid #3a4256; background:#1a1f2b; color:#eee;';
   btn.addEventListener('click', openView);
   const left = bar.querySelector('.topbar-left') || bar;
   left.appendChild(btn);

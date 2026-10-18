@@ -60,6 +60,7 @@ async function restoreAutomations() {
     setStatusText(document.getElementById(statusId), 'Resumed');
   }
   await browser.storage.local.remove(PENDING_KEY);
+  renderBanner(null);
 }
 
 function renderBanner(pending) {
@@ -101,8 +102,8 @@ export async function initHumanVerificationBanner() {
   const got = await browser.storage.local.get(PENDING_KEY);
   if (got[PENDING_KEY]) lockSwitches();
   renderBanner(got[PENDING_KEY]);
-  browser.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'local' || !changes[PENDING_KEY]) return;
+  browser.storage.local.onChanged.addListener(changes => {
+    if (!changes[PENDING_KEY]) return;
     renderBanner(changes[PENDING_KEY].newValue);
   });
 }

@@ -1,39 +1,57 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="nx-theme">
 <head>
   <meta charset="UTF-8" />
   <title>Nexus Overseer</title>
+  <link rel="stylesheet" href="theme.css" />
   <link rel="stylesheet" href="dashboard.css" />
 </head>
 <body>
   <div class="app-header">
-    <h1>Nexus Overseer</h1>
-    <label class="status-server-field">
-      Server
+    <button id="nav-toggle" class="nav-toggle" type="button" aria-label="Menu" aria-controls="main-nav" aria-expanded="false">☰</button>
+  </div>
+  <button id="expert-toggle" type="button" aria-label="Toggle expert mode"></button>
+
+  <div id="nav-backdrop" class="nav-backdrop"></div>
+  <nav class="tabs" id="main-nav">
+    <div class="nav-brand">
+      <img src="icons/icon128.png" alt="" width="28" height="28" />
+      <h1>Nexus Overseer</h1>
+    </div>
+    <label class="nav-server">
+      <span class="nav-group">Server</span>
       <select id="server-select" class="status-server-select" title="Select the Nexus Legacy server whose data the addon shows. It follows your active game tab automatically.">
         <option value="s0">NX-S0</option>
         <option value="beta">NX-BETA</option>
       </select>
     </label>
-  </div>
-  <button id="expert-toggle" type="button" aria-label="Toggle expert mode"></button>
-
-  <nav class="tabs">
-    <button class="tab main-tab active" data-tab="dashboard">Dashboard</button>
-    <button class="tab main-tab" data-tab="statistics">Statistics</button>
-    <button class="tab main-tab expert-only" data-tab="scouting">Scouting</button>
-    <button class="tab main-tab" data-tab="asteroids">Asteroids</button>
-    <button class="tab main-tab expert-only" data-tab="expeditions">Expeditions</button>
-    <button class="tab main-tab" data-tab="pirates">Pirates</button>
-    <button class="tab main-tab" data-tab="fleets">Fleets</button>
-    <button class="tab main-tab" data-tab="finder">Galaxy Scout</button>
-    <button class="tab main-tab" data-tab="market">Market</button>
-    <button class="tab main-tab" data-tab="techtree">Tech Tree</button>
-    <button class="tab main-tab" data-tab="simulator">Simulator</button>
-    <button class="tab main-tab" data-tab="options" title="Options" aria-label="Options"></button>
-  </nav>
+    <div class="nav-group">Overview</div>
+    <button class="tab main-tab active" data-tab="dashboard"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg><span>Dashboard</span></button>
+    <button class="tab main-tab" data-tab="statistics"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg><span>Statistics</span></button>
+    <div class="nav-group">Explore</div>
+    <button class="tab main-tab expert-only" data-tab="scouting"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg><span>Scouting</span></button>
+    <button class="tab main-tab" data-tab="asteroids"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 13-8.381 8.38a1 1 0 0 1-3.001-3L11 9.999"/><path d="M15.973 4.027A13 13 0 0 0 5.902 2.373c-1.398.342-1.092 2.158.277 2.601a19.9 19.9 0 0 1 5.822 3.024"/><path d="M16.001 11.999a19.9 19.9 0 0 1 3.024 5.824c.444 1.369 2.26 1.676 2.603.278A13 13 0 0 0 20 8.069"/><path d="M18.352 3.352a1.205 1.205 0 0 0-1.704 0l-5.296 5.296a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l5.296-5.296a1.205 1.205 0 0 0 0-1.704z"/></svg><span>Asteroids</span></button>
+    <button class="tab main-tab expert-only" data-tab="expeditions"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg><span>Expeditions</span></button>
+    <button class="tab main-tab" data-tab="finder"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span>Galaxy Scout</span></button>
+    <div class="nav-group">Military</div>
+    <button class="tab main-tab" data-tab="pirates"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12.5 17-.5-1-.5 1h1z"/><path d="M15 22a1 1 0 0 0 1-1v-1a2 2 0 0 0 1.56-3.25 8 8 0 1 0-11.12 0A2 2 0 0 0 8 20v1a1 1 0 0 0 1 1z"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="12" r="1"/></svg><span>Pirates</span></button>
+    <button class="tab main-tab" data-tab="fleets"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg><span>Fleets</span></button>
+    <button class="tab main-tab" data-tab="simulator"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01M12 10h.01M8 10h.01M12 14h.01M8 14h.01M12 18h.01M8 18h.01"/></svg><span>Simulator</span></button>
+    <div class="nav-group">Economy</div>
+    <button class="tab main-tab" data-tab="market"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg><span>Market</span></button>
+    <button class="tab main-tab" data-tab="techtree"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/></svg><span>Tech Tree</span></button>
+    <div class="nav-sep"></div>
+    <button class="tab main-tab" data-tab="options" title="Options" aria-label="Options"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg><span>Options</span></button>
+        <button class="tab main-tab" data-tab="guide"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg><span>User Guide</span></button>
+      </nav>
 
   <div id="hv-banner" class="hv-banner" role="alert"></div>
+
+  <div class="status-bar">
+    <span id="status-text">Loading…</span>
+    <span id="status-alarm-text" class="status-alarm-hidden"></span>
+    <button id="btn-scrape">Scrape Now</button>
+  </div>
 
   <div class="subtabs">
     <button class="tab subtab active" data-tab="global">Global</button>
@@ -47,14 +65,94 @@
     <button class="tab subtab" data-tab="wormholes">Wormhole</button>
   </div>
 
-  <div class="status-bar">
-    <span id="status-text">Loading…</span>
-    <span id="status-alarm-text" class="status-alarm-hidden"></span>
-    <button id="btn-scrape">Scrape Now</button>
-  </div>
-
-  <div id="simulator-content" style="display:none;">
-    <iframe id="simulator-frame" src="simulator.html" title="Combat Simulator"></iframe>
+  <div id="simulator-content" class="simulator-dashboard" style="display:none;">
+    <div class="status-bar show">
+      <span id="sim-status" role="status"></span>
+    </div>
+    <div class="toolbar-panel">
+      <div class="toolbar-actions">
+        <button id="btn-run" class="toolbar-button primary-button">Simulate battle</button>
+        <button id="btn-clear" class="toolbar-button secondary-button">Clear fleets</button>
+      </div>
+    </div>
+    <div class="sim-layout">
+      <div class="dashboard-panel">
+        <h2 class="fleet-title attacker">Attacker fleet</h2>
+        <div class="toolbar-row">
+          <select id="attacker-type" class="toolbar-select" title="Fleet owner or faction">
+            <option value="player">Player</option>
+            <option value="npc">NPC</option>
+            <option value="pirate">Pirate</option>
+          </select>
+          <span id="attacker-zone-wrap" style="display:none;"><select id="attacker-zone" class="toolbar-select"></select></span>
+          <select id="fleet-planet" class="toolbar-select" title="Planet to import ships from">
+            <option value="home">Home planet</option>
+          </select>
+          <select id="fleet-class" class="toolbar-select" title="Filter by ship class">
+            <option value="">All classes</option>
+          </select>
+          <button id="btn-load-fleet" class="toolbar-button secondary-button">Load my fleet</button>
+        </div>
+        <div class="toolbar-row">
+          <label class="toolbar-field"><span class="toolbar-label">Origin system</span>
+            <input id="atk-system" type="text" class="toolbar-input coord-input" placeholder="e.g. A12-27" /></label>
+        </div>
+        <div id="attacker-player-opts" class="panel-toolbar sim-settings">
+          <label class="checkbox-label"><input id="attacker-own-bonuses" type="checkbox" checked /> Use my own research and bonuses</label>
+          <label class="checkbox-label"><input id="attacker-leadership" type="checkbox" /> Attach my leadership</label>
+          <div class="tech-grid" id="attacker-bonuses"></div>
+        </div>
+        <table class="fleet-table"><tbody id="attacker-ships"></tbody></table>
+      </div>
+      <div class="dashboard-panel">
+        <h2 class="fleet-title defender">Defender fleet</h2>
+        <div class="toolbar-row">
+          <select id="defender-type" class="toolbar-select" title="Fleet owner or faction">
+            <option value="player">Player</option>
+            <option value="npc">NPC</option>
+            <option value="pirate">Pirate</option>
+          </select>
+          <span id="defender-zone-wrap" style="display:none;"><select id="defender-zone" class="toolbar-select"></select></span>
+          <select id="report-select" class="toolbar-select" style="max-width:280px;">
+            <option value="">Fill from intel report…</option>
+          </select>
+        </div>
+        <div class="toolbar-row">
+          <label class="toolbar-field"><span class="toolbar-label">Target system</span>
+            <input id="def-system" type="text" class="toolbar-input coord-input" placeholder="e.g. G35-41" /></label>
+          <span id="distance-display" class="coord-distance"></span>
+        </div>
+        <div id="defender-player-opts" class="panel-toolbar sim-settings">
+          <label class="checkbox-label"><input id="defender-own-bonuses" type="checkbox" /> Use my own research and bonuses</label>
+          <label class="checkbox-label"><input id="defender-leadership" type="checkbox" /> Attach my leadership</label>
+          <div class="tech-grid" id="defender-bonuses"></div>
+        </div>
+        <div id="defender-defense-box" class="panel-toolbar sim-settings">
+          <div class="tech-grid" id="defender-defense"></div>
+          <div class="tech-grid">
+            <label>Building HP bonus % <input id="def-building-hp-bonus" type="number" class="panel-toolbar-input" step="0.1" placeholder="0" /></label>
+            <label>Planetary defence bonus % <input id="def-planetary-bonus" type="number" class="panel-toolbar-input" step="0.1" placeholder="0" /></label>
+          </div>
+        </div>
+        <div id="target-intel" style="display:none;" class="panel-toolbar sim-settings"></div>
+        <table class="fleet-table"><tbody id="defender-ships"></tbody></table>
+      </div>
+    </div>
+    <div id="results" style="display:none;">
+      <div class="section-label">Battle outcome</div>
+      <div class="stats" id="outcome-stats"></div>
+      <div class="sim-fleet-results" id="fleet-results"></div>
+      <div class="sim-rounds">
+        <h3 class="sim-rounds-heading">Combat rounds <span id="rounds-count"></span></h3>
+        <div class="sim-rounds-list" id="rounds-log"></div>
+      </div>
+      <div class="sim-layout">
+        <div><div class="section-label">Attacker losses</div><div class="sim-loss-rows" id="attacker-losses"></div></div>
+        <div><div class="section-label">Defender losses</div><div class="sim-loss-rows" id="defender-losses"></div></div>
+      </div>
+      <div class="section-label">Debris generated</div>
+      <div class="stats" id="debris-stats"></div>
+    </div>
   </div>
 
   <div class="toolbar-panel global-filter-toolbar" id="global-controls" style="display:none;">
@@ -94,6 +192,8 @@
   </div>
 
   <div id="dashboard-content" class="global-dashboard"></div>
+
+  <div id="guide-content" class="global-dashboard" style="display:none;"></div>
 
   <div id="options-content" class="global-dashboard" style="display:none;">
     <section class="dashboard-panel opt-panel" id="opt-dashboard">
@@ -1208,11 +1308,11 @@
       </label>
     </div>
 
-    <div class="fleet-box dashboard-panel fleet-editor-panel">
+    <div class="dashboard-panel fleet-editor-panel">
       <h2 class="fleet-title attacker" id="ft-box-title">Fleet</h2>
       <span id="ft-status" class="fleet-status"></span>
       <div id="ft-legend" class="fleet-legend"></div>
-      <table class="fleet-table"><tbody id="ft-ships"></tbody></table>
+      <div id="ft-ships" class="fleet-ship-groups"></div>
       <div class="fleet-escort-config">
         <div class="fleet-escort-label">Escort for zone:</div>
         <div id="ft-escort-zones" class="fleet-escort-zones"></div>
@@ -1364,17 +1464,28 @@
     </div>
   </div>
 
-  <div class="storage-footer footer-bar">
-    <span class="footer-links">
-      <a id="footer-version" class="footer-link" href="#" title="Show what's new in this version"></a>
-      <a class="footer-link" href="https://github.com/DopeEx/NexusOverseer" target="_blank" rel="noopener noreferrer">GitHub</a>
-    </span>
-  </div>
+  <footer class="app-footer">
+    <div class="app-footer-brand">
+      <span>Nexus Overseer</span>
+      <button id="footer-version" class="footer-version" type="button" title="Show what's new in this version"></button>
+    </div>
+    <nav class="app-footer-links" aria-label="Project links">
+      <a class="footer-link" href="https://github.com/DopeEx/NexusOverseer" target="_blank" rel="noopener noreferrer">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        <span>GitHub</span>
+      </a>
+      <a class="footer-link" href="https://github.com/DopeEx/NexusOverseer/issues" target="_blank" rel="noopener noreferrer">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 9.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/><path d="M8 0a8 8 0 110 16A8 8 0 018 0zM1.5 8a6.5 6.5 0 1013 0 6.5 6.5 0 00-13 0z"/></svg>
+        <span>Report an issue</span>
+      </a>
+    </nav>
+  </footer>
 
   <!-- Load order: polyfill + common.js first, tabs next, orchestrator last. -->
   <script src="browser-polyfill.js"></script>
   <script src="server-storage.js"></script>
   <script src="chart.umd.js"></script>
+  <script src="guide-content.js"></script>
   <script type="module" src="dashboard.js"></script>
 </body>
 </html>

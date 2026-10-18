@@ -4,11 +4,11 @@ import { fmt, store, confirmDialog, escapeHtml } from '../common.js';
 import { loadAll } from '../dashboard.js';
 
 export const BRANCH_ORDER = ['military', 'science', 'economy'];
-export const BRANCH_COLORS = { military: '#ff7b72', science: '#58a6ff', economy: '#e3b341' };
+export const BRANCH_COLORS = { military: '#ff6b7a', science: '#7ed4ff', economy: '#ffc070' };
 export const STATUS_LEGEND = [
-  ['maxed', '#56d364', 'Maxed'], ['researched', '#58a6ff', 'Researched'],
-  ['researching', '#e3b341', 'Researching'], ['available', '#8b949e', 'Available'],
-  ['locked', '#484f58', 'Locked'],
+  ['maxed', '#7ed957', 'Maxed'], ['researched', '#7ed4ff', 'Researched'],
+  ['researching', '#ffc070', 'Researching'], ['available', '#c0cce0', 'Available'],
+  ['locked', '#64748b', 'Locked'],
 ];
 export const SVGNS = 'http://www.w3.org/2000/svg';
 export let ttPinned = null;   // pinned tech key (click to lock highlight)
@@ -495,9 +495,9 @@ export function renderQueue() {
   const aff = scheduleAffordability(items, now);
   let afford = '';
   if (aff) {
-    afford = aff.ok ? '<div style="color:#56d364">Affordable now</div>'
-      : aff.infeasible ? '<div style="color:#ff7b72">Not affordable (no income for a resource)</div>'
-        : `<div style="color:#e3b341">Affordable in ~${fmtDuration(aff.waitH * 3600)} (at current rates)</div>`;
+    afford = aff.ok ? '<div style="color:var(--success)">Affordable now</div>'
+      : aff.infeasible ? '<div style="color:var(--error)">Not affordable (no income for a resource)</div>'
+        : `<div style="color:var(--warning)">Affordable in ~${fmtDuration(aff.waitH * 3600)} (at current rates)</div>`;
   }
 
   const slotNote = slots > 1 ? ` · ${slots} research slots` : '';
@@ -506,7 +506,7 @@ export function renderQueue() {
     afford +
     `<div>Research time: <span class="tot-val">${fmtDuration(researchTime)}</span> · ${items.length} steps${slotNote}</div>` +
     `<div>Queue done: <span class="tot-val">${fmtClock(finishTime)}</span></div>` +
-    (labInfo.level ? `<div style="color:#6e7681">${labInfo.estimated ? 'Est. lab' : 'Lab'} level ${labInfo.level}</div>` : '');
+    (labInfo.level ? `<div style="color:var(--text-subtle)">${labInfo.estimated ? 'Est. lab' : 'Lab'} level ${labInfo.level}</div>` : '');
   clearBtn.style.display = '';
 }
 
@@ -908,7 +908,7 @@ export function renderTechTreeTab() {
     path.setAttribute('d', d);
     path.setAttribute('class', 'tt-edge');
     path.setAttribute('marker-end', 'url(#tt-arrow)');
-    path.style.stroke = BRANCH_COLORS[e.branch] || '#30363d';
+    path.style.stroke = BRANCH_COLORS[e.branch] || '#15263b';
     if (e.met) {
       path.style.strokeOpacity = '0.85';
     } else {
@@ -928,7 +928,7 @@ export function renderTechTreeTab() {
     node.className = `tt-node ${techStatus(t, levels)}`;
     node.style.left = `${p.x}px`;
     node.style.top = `${p.y}px`;
-    node.style.borderTop = `3px solid ${BRANCH_COLORS[t.branch] || '#30363d'}`;
+    node.style.borderTop = `3px solid ${BRANCH_COLORS[t.branch] || '#15263b'}`;
     node.title = techTooltip(t, levels);
     const name = document.createElement('div');
     name.className = 'tt-node-name';

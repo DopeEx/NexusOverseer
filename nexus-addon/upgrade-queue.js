@@ -82,7 +82,7 @@ function render() {
   listEl.textContent = '';
   if (!items.length) {
     const empty = document.createElement('div');
-    empty.style.cssText = 'color:#484f58; padding:10px 2px; font-size:.9rem;';
+    empty.className = 'nx-planner-info';
     empty.textContent = 'Empty — add a building, tech, or ship from a planner.';
     listEl.appendChild(empty);
     return;
@@ -92,16 +92,16 @@ function render() {
     const row = document.createElement('div');
     row.draggable = true;
     row.dataset.i = String(i);
-    row.style.cssText = 'display:flex; align-items:center; gap:8px; padding:7px 8px; margin:6px 0;' +
-      `background:${isSel ? '#132d1d' : '#0d1117'}; border:1px solid ${isSel ? '#2ea043' : '#21262d'}; border-radius:7px; cursor:pointer;`;
+    row.className = 'nx-planner-queue-row';
+    row.classList.toggle('nx-planner-queue-selected', isSel);
     row.title = 'Select to include in the resource total';
     row.innerHTML =
       `<span style="opacity:.5; cursor:grab;">⋮⋮</span>` +
       `<span style="font-size:15px;">${ICON[it.kind] || '•'}</span>` +
       `<div style="flex:1; min-width:0;">` +
-        `<div style="color:#e6edf3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${it.name || it.key}</div>` +
-        `<div style="color:#8b949e; font-size:.8rem;">L${from} → ${target}` +
-          (it.planet ? ` · <span style="color:#6e7681;">${it.planet}</span>` : '') + `</div>` +
+        `<div class="nx-text" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${it.name || it.key}</div>` +
+        `<div class="nx-subtle" style="font-size:.8rem;">L${from} → ${target}` +
+          (it.planet ? ` · <span class="nx-dim">${it.planet}</span>` : '') + `</div>` +
       `</div>`;
     row.onclick = () => {
       if (isSel) selected.delete(it.id); else selected.add(it.id);
@@ -111,7 +111,7 @@ function render() {
     const del = document.createElement('button');
     del.type = 'button'; del.textContent = '✕';
     del.title = 'Remove';
-    del.style.cssText = 'background:none; border:none; color:#6e7681; cursor:pointer; font-size:14px; padding:2px 4px;';
+    del.className = 'nx-icon-btn';
     del.onclick = e => {
       e.stopPropagation();
       selected.delete(it.id);
@@ -149,12 +149,12 @@ async function renderAgg() {
 
   const planetIds = new Set(sel.map(({ it }) => it.planetId));
   if (planetIds.size > 1) {
-    aggEl.innerHTML = '<div style="color:#ff7b72; font-size:.85rem; padding:8px 2px;">Select items on one planet only.</div>';
+    aggEl.innerHTML = '<div class="nx-err">Select items on one planet only.</div>';
     return;
   }
   const planetId = [...planetIds][0];
   if (planetId == null) { aggEl.textContent = ''; return; }
-  aggEl.innerHTML = '<div style="color:#8b949e; font-size:.85rem; padding:8px 2px;">Computing…</div>';
+  aggEl.innerHTML = '<div class="nx-planner-info">Computing…</div>';
 
   let need = {}, pl;
   try {
@@ -170,7 +170,7 @@ async function renderAgg() {
     pl = d.planet || d;
   } catch (e) {
     if (token !== aggToken) return;
-    aggEl.innerHTML = `<div style="color:#ff7b72; font-size:.85rem; padding:8px 2px;">Error: ${e.message}</div>`;
+    aggEl.innerHTML = `<div class="nx-err">Error: ${e.message}</div>`;
     return;
   }
   if (token !== aggToken) return;
@@ -179,14 +179,10 @@ async function renderAgg() {
 
 function renderAggTable(need, pl, planetId) {
   aggEl.textContent = '';
-  const cols = 'display:grid; grid-template-columns:1fr 70px 70px 70px; align-items:center;';
-  const numCell = 'text-align:right; padding:4px 6px; border-left:1px solid #21262d;';
   const head = document.createElement('div');
-  head.style.cssText = cols + ' color:#8b949e; font-size:.7rem; text-transform:uppercase; letter-spacing:.04em; border-top:1px solid #30363d; border-bottom:1px solid #30363d; margin-top:6px; padding-top:6px;';
-  head.innerHTML = '<div style="padding:4px 0;">Selected</div>' +
-    `<div style="${numCell}">Need</div>` +
-    `<div style="${numCell}">Have</div>` +
-    `<div style="${numCell}">Deficit</div>`;
+  head.className = 'nx-planner-cost-row nx-planner-cost-head';
+  head.innerHTML = '<div class="nx-resource-label">Selected</div>' +
+    '<div>Need</div><div>Have</div><div>Deficit</div>';
   aggEl.appendChild(head);
 
   const deficit = {};
@@ -196,12 +192,12 @@ function renderAggTable(need, pl, planetId) {
     const short = Math.max(0, n - have);
     deficit[cargo] = short;
     const line = document.createElement('div');
-    line.style.cssText = cols + ' border-bottom:1px solid #161b22; font-size:.85rem;';
+    line.className = 'nx-planner-cost-row';
     line.innerHTML =
-      `<div style="display:flex; align-items:center; padding:4px 0;"><img src="/images/resources/${cargo}.webp" width="16" height="16" style="width:16px;height:16px;" title="${labelOf(cargo)}"></div>` +
-      `<div style="${numCell}">${fmt(n)}</div>` +
-      `<div style="${numCell} color:#8b949e;">${fmt(have)}</div>` +
-      `<div style="${numCell} color:${short > 0 ? '#ff7b72' : '#56d364'};">${short > 0 ? fmt(short) : '—'}</div>`;
+      `<div class="nx-resource-label"><img src="/images/resources/${cargo}.webp" width="16" height="16" title="${labelOf(cargo)}"></div>` +
+      `<div>${fmt(n)}</div>` +
+      `<div class="nx-subtle">${fmt(have)}</div>` +
+      `<div class="${short > 0 ? 'nx-err' : 'nx-ok'}">${short > 0 ? fmt(short) : '—'}</div>`;
     aggEl.appendChild(line);
   }
   const totalShort = Object.values(deficit).reduce((s, v) => s + v, 0);
@@ -209,8 +205,7 @@ function renderAggTable(need, pl, planetId) {
   sendBtn.type = 'button';
   sendBtn.textContent = 'Send via Quartermaster';
   sendBtn.disabled = totalShort <= 0;
-  sendBtn.style.cssText = 'margin-top:10px; width:100%; padding:7px 10px; border-radius:6px; border:1px solid #2ea043;' +
-    `background:#238636; color:#fff; cursor:pointer;${totalShort <= 0 ? ' opacity:.5; cursor:default;' : ''}`;
+  sendBtn.className = 'nx-btn nx-btn-primary nx-planner-queue-send';
   sendBtn.title = totalShort <= 0 ? 'Selection already covered on that planet' : 'Open the Quartermaster to ship the deficit there';
   sendBtn.onclick = () => {
     const nonZero = Object.fromEntries(Object.entries(deficit).filter(([, v]) => v > 0));
@@ -239,13 +234,13 @@ window.__nxQueue = {
   async mountPanel(overlay) {
     await load();
     const panel = document.createElement('div');
-    panel.style.cssText = 'background:#12161f; color:#e6edf3; border:1px solid #30363d; border-radius:10px;' +
-      'width:280px; max-width:92vw; max-height:88vh; overflow:auto; padding:16px 16px; margin-left:14px;';
-    panel.innerHTML = '<h2 style="margin:0 0 10px; font-size:1.05rem;">To-do</h2>';
+    panel.className = 'nx-planner-box nx-planner-queue';
+    panel.innerHTML = '<h2>To-do</h2>';
     listEl = document.createElement('div');
-    listEl.style.cssText = 'max-height:260px; overflow-y:auto;';
+    listEl.className = 'nx-planner-queue-list';
     panel.appendChild(listEl);
     aggEl = document.createElement('div');
+    aggEl.className = 'nx-planner-queue-summary';
     panel.appendChild(aggEl);
     overlay.appendChild(panel);
     render();

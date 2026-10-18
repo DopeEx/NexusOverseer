@@ -74,7 +74,7 @@ async function initExpeditionLaunch() {
   autoBox.addEventListener('change', e => rememberSelection('e-auto', e.target.checked));
 
   await refreshExpeditionTemplates();
-  browser.storage.onChanged.addListener((changes, area) => {
+  browser.storage.local.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes.fleet_templates) refreshExpeditionTemplates();
   });
 
@@ -440,7 +440,7 @@ export function renderExpeditionStatsTab() {
     appendExtraResourceCards(el, t, periodLabel);
     el.append(
       makeStatCard(`Missions${periodLabel}`, fmt(t.missions), 'missions'),
-      makeStatCard(`Ships lost${periodLabel}`, fmt(t.ships_lost), '', 'color:#ff7b72'),
+      makeStatCard(`Ships lost${periodLabel}`, fmt(t.ships_lost), '', 'color:var(--error)'),
       makeStatCard(`Fuel spent${periodLabel}`, fmt(fuelForMode('expedition', mode)), 'hydrogen'),
     );
   }

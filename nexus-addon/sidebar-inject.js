@@ -1,4 +1,4 @@
-// Injects an "Addon → Nexus Tracker" section into the game's sidebar, styled
+// Injects an "Addon → Nexus Overseer" section into the game's sidebar, styled
 // with the game's own classes, that opens the addon dashboard. The game is a
 // SPA, so re-inject whenever the nav re-renders. dashboard.html is web-
 // accessible for this origin, so a plain link to it works.
@@ -13,18 +13,19 @@ const ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" vie
   class="lucide lucide-line-chart sidebar-link-icon" aria-hidden="true">
   <path d="M3 3v16a2 2 0 0 0 2 2h16"></path><path d="m19 9-5 5-4-4-3 3"></path></svg>`;
 
-// lucide-style "globe" icon for the empire-wide view.
-const EMPIRE_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
-  fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-  class="lucide lucide-globe sidebar-link-icon" aria-hidden="true">
-  <circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path>
-  <path d="M2 12h20"></path></svg>`;
-
 // lucide-style "book-open" icon for the user guide.
 const GUIDE_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
   fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
   class="lucide lucide-book-open sidebar-link-icon" aria-hidden="true">
   <path d="M12 7v14"></path><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"></path></svg>`;
+
+const ASTEROIDS_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+  fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+  class="sidebar-link-icon" aria-hidden="true">
+  <path d="m14 13-8.381 8.38a1 1 0 0 1-3.001-3L11 9.999"/>
+  <path d="M15.973 4.027A13 13 0 0 0 5.902 2.373c-1.398.342-1.092 2.158.277 2.601a19.9 19.9 0 0 1 5.822 3.024"/>
+  <path d="M16.001 11.999a19.9 19.9 0 0 1 3.024 5.824c.444 1.369 2.26 1.676 2.603.278A13 13 0 0 0 20 8.069"/>
+  <path d="M18.352 3.352a1.205 1.205 0 0 0-1.704 0l-5.296 5.296a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l5.296-5.296a1.205 1.205 0 0 0 0-1.704z"/></svg>`;
 
 function buildSection() {
   const section = document.createElement('div');
@@ -33,13 +34,10 @@ function buildSection() {
   section.innerHTML = `
     <div class="sidebar-section-label">Addon</div>
     <a class="sidebar-link" href="${DASH_URL}" target="_blank" rel="noopener" data-nexus-addon="1">
-      ${ICON}<span class="sidebar-link-label">Nexus Tracker</span>
+      ${ICON}<span class="sidebar-link-label">Nexus Overseer</span>
     </a>
     <a class="sidebar-link" href="#" data-nexus-lsbelts="1">
-      ${ICON}<span class="sidebar-link-label">Live Search Belts</span>
-    </a>
-    <a class="sidebar-link" href="#" data-nexus-empire="1">
-      ${EMPIRE_ICON}<span class="sidebar-link-label">Empire View</span>
+      ${ASTEROIDS_ICON}<span class="sidebar-link-label">Live Search Belts</span>
     </a>
     <a class="sidebar-link" href="#" data-nexus-guide="1">
       ${GUIDE_ICON}<span class="sidebar-link-label">User Guide</span>
@@ -131,8 +129,8 @@ rt.onMessage.addListener((msg, sender, sendResponse) => {
 // Opened when the user clicks an asteroid live-search notification. Floating,
 // draggable, non-modal — same style as the ratio calculator.
 const TYPE_COLOR = {
-  ore: '#fb923c', gas: '#60a5fa', ice: '#67e8f9', plasma: '#f97316',
-  quantum: '#f472b6', dark: '#9333ea',
+  ore: 'var(--res-ore)', gas: 'var(--res-hydrogen)', ice: 'var(--res-cryo)', plasma: 'var(--res-plasma)',
+  quantum: 'var(--res-quantum)', dark: 'var(--res-dark)',
 };
 // Ship recommendation per field type: specialized ship + per-cycle extraction
 // (Stats.txt). ships = ceil( remaining / (rate * cycles * richness) ); an
@@ -157,32 +155,31 @@ function recommend(m, excavator) {
 }
 // Confirmation dialog with the fleet composition — mirrors common.js
 // confirmDialog so a send from this window looks like one from the dashboard.
-function lsConfirm(message, ships, defs, altLabel, untilFullState = null, escortRetreatThresholdState = null) {
+function lsConfirm(message, ships, defs, untilFullState = null, escortRetreatThresholdState = null) {
   return new Promise(resolve => {
     const ov = document.createElement('div');
-    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2147483647;display:flex;align-items:center;justify-content:center';
+    ov.className = 'nx-theme nx-ls-confirm';
     const box = document.createElement('div');
-    box.style.cssText = 'background:#1b2030;color:#e6e8ee;border:1px solid #39405a;border-radius:8px;max-width:420px;padding:20px;font:14px/1.5 system-ui,sans-serif;white-space:pre-line';
+    box.className = 'nx-ls-confirm-box';
     const msg = document.createElement('div');
     // Per line so a ⚠ warning (not enough ships to fill the template) shows red.
     for (const line of String(message).split('\n')) {
       const l = document.createElement('div');
       l.textContent = line;
-      if (line.trim().startsWith('⚠')) l.style.color = '#ff7b72';
+      if (line.trim().startsWith('⚠')) l.className = 'nx-err';
       msg.appendChild(l);
     }
     box.append(msg);
     if (ships && ships.length) {
       const row = document.createElement('div');
-      row.style.cssText = 'margin-top:10px;display:flex;flex-wrap:wrap;gap:12px;white-space:normal';
+      row.className = 'nx-ls-confirm-ships';
       for (const s of ships) {
         const def = defs[s.shipDefId] || {};
         const chip = document.createElement('span');
-        chip.style.cssText = 'display:inline-flex;align-items:center;gap:6px';
+        chip.className = 'nx-ls-confirm-ship';
         if (def.imageUrl) {
           const img = document.createElement('img');
           img.src = def.imageUrl;
-          img.style.cssText = 'width:24px;height:24px;object-fit:contain';
           chip.append(img);
         }
         chip.append(document.createTextNode(`${s.quantity}× ${def.name || '#' + s.shipDefId}`));
@@ -193,7 +190,7 @@ function lsConfirm(message, ships, defs, altLabel, untilFullState = null, escort
     if (untilFullState) {
       const untilFullLabel = document.createElement('label');
       untilFullLabel.title = 'Keep mining past the usual 10 cycles until the mining hold is full or the field is depleted';
-      untilFullLabel.style.cssText = 'margin-top:12px;display:flex;align-items:center;gap:6px;color:#8b949e;font-size:0.85rem;cursor:pointer;white-space:normal';
+      untilFullLabel.className = 'nx-ls-check nx-ls-confirm-option';
       const untilFullCheckbox = document.createElement('input');
       untilFullCheckbox.type = 'checkbox';
       untilFullCheckbox.checked = !!untilFullState.untilFull;
@@ -206,10 +203,10 @@ function lsConfirm(message, ships, defs, altLabel, untilFullState = null, escort
     if (escortRetreatThresholdState) {
       const retreatLabel = document.createElement('label');
       retreatLabel.title = 'If pirates damage the escort past this threshold, the fleet returns early and mining stops. Pirates may still steal cargo.';
-      retreatLabel.style.cssText = 'margin-top:8px;display:flex;align-items:center;gap:6px;color:#8b949e;font-size:0.85rem;cursor:pointer;white-space:normal';
+      retreatLabel.className = 'nx-ls-check nx-ls-confirm-option';
       retreatLabel.append(document.createTextNode('Withdraw escort by damage threshold'));
       const retreatSelect = document.createElement('select');
-      retreatSelect.style.cssText = 'background:#21262d;border:1px solid #30363d;color:#e6edf3;padding:3px 6px;border-radius:6px;font-size:0.85rem';
+      retreatSelect.className = 'nx-input';
       for (const [value, label] of [[null, 'Off'], [30, '30%'], [50, '50%'], [70, '70%']]) {
         const option = document.createElement('option');
         option.value = value == null ? '' : String(value);
@@ -225,11 +222,12 @@ function lsConfirm(message, ships, defs, altLabel, untilFullState = null, escort
       box.append(retreatLabel);
     }
     const btns = document.createElement('div');
-    btns.style.cssText = 'margin-top:18px;display:flex;gap:10px;justify-content:flex-end;white-space:normal';
+    btns.className = 'nx-ls-confirm-actions';
     const mk = (label, primary) => {
       const b = document.createElement('button');
       b.textContent = label;
-      b.style.cssText = `padding:7px 16px;border-radius:6px;border:1px solid #39405a;cursor:pointer;${primary ? 'background:#3b82f6;color:#fff;border-color:#3b82f6' : 'background:#2a3146;color:#e6e8ee'}`;
+      b.type = 'button';
+      b.className = primary ? 'nx-btn nx-btn-primary' : 'nx-btn nx-btn-ghost';
       return b;
     };
     const cancel = mk('Cancel', false), ok = mk('Confirm', true);
@@ -238,27 +236,12 @@ function lsConfirm(message, ships, defs, altLabel, untilFullState = null, escort
     ok.onclick = () => done('ok');
     ov.onclick = e => { if (e.target === ov) done(false); };
     btns.append(cancel);
-    if (altLabel) {
-      const alt = mk(altLabel, false);
-      alt.style.background = '#bd561d'; alt.style.borderColor = '#db6d28'; alt.style.color = '#fff';
-      alt.onclick = () => done('alt');
-      btns.append(alt);
-    }
     btns.append(ok);
     box.append(btns);
     ov.append(box);
     document.body.append(ov);
     ok.focus();
   });
-}
-
-// Hide number-input spinner arrows inside our panels (injected once).
-function ensureNoSpinStyle() {
-  if (document.getElementById('nx-nospin-style')) return;
-  const st = document.createElement('style');
-  st.id = 'nx-nospin-style';
-  st.textContent = '.nx-no-spin{-moz-appearance:textfield}.nx-no-spin::-webkit-outer-spin-button,.nx-no-spin::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}';
-  (document.head || document.documentElement).appendChild(st);
 }
 
 let fieldsPanel = null;
@@ -271,25 +254,47 @@ async function openFieldsPanel() {
 
   const panel = document.createElement('div');
   fieldsPanel = panel;
-  panel.style.cssText = 'position:fixed;top:90px;left:90px;z-index:2147483647;width:520px;max-height:62vh;' +
-    'display:flex;flex-direction:column;background:#1b2030;color:#e6e8ee;border:1px solid #39405a;' +
-    'border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.5);font:13px/1.4 system-ui,sans-serif';
+  panel.className = 'nx-theme nx-ls-panel';
 
   const header = document.createElement('div');
-  header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;' +
-    'padding:10px 14px;border-bottom:1px solid #39405a;cursor:move;user-select:none';
+  header.className = 'nx-ls-header';
   const titleWrap = document.createElement('div');
+  const heading = document.createElement('h1');
+  heading.innerHTML = 'Nexus <span>Overseer</span>: Live Search Belts';
   const title = document.createElement('div');
-  title.textContent = `Asteroid matches (${matches.length})`; title.style.fontWeight = '600';
+  title.textContent = `Asteroid matches (${matches.length})`;
+  title.className = 'nx-sub-label';
   const sub = document.createElement('div');
-  sub.style.cssText = 'color:#8b949e;font-size:0.75rem';
+  sub.className = 'nx-ls-note';
   sub.textContent = live_search_last_at ? `as of ${new Date(live_search_last_at).toLocaleTimeString()}` : 'no scan yet';
-  titleWrap.append(title, sub);
+  titleWrap.append(heading, title, sub);
+  const content = document.createElement('div');
+  content.className = 'nx-ls-content';
+  const collapse = document.createElement('button');
+  collapse.type = 'button';
+  collapse.className = 'nx-overlay-close';
+  collapse.textContent = '\u2212';
+  collapse.title = 'Collapse';
+  collapse.setAttribute('aria-label', 'Collapse Live Search Belts');
+  collapse.setAttribute('aria-expanded', 'true');
+  collapse.onclick = () => {
+    const collapsed = panel.classList.toggle('nx-ls-collapsed');
+    content.hidden = collapsed;
+    collapse.textContent = collapsed ? '+' : '\u2212';
+    collapse.title = collapsed ? 'Expand' : 'Collapse';
+    collapse.setAttribute('aria-label', `${collapsed ? 'Expand' : 'Collapse'} Live Search Belts`);
+    collapse.setAttribute('aria-expanded', String(!collapsed));
+  };
   const close = document.createElement('button');
   close.textContent = '✕';
-  close.style.cssText = 'background:transparent;border:none;color:#8b949e;cursor:pointer;font-size:1rem';
+  close.type = 'button';
+  close.title = 'Close';
+  close.className = 'nx-overlay-close';
   close.onclick = () => { panel.remove(); fieldsPanel = null; };
-  header.append(titleWrap, close);
+  const windowActions = document.createElement('div');
+  windowActions.className = 'nx-ls-window-actions';
+  windowActions.append(collapse, close);
+  header.append(titleWrap, windowActions);
 
   // Sending context: source planet (from live search) + a fleet template chosen
   // in the picker below, capped to what the planet actually has. Availability is
@@ -381,18 +386,14 @@ async function openFieldsPanel() {
   }
   seedFromTemplate(tpl);
 
-  ensureNoSpinStyle();
-
   // Template picker (seeds the editor below) + collapse toggle for the editor.
   const pickWrap = document.createElement('div');
-  pickWrap.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid #39405a';
+  pickWrap.className = 'nx-ls-picker';
   // Clickable toggle (caret + label) — clearly affords showing/hiding the editor.
   const toggle = document.createElement('button');
   toggle.title = 'Show/hide fleet editor';
-  toggle.style.cssText = 'display:inline-flex;align-items:center;gap:5px;background:#21262d;' +
-    'border:1px solid #30363d;border-radius:6px;color:#e6edf3;cursor:pointer;padding:4px 9px;font-size:0.85rem';
-  toggle.onmouseenter = () => { toggle.style.background = '#2a3146'; };
-  toggle.onmouseleave = () => { toggle.style.background = '#21262d'; };
+  toggle.className = 'nx-btn nx-btn-secondary';
+  toggle.type = 'button';
   const caret = document.createElement('span');
   caret.textContent = '▾'; caret.style.cssText = 'transition:transform .15s;transform:rotate(-90deg)';
   const tLbl = document.createElement('span');
@@ -404,9 +405,9 @@ async function openFieldsPanel() {
     caret.style.transform = hidden ? '' : 'rotate(-90deg)';
   };
   const pickLbl = document.createElement('span');
-  pickLbl.textContent = 'Fleet:'; pickLbl.style.color = '#8b949e';
+  pickLbl.textContent = 'Fleet:'; pickLbl.className = 'nx-subtle';
   const picker = document.createElement('select');
-  picker.style.cssText = 'background:#21262d;border:1px solid #30363d;color:#e6edf3;padding:4px 8px;border-radius:6px;font-size:0.85rem';
+  picker.className = 'nx-input';
   if (!templates.length) {
     const o = document.createElement('option'); o.textContent = '— none (create in Asteroids tab) —'; picker.appendChild(o); picker.disabled = true;
   } else {
@@ -419,7 +420,7 @@ async function openFieldsPanel() {
   // Excavator +20% toggle — boosts the recommended-ship calculation.
   const excLbl = document.createElement('label');
   excLbl.title = 'Include an Excavator: +20% fleet extraction capacity in the recommendation';
-  excLbl.style.cssText = 'display:inline-flex;align-items:center;gap:4px;color:#8b949e;font-size:0.85rem;cursor:pointer';
+  excLbl.className = 'nx-ls-check';
   const excChk = document.createElement('input');
   excChk.type = 'checkbox';
   excChk.checked = excavator;
@@ -434,33 +435,32 @@ async function openFieldsPanel() {
   // Per-ship-type editor — one line per ship available on the planet (or in the
   // template). Editing a quantity updates the fleet used for fuel + sending.
   const editorWrap = document.createElement('div');
-  editorWrap.style.cssText = 'padding:8px 14px;border-bottom:1px solid #39405a;max-height:150px;overflow:auto;flex-direction:column;gap:6px;display:none';
+  editorWrap.className = 'nx-ls-editor';
+  editorWrap.style.display = 'none';
   function buildEditor() {
     editorWrap.textContent = '';
     const ids = new Set([
       ...Object.keys((tpl && tpl.ships) || {}).map(Number),
       ...Object.keys(avail).map(Number).filter(id => (avail[id] || 0) > 0),
     ]);
-    if (!ids.size) { editorWrap.textContent = 'No ships available on the source planet.'; editorWrap.style.color = '#8b949e'; return; }
-    editorWrap.style.color = '';
+    if (!ids.size) { editorWrap.textContent = 'No ships available on the source planet.'; return; }
     for (const id of ids) {
       const def = shipDefs[id] || {};
       const max = avail[id] || 0;
       // Fixed grid so the icon / name / input / "/max" columns line up across rows.
       const line = document.createElement('div');
-      line.style.cssText = 'display:grid;grid-template-columns:20px 1fr 60px 40px;align-items:center;gap:8px';
+      line.className = 'nx-ls-editor-row';
       const iconCell = document.createElement('span');
       if (def.imageUrl) {
         const img = document.createElement('img');
-        img.src = def.imageUrl; img.style.cssText = 'width:20px;height:20px;object-fit:contain;display:block';
+        img.src = def.imageUrl;
         iconCell.append(img);
       }
       const name = document.createElement('span');
-      name.textContent = def.name || `#${id}`; name.style.cssText = 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+      name.textContent = def.name || `#${id}`; name.className = 'nx-ls-editor-name';
       const inp = document.createElement('input');
       inp.type = 'number'; inp.min = '0'; inp.max = String(max); inp.value = String(shipsState.get(id) || 0);
-      inp.className = 'nx-no-spin';
-      inp.style.cssText = 'width:100%;background:#21262d;border:1px solid #30363d;color:#e6edf3;padding:3px 6px;border-radius:6px;font-size:0.85rem;box-sizing:border-box';
+      inp.className = 'nx-no-spin nx-input';
       inp.addEventListener('change', () => {
         let v = parseInt(inp.value, 10); if (isNaN(v) || v < 0) v = 0;
         if (v > max) v = max;
@@ -469,7 +469,7 @@ async function openFieldsPanel() {
         renderRows();
       });
       const avLbl = document.createElement('span');
-      avLbl.textContent = `/ ${max}`; avLbl.style.color = '#8b949e';
+      avLbl.textContent = `/ ${max}`; avLbl.className = 'nx-subtle';
       line.append(iconCell, name, inp, avLbl);
       editorWrap.append(line);
     }
@@ -477,32 +477,30 @@ async function openFieldsPanel() {
   buildEditor();
 
   const body = document.createElement('div');
-  body.style.cssText = 'overflow:auto;padding:10px 14px';
+  body.className = 'nx-ls-body';
 
   // Row picked via the radio column, for the "Optimise Mining Fleet" button.
   let selectedMatchId = null;
 
   function renderRows() {
     body.textContent = '';
-    if (!matches.length) { body.textContent = 'No current matches.'; body.style.color = '#8b949e'; return; }
+    if (!matches.length) { body.textContent = 'No current matches.'; return; }
 
     const table = document.createElement('table');
-    table.style.cssText = 'width:100%;border-collapse:collapse';
-    table.innerHTML = `<thead><tr style="text-align:left;color:#8b949e;font-size:0.8rem">
-      <th style="padding:4px 6px"></th><th style="padding:4px 6px"></th><th style="padding:4px 6px">Fuel (System)</th>
-      <th style="padding:4px 6px">Type</th><th style="padding:4px 6px;text-align:right">Mult</th>
-      <th style="padding:4px 6px;text-align:right">Left %</th>
-      <th style="padding:4px 6px">Recommended</th></tr></thead>`;
+    table.className = 'nx-ls-table';
+    table.innerHTML = `<thead><tr>
+      <th></th><th></th><th>Fuel (System)</th>
+      <th>Type</th><th class="nx-ls-numeric">Mult</th>
+      <th class="nx-ls-numeric">Left %</th>
+      <th>Recommended</th></tr></thead>`;
     const tb = document.createElement('tbody');
     for (const m of matches) {
       const tr = document.createElement('tr');
-      tr.style.borderTop = '1px solid #2a3147';
       if ((myUsername && m.controllerName === myUsername) || miningFieldIds.has(m.id)) {
-        tr.style.background = 'rgba(63,185,80,0.15)';   // already mining / claimed by us
+        tr.className = 'nx-ls-mining';   // already mining / claimed by us
       }
 
       const selTd = document.createElement('td');
-      selTd.style.cssText = 'padding:4px 6px';
       const selInp = document.createElement('input');
       selInp.type = 'radio'; selInp.name = 'nx-ls-row-select';
       selInp.checked = selectedMatchId === m.id;
@@ -522,14 +520,12 @@ async function openFieldsPanel() {
         : 'Send the recommended fleet to mine this field.';
 
       const mineTd = document.createElement('td');
-      mineTd.style.cssText = 'padding:4px 6px';
       const mineBtn = document.createElement('button');
       mineBtn.textContent = '⛏';
       mineBtn.title = mineTip;
       mineBtn.disabled = !canMine;
-      mineBtn.style.cssText = canMine
-        ? 'background:#238636;border:1px solid #2ea043;color:#fff;border-radius:6px;cursor:pointer;padding:2px 8px;font-size:0.95rem'
-        : 'background:#30363d;border:1px solid #30363d;color:#8b949e;border-radius:6px;cursor:not-allowed;padding:2px 8px;font-size:0.95rem';
+      mineBtn.type = 'button';
+      mineBtn.className = 'nx-btn nx-btn-secondary nx-btn-sm';
       mineBtn.onclick = async () => {
         if (!canMine) return;
         const short = ships.some(s => (avail[s.shipDefId] || 0) < s.quantity);
@@ -538,7 +534,7 @@ async function openFieldsPanel() {
         const r = await lsConfirm(
           `Send fleet?\nTo: ${m.name} (${m.system})\nFrom: ${planetName}` +
           (short ? '\n\n⚠ Some ships are short on this planet; sending what is available.' : ''),
-          ships, shipDefs, null, untilFullState, escortRetreatThresholdState);
+          ships, shipDefs, untilFullState, escortRetreatThresholdState);
         if (!r) return;
         untilFull = untilFullState.untilFull;
         localStorage.setItem('nx-ls-until-full', untilFull ? '1' : '0');
@@ -561,7 +557,7 @@ async function openFieldsPanel() {
         });
         if (res && res.error) { mineBtn.textContent = '⛏'; mineBtn.disabled = false; window.alert(`Send failed: ${res.error}`); }
         else {
-          mineBtn.textContent = '✓'; mineBtn.style.cssText = 'background:#1f6feb;border:1px solid #1f6feb;color:#fff;border-radius:6px;padding:2px 8px;font-size:0.95rem';
+          mineBtn.textContent = '✓'; mineBtn.className = 'nx-btn nx-btn-secondary nx-btn-sm';
           miningFieldIds.add(m.id);   // optimistic — GET_MISSIONS can lag right after the send
           renderRows();
           refreshMiningFieldIds().then(renderRows);
@@ -570,7 +566,6 @@ async function openFieldsPanel() {
       mineTd.appendChild(mineBtn);
 
       const fuelTd = document.createElement('td');
-      fuelTd.style.cssText = 'padding:4px 6px';
       fuelTd.textContent = `${ships.length ? '…' : '—'} (${m.system})`;
       if (ships.length && m.systemId != null) {
         ext.runtime.sendMessage({ type: 'GET_FUEL_ESTIMATE', body: { sourcePlanetId: planetId, targetSystemId: m.systemId, ships } })
@@ -578,9 +573,9 @@ async function openFieldsPanel() {
           .catch(() => { fuelTd.textContent = `? (${m.system})`; });
       }
 
-      const cell = (txt, extra = '') => { const td = document.createElement('td'); td.style.cssText = `padding:4px 6px;${extra}`; td.textContent = txt; return td; };
+      const cell = (txt, extra = '') => { const td = document.createElement('td'); td.style.cssText = extra; td.textContent = txt; return td; };
       tr.append(selTd, mineTd, fuelTd,
-        cell(m.type, `color:${TYPE_COLOR[m.type] || '#e6e8ee'}`),
+        cell(m.type, `color:${TYPE_COLOR[m.type] || 'var(--text)'}`),
         cell(m.mult != null ? `×${m.mult}` : '—', 'text-align:right'),
         cell(m.leftPct != null ? `${m.leftPct}%` : '—', 'text-align:right'),
         cell(rec ? `${rec.count}× ${rec.name}` : '—'));
@@ -616,19 +611,16 @@ async function openFieldsPanel() {
   ext.storage.onChanged.addListener(onScan);
 
   const footer = document.createElement('div');
-  footer.style.cssText = 'display:flex;justify-content:space-between;align-items:center;' +
-    'padding:10px 14px;border-top:1px solid #39405a';
+  footer.className = 'nx-ls-footer';
   const note = document.createElement('span');
-  note.style.cssText = 'color:#8b949e;font-size:0.75rem';
+  note.className = 'nx-ls-note';
   // Start/Stop toggle. Starting re-uses the saved config (planet + filters).
   const toggleBtn = document.createElement('button');
   let curRunning = running;
   const paintToggle = () => {
     toggleBtn.textContent = curRunning ? 'Stop Live Search' : 'Start Live Search';
     note.textContent = curRunning ? 'Live search running (every 5 min).' : 'Live search stopped.';
-    toggleBtn.style.cssText = curRunning
-      ? 'background:#da3633;border:1px solid #f85149;color:#fff;padding:6px 12px;border-radius:6px;cursor:pointer'
-      : 'background:#238636;border:1px solid #2ea043;color:#fff;padding:6px 12px;border-radius:6px;cursor:pointer';
+    toggleBtn.className = curRunning ? 'nx-btn nx-ls-stop' : 'nx-btn nx-btn-primary';
   };
   paintToggle();
   toggleBtn.onclick = async () => {
@@ -654,9 +646,7 @@ async function openFieldsPanel() {
   const paintOptBtn = () => {
     const has = selectedMatchId != null;
     optBtn.disabled = !has;
-    optBtn.style.cssText = has
-      ? 'background:#1f6feb;border:1px solid #1f6feb;color:#fff;padding:6px 12px;border-radius:6px;cursor:pointer'
-      : 'background:#30363d;border:1px solid #30363d;color:#8b949e;padding:6px 12px;border-radius:6px;cursor:not-allowed';
+    optBtn.className = 'nx-btn nx-btn-secondary';
   };
   paintOptBtn();
   optBtn.onclick = () => {
@@ -676,11 +666,12 @@ async function openFieldsPanel() {
   };
 
   const btnGroup = document.createElement('div');
-  btnGroup.style.cssText = 'display:flex;gap:8px;';
+  btnGroup.className = 'nx-ls-actions';
   btnGroup.append(optBtn, toggleBtn);
   footer.append(note, btnGroup);
 
-  panel.append(header, pickWrap, editorWrap, body, footer);
+  content.append(pickWrap, editorWrap, body, footer);
+  panel.append(header, content);
   document.body.append(panel);
   makeDraggable(panel, header);
 }

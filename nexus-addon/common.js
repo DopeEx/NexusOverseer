@@ -14,6 +14,13 @@ export function setActiveTab(t) { activeTab = t; }
 const ERROR_TEXT = /\bfailed\b|^(⚠\s*)?(error|failed)\b|^could not\b|^unable to\b/i;
 const WARNING_TEXT = /^cannot\b|^waiting for ships\b|^select .+ first\b|^no (suitable|source|available)\b/i;
 
+// Shared inline styles for the dialogs built in this file.
+const DIALOG_BOX_CSS = 'background:var(--bg-panel);color:var(--text);border:1px solid var(--border-strong);border-radius:8px;padding:20px;font:14px/1.5 system-ui,sans-serif;';
+function dialogBtnCss(primary, bg, border) {
+  const tone = primary ? `background:${bg};color:#fff;border-color:${border}` : 'background:var(--bg-hover);color:var(--text)';
+  return `padding:7px 16px;border-radius:6px;border:1px solid var(--border-strong);cursor:pointer;${tone}`;
+}
+
 function classifyStatus(text, variant) {
   const s = String(text ?? '');
   if (variant === 'warning' || !variant) {
@@ -78,14 +85,14 @@ export async function confirmDialog(message, ships) {
     const ov = document.createElement('div');
     ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99999;display:flex;align-items:center;justify-content:center';
     const box = document.createElement('div');
-    box.style.cssText = 'background:#1b2030;color:#e6e8ee;border:1px solid #39405a;border-radius:8px;max-width:420px;padding:20px;font:14px/1.5 system-ui,sans-serif;white-space:pre-line';
+    box.style.cssText = DIALOG_BOX_CSS + 'max-width:420px;white-space:pre-line';
     const msg = document.createElement('div');
     // Render per line so a ⚠ warning (e.g. not enough ships to fill the template)
     // stands out in red.
     for (const line of String(message).split('\n')) {
       const l = document.createElement('div');
       l.textContent = line;
-      if (line.trim().startsWith('⚠')) l.style.color = '#ff7b72';
+      if (line.trim().startsWith('⚠')) l.style.color = '#ff6b7a';
       msg.appendChild(l);
     }
     const btns = document.createElement('div');
@@ -93,7 +100,7 @@ export async function confirmDialog(message, ships) {
     const mk = (label, primary) => {
       const b = document.createElement('button');
       b.textContent = label;
-      b.style.cssText = `padding:7px 16px;border-radius:6px;border:1px solid #39405a;cursor:pointer;${primary ? 'background:#3b82f6;color:#fff;border-color:#3b82f6' : 'background:#2a3146;color:#e6e8ee'}`;
+      b.style.cssText = dialogBtnCss(primary, 'var(--btn-primary)', 'var(--btn-primary)');
       return b;
     };
     const cancel = mk('Cancel', false);
@@ -163,7 +170,7 @@ export async function editFleetDialog({
     const ov = document.createElement('div');
     ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99999;display:flex;align-items:center;justify-content:center';
     const box = document.createElement('div');
-    box.style.cssText = 'background:#1b2030;color:#e6e8ee;border:1px solid #39405a;border-radius:8px;max-width:420px;width:90%;padding:20px;font:14px/1.5 system-ui,sans-serif';
+    box.style.cssText = DIALOG_BOX_CSS + 'max-width:420px;width:90%';
     const h = document.createElement('div');
     h.textContent = title || 'Edit fleet';
     h.style.cssText = 'font-weight:600;margin-bottom:2px';
@@ -171,7 +178,7 @@ export async function editFleetDialog({
     if (subtitle) {
       const sub = document.createElement('div');
       sub.textContent = subtitle;
-      sub.style.cssText = 'color:#8b949e;font-size:0.85rem;margin-bottom:8px;white-space:pre-line';
+      sub.style.cssText = 'color:var(--text-muted);font-size:0.85rem;margin-bottom:8px;white-space:pre-line';
       box.append(sub);
     }
 
@@ -179,12 +186,12 @@ export async function editFleetDialog({
     rows.style.cssText = 'display:flex;flex-direction:column;gap:6px;max-height:240px;overflow:auto;margin-top:8px';
     if (!ids.length) {
       rows.textContent = 'No ships available on the source planet.';
-      rows.style.color = '#8b949e';
+      rows.style.color = '#c0cce0';
     }
     const ok = document.createElement('button');   // declared early for refresh()
     const validation = document.createElement('div');
     validation.setAttribute('role', 'alert');
-    validation.style.cssText = 'margin-top:10px;color:#ff7b72;font-size:0.82rem;white-space:pre-line';
+    validation.style.cssText = 'margin-top:10px;color:var(--error);font-size:0.82rem;white-space:pre-line';
     let confirming = false;
     let availabilityError = '';
     let escortButtonRow = null;
@@ -239,8 +246,8 @@ export async function editFleetDialog({
       const coverage = escortTemplates.reduce((total, template) =>
         total + Math.min(minerCount, templateCoverage(template)), 0);
       const allCovered = minerCount === 0 || coverage >= minerCount;
-      ok.style.borderColor = allCovered ? '#2ea043' : '#f85149';
-      ok.style.background = allCovered ? '#238636' : '#da3633';
+      ok.style.borderColor = allCovered ? 'var(--btn-ok-border)' : 'var(--btn-danger-border)';
+      ok.style.background = allCovered ? 'var(--btn-ok)' : 'var(--btn-danger)';
 
       for (const template of escortTemplates) {
         const entries = Object.entries(template.ships || {});
@@ -253,7 +260,7 @@ export async function editFleetDialog({
           : Math.ceil(quantity);
         const canFill = entries.length > 0 && entries.every(([id, quantity]) =>
           (avail[Number(id)] || 0) >= required(quantity));
-        const color = canFill ? '#56d364' : '#ff7b72';
+        const color = canFill ? '#7ed957' : '#ff6b7a';
         const button = document.createElement('button');
         button.type = 'button';
         button.textContent = template.name;
@@ -342,7 +349,7 @@ export async function editFleetDialog({
       const inp = document.createElement('input');
       const avLbl = document.createElement('span');
       inp.type = 'number'; inp.min = '0'; inp.max = String(max); inp.value = String(state.get(id) || 0);
-      inp.style.cssText = 'width:100%;background:#21262d;border:1px solid #30363d;color:#e6edf3;padding:3px 6px;border-radius:6px;font-size:0.85rem;box-sizing:border-box';
+      inp.style.cssText = 'width:100%;background:var(--bg-raised);border:1px solid var(--border);color:var(--text);padding:3px 6px;border-radius:6px;font-size:0.85rem;box-sizing:border-box';
       inp.addEventListener('change', () => {
         let v = parseInt(inp.value, 10); if (isNaN(v) || v < 0) v = 0;
         if (v > (avail[id] || 0)) v = avail[id] || 0;
@@ -354,7 +361,7 @@ export async function editFleetDialog({
         }
         refresh();
       });
-      avLbl.textContent = `/ ${max}`; avLbl.style.color = '#8b949e';
+      avLbl.textContent = `/ ${max}`; avLbl.style.color = '#c0cce0';
       line.append(iconCell, name, inp, avLbl);
       rows.append(line);
       inputs.set(id, inp);
@@ -366,9 +373,9 @@ export async function editFleetDialog({
       const planBtn = document.createElement('button');
       planBtn.type = 'button';
       planBtn.textContent = planner.label || 'Calculate fleet';
-      planBtn.style.cssText = 'padding:5px 12px;border-radius:6px;border:1px solid #39405a;background:#2a3146;color:#e6e8ee;cursor:pointer;font-size:0.82rem';
+      planBtn.style.cssText = 'padding:5px 12px;border-radius:6px;border:1px solid var(--border-strong);background:var(--bg-hover);color:var(--text);cursor:pointer;font-size:0.82rem';
       const planMsg = document.createElement('span');
-      planMsg.style.cssText = 'color:#8b949e;font-size:0.82rem;white-space:pre-line';
+      planMsg.style.cssText = 'color:var(--text-muted);font-size:0.82rem;white-space:pre-line';
       planBtn.onclick = async () => {
         planBtn.disabled = true;
         planBtn.style.opacity = '0.5';
@@ -405,16 +412,16 @@ export async function editFleetDialog({
     }
     if (escortTemplates.length) {
       const escortSection = document.createElement('div');
-      escortSection.style.cssText = 'margin-top:10px;padding-top:8px;border-top:1px solid #30363d;';
+      escortSection.style.cssText = 'margin-top:10px;padding-top:8px;border-top:1px solid var(--border);';
       escortLabel = document.createElement('div');
-      escortLabel.style.cssText = 'font-size:0.78rem;color:#8b949e;margin-bottom:6px;';
+      escortLabel.style.cssText = 'font-size:0.78rem;color:var(--text-muted);margin-bottom:6px;';
       escortButtonRow = document.createElement('div');
       escortButtonRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;';
       escortSection.append(escortLabel, escortButtonRow);
       if (autoEscortTemplate) {
         let autoEscort = localStorage.getItem('nx-af-auto-escort') === '1';
         const autoLabel = document.createElement('label');
-        autoLabel.style.cssText = 'display:inline-flex;align-items:center;gap:5px;margin-top:8px;font-size:0.82rem;color:#8b949e;cursor:pointer';
+        autoLabel.style.cssText = 'display:inline-flex;align-items:center;gap:5px;margin-top:8px;font-size:0.82rem;color:var(--text-muted);cursor:pointer';
         autoLabel.title = `Automatically add "${autoEscortTemplate.name}" when opening or optimising this mining fleet`;
         const autoCheckbox = document.createElement('input');
         autoCheckbox.type = 'checkbox';
@@ -437,7 +444,7 @@ export async function editFleetDialog({
     btns.style.cssText = 'margin-top:18px;display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end';
     const mk = (b, label, primary) => {
       b.textContent = label;
-      b.style.cssText = `padding:7px 16px;border-radius:6px;border:1px solid #39405a;cursor:pointer;${primary ? 'background:#238636;color:#fff;border-color:#2ea043' : 'background:#2a3146;color:#e6e8ee'}`;
+      b.style.cssText = dialogBtnCss(primary, 'var(--btn-ok)', 'var(--btn-ok-border)');
       return b;
     };
     const cancel = mk(document.createElement('button'), 'Cancel', false);
@@ -445,7 +452,7 @@ export async function editFleetDialog({
     if (untilFullState) {
       const untilFullLabel = document.createElement('label');
       untilFullLabel.title = 'Keep mining past the usual 10 cycles until the mining hold is full or the field is depleted';
-      untilFullLabel.style.cssText = 'display:flex;align-items:center;gap:6px;margin-top:12px;color:#8b949e;font-size:0.85rem;cursor:pointer';
+      untilFullLabel.style.cssText = 'display:flex;align-items:center;gap:6px;margin-top:12px;color:var(--text-muted);font-size:0.85rem;cursor:pointer';
       const untilFullCheckbox = document.createElement('input');
       untilFullCheckbox.type = 'checkbox';
       untilFullCheckbox.checked = !!untilFullState.untilFull;
@@ -458,10 +465,10 @@ export async function editFleetDialog({
     if (escortRetreatThresholdState) {
       const retreatLabel = document.createElement('label');
       retreatLabel.title = 'If pirates damage the escort past this threshold, the fleet returns early and mining stops. Pirates may still steal cargo.';
-      retreatLabel.style.cssText = 'display:flex;align-items:center;gap:6px;margin-top:8px;color:#8b949e;font-size:0.85rem;cursor:pointer';
+      retreatLabel.style.cssText = 'display:flex;align-items:center;gap:6px;margin-top:8px;color:var(--text-muted);font-size:0.85rem;cursor:pointer';
       retreatLabel.append(document.createTextNode('Withdraw escort by damage threshold'));
       const retreatSelect = document.createElement('select');
-      retreatSelect.style.cssText = 'background:#21262d;border:1px solid #30363d;color:#e6edf3;padding:3px 6px;border-radius:6px;font-size:0.85rem';
+      retreatSelect.style.cssText = 'background:var(--bg-raised);border:1px solid var(--border);color:var(--text);padding:3px 6px;border-radius:6px;font-size:0.85rem';
       for (const [value, label] of [[null, 'Off'], [30, '30%'], [50, '50%'], [70, '70%']]) {
         const option = document.createElement('option');
         option.value = value == null ? '' : String(value);
@@ -511,7 +518,7 @@ export async function editFleetDialog({
     refresh();
     if (recShips.length) {
       const miningOptions = document.createElement('div');
-      miningOptions.style.cssText = 'display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;color:#8b949e;font-size:0.82rem;';
+      miningOptions.style.cssText = 'display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;color:var(--text-muted);font-size:0.82rem;';
       let autoOptimise = localStorage.getItem('nx-af-auto-optimise') === '1';
       const autoOptimiseLabel = document.createElement('label');
       autoOptimiseLabel.title = 'Automatically apply the mining recommendation when this dialog opens';
@@ -545,7 +552,7 @@ export async function editFleetDialog({
       const opt = document.createElement('button');
       opt.textContent = 'Optimise Mining Fleet';
       opt.title = 'Set the recommended count for mining ships only — escort/combat ships untouched';
-      opt.style.cssText = 'padding:7px 16px;border-radius:6px;border:1px solid #1f6feb;background:#1f6feb;color:#fff;cursor:pointer;margin-right:auto';
+      opt.style.cssText = 'padding:7px 16px;border-radius:6px;border:1px solid var(--btn-blue);background:var(--btn-blue);color:#fff;cursor:pointer;margin-right:auto';
       opt.onclick = optimiseMiningFleet;
       btns.append(opt);
       if (autoOptimise) optimiseMiningFleet();
@@ -575,13 +582,11 @@ export function renderMarkdown(text) {
     if (h) {
       closeList();
       const el = document.createElement('h4');
-      el.style.cssText = 'margin:14px 0 6px;font-size:0.95rem';
       inlineMd(el, h[1]);
       frag.append(el);
     } else if (/^[-*]\s+/.test(line)) {
-      if (!ul) { ul = document.createElement('ul'); ul.style.cssText = 'margin:0 0 4px 18px;padding:0'; frag.append(ul); }
+      if (!ul) { ul = document.createElement('ul'); frag.append(ul); }
       li = document.createElement('li');
-      li.style.cssText = 'margin:2px 0';
       inlineMd(li, line.replace(/^[-*]\s+/, ''));
       ul.append(li);
     } else if (li) {                       // wrapped continuation of a bullet
@@ -610,24 +615,26 @@ function inlineMd(parent, text) {
 }
 
 // One-button info modal (e.g. "What's new"). `body` may be a string (plain
-// text) or a DOM node (e.g. from renderMarkdown).
-export function infoDialog(title, body) {
+// text) or a DOM node (e.g. from renderMarkdown). Header and button stay
+// visible; only the body scrolls.
+export function infoDialog(title, body, { width = 480 } = {}) {
   return new Promise(resolve => {
     const ov = document.createElement('div');
-    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99999;display:flex;align-items:center;justify-content:center';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px';
     const box = document.createElement('div');
-    box.style.cssText = 'background:#1b2030;color:#e6e8ee;border:1px solid #39405a;border-radius:8px;max-width:480px;max-height:70vh;overflow:auto;padding:20px;font:14px/1.5 system-ui,sans-serif';
+    box.style.cssText = DIALOG_BOX_CSS + `width:min(${width}px,100%);max-height:100%;display:flex;flex-direction:column;padding:0`;
     const h = document.createElement('h3');
     h.textContent = title;
-    h.style.cssText = 'margin:0 0 12px';
+    h.style.cssText = 'margin:0;padding:16px 20px 12px;border-bottom:1px solid var(--edge-soft)';
     const msg = document.createElement('div');
+    msg.style.cssText = 'padding:12px 20px;overflow:auto;min-height:0';
     if (body instanceof Node) msg.append(body);
-    else { msg.textContent = body; msg.style.cssText = 'white-space:pre-wrap'; }
+    else { msg.textContent = body; msg.style.whiteSpace = 'pre-wrap'; }
     const btns = document.createElement('div');
-    btns.style.cssText = 'margin-top:18px;display:flex;justify-content:flex-end';
+    btns.style.cssText = 'padding:12px 20px 16px;border-top:1px solid var(--edge-soft);display:flex;justify-content:flex-end';
     const ok = document.createElement('button');
     ok.textContent = 'Got it';
-    ok.style.cssText = 'padding:7px 16px;border-radius:6px;border:1px solid #3b82f6;background:#3b82f6;color:#fff;cursor:pointer';
+    ok.style.cssText = dialogBtnCss(true, 'var(--btn-primary)', 'var(--btn-primary)');
     const close = () => { ov.remove(); resolve(); };
     ok.onclick = close;
     ov.onclick = (e) => { if (e.target === ov) close(); };
@@ -739,24 +746,24 @@ const MISSION_WORK_LABEL = { survey: 'Surveying', investigate: 'Investigating',
   scout_camp: 'Scouting', attack_pirates: 'Attacking' };
 const MISSION_WORK_COLOR = {
   survey: '#3ec6ff', investigate: '#60a5fa', collect_debris: '#2dd4bf',
-  collect_salvage: '#9b6cff', expedition: '#f0883e', xeno_survey: '#bc8cff',
-  scout_camp: '#e3b341', attack_pirates: '#f85149',
+  collect_salvage: '#8b5cf6', expedition: '#f59e0b', xeno_survey: '#a78bfa',
+  scout_camp: '#ffc070', attack_pirates: '#ff6b7a',
 };
 const MISSION_WORK_GRADIENT = {
   survey: 'linear-gradient(90deg, #3ec6ff 0%, #7f77ff 100%)',
   investigate: 'linear-gradient(90deg, #60a5fa 0%, #6366f1 100%)',
   collect_debris: 'linear-gradient(90deg, #2dd4bf 0%, #38bdf8 100%)',
-  collect_salvage: 'linear-gradient(90deg, #9b6cff 0%, #c084fc 100%)',
-  expedition: 'linear-gradient(90deg, #f0883e 0%, #e3b341 100%)',
-  xeno_survey: 'linear-gradient(90deg, #bc8cff 0%, #d2a8ff 100%)',
+  collect_salvage: 'linear-gradient(90deg, #8b5cf6 0%, #a78bfa 100%)',
+  expedition: 'linear-gradient(90deg, #f59e0b 0%, #ffc070 100%)',
+  xeno_survey: 'linear-gradient(90deg, #a78bfa 0%, #c4b5fd 100%)',
 };
 const MISSION_STAGE_COLOR = {
-  outbound: '#3ec6ff', returning: '#9b6cff', arriving: '#6e7681',
+  outbound: '#63dbe7', returning: '#8b5cf6', arriving: '#b9cbdc',
 };
 const MISSION_STAGE_GRADIENT = {
-  outbound: 'linear-gradient(90deg, #3ec6ff 0%, #7f77ff 100%)',
-  returning: 'linear-gradient(90deg, #9b6cff 0%, #c084fc 100%)',
-  arriving: 'linear-gradient(90deg, #6e7681 0%, #8b949e 100%)',
+  outbound: 'linear-gradient(90deg, #227eaa 0%, #63dbe7 100%)',
+  returning: 'linear-gradient(90deg, #8b5cf6 0%, #a78bfa 100%)',
+  arriving: 'linear-gradient(90deg, #8598a9 0%, #b9cbdc 100%)',
 };
 
 // Where a fleet is in its round trip: outbound (departs→arrives), on-site work
@@ -961,10 +968,10 @@ export function computeSeries(reports, mode, fieldGetters) {
 }
 
 export const RESOURCE_SERIES = [
-  { field: 'ore',          label: 'Ore',          color: '#fb923c' },
-  { field: 'silicates',    label: 'Silicates',    color: '#c084fc' },
-  { field: 'hydrogen',     label: 'Hydrogen',     color: '#60a5fa' },
-  { field: 'alloys',       label: 'Alloys',       color: '#94a3b8' },
+  { field: 'ore',          label: 'Ore',          color: '#f59e0b' },
+  { field: 'silicates',    label: 'Silicates',    color: '#8b5cf6' },
+  { field: 'hydrogen',     label: 'Hydrogen',     color: '#06b6d4' },
+  { field: 'alloys',       label: 'Alloys',       color: '#6b7280' },
   { field: 'cryo_ice',     label: 'Cryo-Ice',     color: '#67e8f9' },
   { field: 'quantum_dust', label: 'Quantum Dust', color: '#f472b6' },
   { field: 'plasma_core',  label: 'Plasma Core',  color: '#f97316' },
@@ -998,7 +1005,7 @@ export function makeResourceLineChart(canvasId, series, labelKey, count) {
     datasets.push({
       label: count.label,
       data: series.map(r => r[count.field] || 0),
-      borderColor: '#8b949e',
+      borderColor: cssVar('--text-muted'),
       borderDash: [5, 4],
       backgroundColor: 'transparent',
       fill: false,
@@ -1008,7 +1015,7 @@ export function makeResourceLineChart(canvasId, series, labelKey, count) {
     scales.count = {
       position: 'right',
       beginAtZero: true,
-      ticks: { color: '#8b949e', precision: 0 },
+      ticks: { color: cssVar('--text-muted'), precision: 0 },
       grid: { drawOnChartArea: false },
     };
   }
@@ -1017,7 +1024,7 @@ export function makeResourceLineChart(canvasId, series, labelKey, count) {
     data: { labels: series.map(r => r[labelKey]), datasets },
     options: {
       responsive: true,
-      plugins: { legend: { labels: { color: '#e6edf3' } } },
+      plugins: { legend: { labels: { color: cssVar('--text') } } },
       scales,
     },
   });
@@ -1109,9 +1116,9 @@ export function combinedLost(lost) {
 
 export function makeStatCard(label, value, valueClass, valueStyle) {
   const card = document.createElement('div');
-  const styleClass = valueStyle?.includes('#ff7b72') ? 'danger'
-    : valueStyle?.includes('#e3b341') ? 'warning'
-      : valueStyle?.includes('#56d364') ? 'positive' : '';
+  const styleClass = /#ff6b7a|--error/.test(valueStyle || '') ? 'danger'
+    : /#e3b341|--warning/.test(valueStyle || '') ? 'warning'
+      : /#7ed957|--success/.test(valueStyle || '') ? 'positive' : '';
   card.className = ['stat-card', valueClass, styleClass].filter(Boolean).join(' ');
   const labelDiv = document.createElement('div');
   labelDiv.className = 'label';
@@ -1126,9 +1133,11 @@ export function makeStatCard(label, value, valueClass, valueStyle) {
 
 // ── Charts ─────────────────────────────────────────────────────────────────
 
+// Getters so the theme colours are read when a chart is built, not at import time.
+const scaleAxis = () => ({ ticks: { color: cssVar('--text-muted') }, grid: { color: cssVar('--bg-raised') } });
 export const SCALE_OPTS = {
-  x: { ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
-  y: { ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
+  get x() { return scaleAxis(); },
+  get y() { return scaleAxis(); },
 };
 
 // ── Shared helpers for the newer tabs ──────────────────────────────────────
@@ -1275,7 +1284,7 @@ export function renderNetCards(containerId, collected, lost, periodLabel, fuelHy
     el.appendChild(makeStatCard(`${label} net${periodLabel}`, (v >= 0 ? '+' : '') + fmt(v), cls));
   }
   const totalCard = makeStatCard(`Total net${periodLabel}`, (total >= 0 ? '+' : '') + fmt(total),
-    '', total >= 0 ? 'color:#56d364' : 'color:#ff7b72');
+    '', total >= 0 ? 'color:var(--success)' : 'color:var(--error)');
   totalCard.title = 'Weighted: ore×1, silicates×2, hydrogen×3, alloys×5, precursor fragments×50, artifacts×2000, other exotics×10.'
     + (fuel ? ` Includes ${fmt(fuel)} hydrogen fuel (est.).` : '');
   el.appendChild(totalCard);
@@ -1284,13 +1293,19 @@ export function renderNetCards(containerId, collected, lost, periodLabel, fuelHy
 // Doughnut of a loot/resource breakdown (ore, silicates, hydrogen, alloys and
 // any rares) for the current view period. `totals` is a mode-aware totals
 // object; returns the Chart instance.
+/** Reads a CSS custom property from :root (for canvas/Chart.js, which cannot use var()). */
+export function cssVar(name, fallback = '') {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+}
+// Canvas/Chart.js cannot use var(); keep in sync with --res-* in dashboard.css.
 export const RESOURCE_COLORS = {
-  ore: '#fb923c', silicates: '#c084fc', hydrogen: '#60a5fa', alloys: '#94a3b8',
+  ore: '#f59e0b', silicates: '#8b5cf6', hydrogen: '#06b6d4', alloys: '#6b7280',
 };
 export const RARE_COLORS = {
   cryo_ice: '#67e8f9', quantum_dust: '#f472b6', plasma_core: '#f97316',
   bio_extract: '#10b981', dark_matter: '#9333ea', antimatter: '#ef4444',
 };
+export const ALL_RES_COLORS = { ...RESOURCE_COLORS, ...RARE_COLORS };
 const RARE_FALLBACK = ['#bc8cff', '#d2a8ff', '#ffa657', '#7ee787'];
 
 export function makeResourceDoughnut(canvasId, totals) {
@@ -1315,7 +1330,7 @@ export function makeResourceDoughnut(canvasId, totals) {
     options: {
       responsive: true,
       plugins: {
-        legend: { position: 'right', labels: { color: '#e6edf3', font: { size: 11 } } },
+        legend: { position: 'right', labels: { color: cssVar('--text'), font: { size: 11 } } },
         tooltip: {
           callbacks: {
             label: ctx => {
@@ -1331,7 +1346,7 @@ export function makeResourceDoughnut(canvasId, totals) {
 
 // Colored zone badge cell for report tables.
 export const ZONE_COLORS = {
-  sentinel: '#56d364', open: '#f0883e', dead: '#ff7b72', rift: '#d2a8ff', unknown: '#8b949e',
+  sentinel: '#7ed957', open: '#f0883e', dead: '#ff6b7a', rift: '#d2a8ff', unknown: '#c0cce0',
 };
 export const ZONE_DEFS = Object.freeze([
   Object.freeze({ key: 'sentinel', label: 'Sentinel' }),

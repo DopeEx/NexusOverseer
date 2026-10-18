@@ -1,0 +1,76 @@
+// User Guide content, shared by the in-game overlay (guide-view.js) and the
+// dashboard's User Guide tab (tabs/guide.js). Classic script so it can run as a
+// content script; exposes the sections and a renderer on globalThis. The
+// nx-guide-* classes are styled in theme.css.
+
+// [section title, [ [lead, text], … ]]. `lead` is bolded; text may be ''.
+globalThis.NX_GUIDE_SECTIONS = [
+  ['Getting started', [
+    ['Nexus Overseer', 'The main dashboard: opens in a new tab from the sidebar. Aggregates every report over time into charts, stat cards and sortable tables. Navigate with the sidebar on the left; on narrow windows it collapses behind the ☰ menu button.'],
+    ['In-game tools', 'User Guide and Live Search Belts open from the Addon section of the sidebar; the Quartermaster opens from the 📦 button in the top bar; the upgrade/build planners sit on building, research and ship cards. All render as overlays/panels on the game page itself.'],
+    ['Servers', 'Data is kept separately per server. The dashboard follows your active game tab automatically; the server picker at the top of the dashboard switches manually.'],
+    ['Data', 'The addon scrapes the game APIs every 15 minutes (and on demand). Everything is stored locally in your browser; nothing is sent anywhere. Backups are written to Downloads/NexusOverseer before each update and automatically (weekly by default, see Options).'],
+  ]],
+  ['Dashboard tabs', [
+    ['Dashboard', 'Default tab: total resources and hourly production across all planets and moons, active missions with fleet slots, a "Needs attention" box (idle research labs, planets without construction, nearly full storage, command ship repair, damaged ships, unspent talent points, idle shipyards, free fleet/colony slots), an empire summary, and a card per planet/moon with its construction queue, shipyard queue and hangar fleet by class. Refreshes automatically while visible; Refresh updates immediately.'],
+    ['Statistics', 'All recorded activity, split into sub-tabs: see below.'],
+    ['Asteroids', 'Scan the nearest systems for asteroid fields (filter by multiplier, quantity, remaining %, type and zone) with distance, fuel cost and a ship recommendation per field. 🚀 on a row opens the fleet editor seeded from that recommendation. Live Search keeps scanning in the background and notifies you when a new field matches.'],
+    ['Galaxy Scout', 'Search explored systems for planets by arm, sector, type, size, temperature, moons, zone and ownership, sorted by distance from a chosen origin. Owners show alliance and military/economy/research rank. Moons show type (colour-coded) + building slots.'],
+    ['Pirates', 'Known pirate camps; fleets start from a chosen planet or the nearest one. Scout a camp with a template, or attack it: the fleet editor\'s "Calculate fleet" suggests an attack fleet from the ships you have available. Below: pirate reports, loot vs. losses, loot per period and outcome breakdown.'],
+    ['Fleets', 'Named, planet-agnostic fleet templates reused by every task. Mining ships are colour-coded by what they mine (see the legend); a template can carry an escort per zone.'],
+    ['Simulator', 'Combat calculator backed by the game\'s own simulator. Load your fleet from any planet, fill the defender from an intel report, set tech bonuses, then see the outcome round by round with losses and debris. Also shows the distance between two coordinates.'],
+    ['Market', 'All open offers on the public or alliance market, filtered by resource and minimum ratio and coloured by how good the deal is vs. the market average. Below: your trade history with estimated profit (ore-equivalent, after fees) and net resource flow.'],
+    ['Tech Tree', 'Dependency graph of all research with branch filter and search. Click + on a tech to plan it (prerequisites included) into a research queue and pick the planet to launch from.'],
+    ['Options', 'Choose which "Needs attention" hints and dashboard cards appear, the storage-full threshold, refresh interval, number format and start tab. Data: records cap, automatic backup interval, Back up now, JSON export/import (all data or options only), Purge old reports, Rebuild stats and Reset stats data.'],
+  ]],
+  ['Statistics sub-tabs', [
+    ['Global', 'Combined resource totals and a "share by source" breakdown across all activities.'],
+    ['Surveys / Pirates / Mining / Expeditions / Xeno / Wormhole', 'Per-activity totals, net gain (loot − ship-cost losses − fuel), loot-composition doughnut, daily/hourly charts and a sortable report table.'],
+    ['Battles', 'Every combat in one place: camp raids, mining/survey ambushes, expedition/wormhole fights and player-vs-player attacks. Click a row to expand the fleets (incl. enemy planetary defenses) and per-ship losses. Export CSV downloads the current view with fleets and per-round detail.'],
+    ['Debris', 'Debris collected over time plus active and recent debris runs.'],
+  ]],
+  ['Upgrade & build planners', [
+    ['⬆ upgrade', 'On every building and research card. Pick a target level (and for research, the planet that will research it) to see the total cost to get there and what is missing on that planet.'],
+    ['🚀 build', 'On every shipyard card. Pick a quantity to see the total cost and the missing resources on the planet in view.'],
+    ['Upgrade queue', 'Planned items from all three planners land in a shared to-do list next to the planner. Reorder by drag & drop; select several items to sum their cost against one planet\'s stock.'],
+    ['Send the deficit', 'Every planner hands the missing resources to the Quartermaster, which pre-fills a transfer from another planet.'],
+  ]],
+  ['On the galaxy map', [
+    ['Mining calculator', 'Each asteroid field card shows the optimal number of mining ships to clear it. A per-card picker sets the mining ship and cycle count (both persist).'],
+    ['⛏ Mining toggle', 'The breadcrumb switch hides/shows the injected pickers across all cards at once: green when on, grey-red when off.'],
+  ]],
+  ['Quartermaster (📦 top bar)', [
+    ['Overview', 'Resource and ship cards for your planets, moons and outposts. Moons and outposts sit in the left column; the planet grid uses the remaining width and fits more planets per row on wider screens.'],
+    ['Move by drag & drop', 'Drag a resource or ship from a colony onto another to stage a transfer in the docked builder card at the top: adjust amounts, choose the allowed transport types (selection is remembered), see fuel + ETA, then Send. Hold the item in a highlighted top or bottom edge zone to scroll to colonies outside the visible area.'],
+    ['What each drop does', 'Planet→planet: deliver resources / transfer (relocate) ships. Planet→outpost: supply resources / deploy ships. Drag an outpost resource onto a planet to collect it (choose source planet + resource types). Nothing sends until you press Send.'],
+  ]],
+  ['Other sidebar tools', [
+    ['Live Search Belts', 'Start/stop the background asteroid live-search and view its latest matches, with per-row fuel and a one-click mine. The draggable window can be collapsed to its title bar without losing your fleet selection or editor inputs.'],
+  ]],
+  ['Good to know', [
+    ['Stats drift', 'If a "Stats drift detected" banner appears, click Options > Data > Rebuild stats once: it recomputes aggregates from the stored records.'],
+    ['Confirmations', 'Every fleet launch asks for confirmation and shows the exact ships being sent.'],
+  ]],
+];
+
+globalThis.NX_renderGuide = function renderGuide(root) {
+  for (const [title, items] of globalThis.NX_GUIDE_SECTIONS) {
+    const panel = document.createElement('section');
+    panel.className = 'nx-guide-panel';
+    const label = document.createElement('h2');
+    label.className = 'nx-guide-label';
+    label.textContent = title;
+    const list = document.createElement('div');
+    list.className = 'nx-guide-items';
+    for (const [lead, text] of items) {
+      const item = document.createElement('div');
+      item.className = 'nx-guide-item';
+      const b = document.createElement('strong');
+      b.textContent = lead;
+      item.append(b, text ? `: ${text}` : '');
+      list.appendChild(item);
+    }
+    panel.append(label, list);
+    root.appendChild(panel);
+  }
+};

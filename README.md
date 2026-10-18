@@ -14,7 +14,7 @@ Browser extension (Firefox and Chrome) for [Nexus Legacy](https://nexuslegacy.sp
 - **Market**: browse and track trades.
 - **Tech Tree and upgrades**: research overview plus building, ship and tech upgrade queues.
 - **Logistics (Quartermaster)**: resource transfers and outpost collections with selectable transport ships.
-- **Combat Simulator**: uses the game's official combat calculator.
+- **Combat Simulator**: integrated directly into the dashboard, using the game's official combat calculator. Fleet inputs, intel imports, and battle results stay in the same tab.
 - **Multiple universes**: data is kept separately for each universe.
 - **Backups**: JSON export and import of your data and options (Options > Data).
 

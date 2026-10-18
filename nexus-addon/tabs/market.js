@@ -5,18 +5,13 @@
 // so "buy" filters on offerResource and "sell" on requestResource. Ratio is
 // received-per-given (offerAmount / requestAmount) — higher is a better deal.
 
-import { applySort, attachSortable, fmt, makeStatCard, marketTradeNet, resourceWeight, setStatusText } from '../common.js';
+import { ALL_RES_COLORS, applySort, attachSortable, fmt, makeStatCard, marketTradeNet, resourceWeight, setStatusText } from '../common.js';
 
 let iconBase = 'https://s0.nexuslegacy.space/images/resources/';
 // All tradable resources, always shown as filter icons (basic first, then exotic).
 const RESOURCES = ['ore', 'silicates', 'hydrogen', 'alloys', 'cryo_ice',
   'quantum_dust', 'plasma_core', 'bio_extract', 'dark_matter', 'antimatter'];
-// Per-resource colours for the Offering / For amounts in the table.
-const RES_COLOR = {
-  ore: '#fb923c', silicates: '#c084fc', hydrogen: '#60a5fa', alloys: '#94a3b8',
-  cryo_ice: '#67e8f9', quantum_dust: '#f472b6', plasma_core: '#f97316',
-  bio_extract: '#10b981', dark_matter: '#9333ea', antimatter: '#ef4444',
-};
+const RES_COLOR = ALL_RES_COLORS;
 // Mean ratio after dropping the worst 5% (lowball listings nobody trades), so
 // the baseline reflects the real market rather than junk orders.
 const trimmedMean = nums => {
@@ -189,7 +184,7 @@ function renderHistory() {
     'Estimated profit (ore-equivalent)',
     `${profit >= 0 ? '+' : ''}${fmt(Math.round(profit))}`,
     '',
-    profit >= 0 ? 'color:#56d364' : 'color:#ff7b72',
+    profit >= 0 ? 'color:var(--success)' : 'color:var(--error)',
   );
   profitCard.title = 'Each trade uses received amount after fee, then subtracts paid value. Transport fuel is not included.';
   stats.append(
@@ -205,7 +200,7 @@ function renderHistory() {
     .sort((a, b) => Math.abs(b[1] * resourceWeight(b[0])) - Math.abs(a[1] * resourceWeight(a[0])));
   if (!flowEntries.length) {
     flowBox.textContent = 'No trades in this range.';
-    flowBox.style.color = '#484f58';
+    flowBox.style.color = '#64748b';
   } else {
     flowBox.style.color = '';
     for (const [resource, value] of flowEntries) {
@@ -257,7 +252,7 @@ function renderHistory() {
     values.forEach((value, index) => {
       const cell = document.createElement('td');
       cell.textContent = value;
-      if (index === 1) cell.style.color = net.soldByMe ? '#e3b341' : '#79c0ff';
+      if (index === 1) cell.style.color = net.soldByMe ? '#ffc070' : '#79c0ff';
       if (index === 6) cell.className = net.oreEquivalent >= 0 ? 'market-profit-positive' : 'market-profit-negative';
       row.appendChild(cell);
     });
@@ -339,7 +334,7 @@ export function renderMarket() {
   if (!rows.length) {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
-    td.colSpan = 6; td.style.color = '#484f58';
+    td.colSpan = 6; td.style.color = '#64748b';
     td.textContent = orders.length ? 'No orders match these filters.' : 'No open orders.';
     tr.appendChild(td); tbody.appendChild(tr);
     return;
@@ -355,7 +350,7 @@ export function renderMarket() {
       `1 ${res(o.offerResource)} for ${n.toLocaleString()} ${res(o.requestResource)}`,
       o.ratio.toFixed(3),
     ];
-    const colColor = { 2: RES_COLOR[o.offerResource], 3: RES_COLOR[o.requestResource], 5: '#e3b341' };
+    const colColor = { 2: RES_COLOR[o.offerResource], 3: RES_COLOR[o.requestResource], 5: '#ffc070' };
     if (allianceMembers.has(o.userId)) colColor[1] = '#7ee787';   // alliance seller
 
     // Tint by deal quality vs the market: this ratio ÷ the pair's baseline ratio

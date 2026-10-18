@@ -93,7 +93,7 @@ export function renderActiveRuns() {
   if (!runs.length) {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
-    td.colSpan = 6; td.style.color = '#484f58';
+    td.colSpan = 6; td.style.color = '#64748b';
     td.textContent = 'No debris-collection fleets in flight.';
     tr.appendChild(td); tbody.appendChild(tr);
     return;
@@ -121,7 +121,7 @@ export function renderCollectionLog() {
   if (!log.length) {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
-    td.colSpan = 12; td.style.color = '#484f58';
+    td.colSpan = 12; td.style.color = '#64748b';
     td.textContent = 'No collections recorded yet — they appear when a collect-debris fleet returns.';
     tr.appendChild(td); tbody.appendChild(tr);
     return;

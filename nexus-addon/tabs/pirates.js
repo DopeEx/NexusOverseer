@@ -3,7 +3,7 @@
 import { loadFleetTemplates } from './fleets.js';
 import { suggestAttackFleet } from '../pirate-planner.js';
 import { pauseAutomationsForHumanVerification } from '../human-verification.js';
-import { EXTRA_RES_KEYS_UI, PER_PAGE, SERIES_GETTERS, appendExtraResourceCards, applySort, attachSortable, computeResourcesLost, computeSeries, editFleetDialog, emptyResources, filterZone, fmt, fmtCountdown, fuelForMode, getLabelKey, getMode, isUnfiltered, makeResourceLineChart, makeStatCard, missionProgress, periodLabelFor, recordsForMode, renderLostCards, renderNetCards, rememberSelection, rememberedSelections, setStatusText, store, windowActive, zoneCell, ZONE_COLORS } from '../common.js';
+import { appendExtraResourceCards, applySort, attachSortable, computeResourcesLost, computeSeries, cssVar, editFleetDialog, emptyResources, EXTRA_RES_KEYS_UI, filterZone, fmt, fmtCountdown, fuelForMode, getLabelKey, getMode, isUnfiltered, makeResourceLineChart, makeStatCard, missionProgress, PER_PAGE, periodLabelFor, recordsForMode, rememberedSelections, rememberSelection, renderLostCards, renderNetCards, SERIES_GETTERS, setStatusText, store, windowActive, ZONE_COLORS, zoneCell } from '../common.js';
 
 export let chartPirateLoot, chartPirateOutcomes;
 
@@ -116,7 +116,7 @@ function renderPirateReports(error) {
     cells.forEach((v, i) => {
       const td = document.createElement('td');
       td.textContent = v;
-      if (i === 2) td.style.color = won ? '#3fb950' : '#f85149';
+      if (i === 2) td.style.color = won ? '#7ed957' : '#ff6b7a';
       tr.appendChild(td);
     });
     tbody.appendChild(tr);
@@ -382,7 +382,7 @@ async function initPirateCamps() {
   });
   sel.disabled = nearestBox.checked;
   await refreshPirateTemplates();
-  browser.storage.onChanged.addListener((changes, area) => {
+  browser.storage.local.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes.fleet_templates) refreshPirateTemplates();
   });
 
@@ -720,8 +720,8 @@ export function renderPirateStatsTab() {
     appendExtraResourceCards(collected, t, periodLabel);
     collected.append(
       makeStatCard(`Raids${periodLabel}`,     fmt(t.raids),     'missions'),
-      makeStatCard(`Ships destroyed${periodLabel}`, fmt(t.ships_destroyed), '', 'color:#ff7b72'),
-      makeStatCard(`Pirates destroyed${periodLabel}`, fmt(t.pirates_destroyed), '', 'color:#56d364'),
+      makeStatCard(`Ships destroyed${periodLabel}`, fmt(t.ships_destroyed), '', 'color:var(--error)'),
+      makeStatCard(`Pirates destroyed${periodLabel}`, fmt(t.pirates_destroyed), '', 'color:var(--success)'),
       makeStatCard(`Fuel spent${periodLabel}`, fmt(fuelForMode('pirate', getMode())), 'hydrogen'),
     );
   }
@@ -753,7 +753,7 @@ export function renderPirateOutcomesChart(outcomes) {
     const pct = total ? (o.count / total * 100).toFixed(1) : 0;
     return `${o.outcome.replace(/_/g, ' ')} — ${o.count} (${pct}%)`;
   });
-  const colors = ['#56d364', '#ff7b72', '#e3b341', '#58a6ff', '#8b949e'];
+  const colors = ['#7ed957', '#ff6b7a', '#ffc070', '#7ed4ff', '#c0cce0'];
   if (chartPirateOutcomes) chartPirateOutcomes.destroy();
   chartPirateOutcomes = new Chart(document.getElementById('chart-pirate-outcomes'), {
     type: 'doughnut',
@@ -761,7 +761,7 @@ export function renderPirateOutcomesChart(outcomes) {
     options: {
       responsive: true,
       plugins: {
-        legend: { position: 'right', labels: { color: '#e6edf3', font: { size: 11 } } },
+        legend: { position: 'right', labels: { color: cssVar('--text'), font: { size: 11 } } },
         tooltip: {
           callbacks: {
             label: ctx => {

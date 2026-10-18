@@ -115,9 +115,9 @@ export function renderMiningTab() {
   ops.append(
     makeStatCard(`Deliveries${periodLabel}`, fmt(t.deliveries), 'missions'),
     makeStatCard(`Mining cycles${periodLabel}`, fmt(t.cycles), ''),
-    makeStatCard(`Drill breakdowns${periodLabel}`, fmt(t.drill_breakdowns), '', 'color:#e3b341'),
-    makeStatCard(`Ships lost${periodLabel}`, fmt(t.ships_lost), '', 'color:#ff7b72'),
-    makeStatCard(`Cargo stolen${periodLabel}`, fmt(stolenTotal), '', 'color:#ff7b72'),
+    makeStatCard(`Drill breakdowns${periodLabel}`, fmt(t.drill_breakdowns), '', 'color:var(--warning)'),
+    makeStatCard(`Ships lost${periodLabel}`, fmt(t.ships_lost), '', 'color:var(--error)'),
+    makeStatCard(`Cargo stolen${periodLabel}`, fmt(stolenTotal), '', 'color:var(--error)'),
     makeStatCard(`Fuel spent${periodLabel}`, fmt(fuelForMode('mining', getMode())), 'hydrogen'),
   );
 
@@ -197,7 +197,7 @@ async function fillFuelRoi(rows) {
 
     const roi = mined - breakdown - (fuel || 0) * RESOURCE_WEIGHTS.hydrogen - shipLoss - stolen;
     roiCell.textContent = (roi >= 0 ? '+' : '') + fmt(roi);
-    roiCell.style.color = roi >= 0 ? '#56d364' : '#ff7b72';
+    roiCell.style.color = roi >= 0 ? '#7ed957' : '#ff6b7a';
     roiCell.title = fuel == null
       ? `Fuel excluded. mined ${fmt(mined)} − breakdown ${fmt(breakdown)} − ship loss ${fmt(shipLoss)} − stolen ${fmt(stolen)}`
       : `mined ${fmt(mined)} − breakdown ${fmt(breakdown)} − fuel ${fmt(fuel * RESOURCE_WEIGHTS.hydrogen)} − ship loss ${fmt(shipLoss)} − stolen ${fmt(stolen)}`;
