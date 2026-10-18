@@ -21,11 +21,19 @@ export default [
     },
   },
   {
-    files: ['tests/**/*.js', 'eslint.config.js'],
+    files: ['tests/**/*.js', 'tools/demo/server.js', 'eslint.config.js'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
       globals: { ...globals.node }
+    },
+  },
+  {
+    files: ['tools/demo/browser.js', 'tools/demo/fixtures.js'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: { ...globals.browser },
     },
   },
   {
