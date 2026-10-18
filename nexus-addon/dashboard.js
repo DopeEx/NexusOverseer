@@ -352,7 +352,8 @@ function updateTabNavigation() {
     b.classList.toggle('active', b.dataset.tab === activeTab);
   });
   document.querySelector('.subtabs')?.classList.toggle('show', isStatisticsContext);
-  document.querySelector('.status-bar')?.classList.toggle('show', isStatisticsContext);
+  document.getElementById('statistics-status').classList.toggle('show', isStatisticsContext);
+  document.getElementById('dashboard-status').classList.toggle('show', activeMainTab === 'dashboard');
 }
 
 document.querySelectorAll('.tab').forEach(btn => {

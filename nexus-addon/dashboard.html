@@ -9,13 +9,20 @@
 <body>
   <div class="app-header">
     <button id="nav-toggle" class="nav-toggle" type="button" aria-label="Menu" aria-controls="main-nav" aria-expanded="false">☰</button>
+    <div id="dashboard-status" class="status-bar show ov-statusbar"></div>
+    <div id="statistics-status" class="status-bar">
+      <span id="status-text">Loading…</span>
+      <span id="status-alarm-text" class="status-alarm-hidden"></span>
+      <button id="btn-scrape">Scrape Now</button>
+    </div>
   </div>
-  <button id="expert-toggle" type="button" aria-label="Toggle expert mode"></button>
 
   <div id="nav-backdrop" class="nav-backdrop"></div>
   <nav class="tabs" id="main-nav">
     <div class="nav-brand">
-      <img src="icons/icon128.png" alt="" width="28" height="28" />
+      <button id="expert-toggle" type="button" aria-label="Toggle expert mode">
+        <img src="icons/icon128.png" alt="" width="28" height="28" />
+      </button>
       <h1>Nexus Overseer</h1>
     </div>
     <label class="nav-server">
@@ -46,12 +53,6 @@
       </nav>
 
   <div id="hv-banner" class="hv-banner" role="alert"></div>
-
-  <div class="status-bar">
-    <span id="status-text">Loading…</span>
-    <span id="status-alarm-text" class="status-alarm-hidden"></span>
-    <button id="btn-scrape">Scrape Now</button>
-  </div>
 
   <div class="subtabs">
     <button class="tab subtab active" data-tab="global">Global</button>

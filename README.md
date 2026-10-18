@@ -1,5 +1,9 @@
 # Nexus Overseer
 
+<p align="center">
+  <img src="docs/assets/nexus-overseer-logo.png" alt="Nexus Overseer" width="240">
+</p>
+
 Browser extension (Firefox and Chrome) for [Nexus Legacy](https://nexuslegacy.space): statistics, mining, logistics and planning tools in one dashboard.
 
 > Screenshots are being updated and will be added here.
