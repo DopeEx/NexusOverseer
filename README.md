@@ -6,7 +6,57 @@
 
 Browser extension (Firefox and Chrome) for [Nexus Legacy](https://nexuslegacy.space): statistics, mining, logistics and planning tools in one dashboard.
 
-> Screenshots are being updated and will be added here.
+## Screenshots
+
+All screenshots use the real dashboard with entirely fictional demo data.
+No player account, actual coordinates or real economy data is shown.
+
+![Empire dashboard with fictional demo data](docs/assets/screenshots/dashboard.png)
+
+<details>
+<summary>All screenshots: statistics, exploration, fleets, simulator, market and options</summary>
+
+### Statistics
+
+![Statistics with fictional demo data](docs/assets/screenshots/statistics.png)
+
+### Asteroid fields
+
+![Asteroid fields with fictional demo data](docs/assets/screenshots/asteroids.png)
+
+### Galaxy Scout
+
+![Galaxy Scout with a fictional galaxy](docs/assets/screenshots/galaxy-scout.png)
+
+### Pirates
+
+![Pirate camps with fictional demo data](docs/assets/screenshots/pirates.png)
+
+### Fleet templates
+
+![Fleet templates with fictional demo data](docs/assets/screenshots/fleet-templates.png)
+
+### Combat simulator
+
+![Combat simulator with fictional fleets and intel](docs/assets/screenshots/combat-simulator.png)
+
+### Market
+
+![Market with fictional offers and trades](docs/assets/screenshots/market.png)
+
+### Tech Tree
+
+![Tech Tree with fictional research progress](docs/assets/screenshots/tech-tree.png)
+
+### Options
+
+![Options in the isolated demo](docs/assets/screenshots/options.png)
+
+### User Guide
+
+![User Guide in the isolated demo](docs/assets/screenshots/user-guide.png)
+
+</details>
 
 ## Features
 
@@ -45,6 +95,7 @@ Download the latest package from the [Releases](https://github.com/DopeEx/NexusO
 
 ## Documentation
 
+- [Local screenshot demo](docs/screenshot-demo.md): run the dashboard with fictional data, without a game account.
 - [API integration reference](docs/api-reference.md): API routes used by the add-on, request handling, and observed response shapes.
 - [Game reference](docs/game-reference.md): game systems and reference data.
 - [Privacy policy](docs/privacy-policy.md): data access, storage, and API actions.
