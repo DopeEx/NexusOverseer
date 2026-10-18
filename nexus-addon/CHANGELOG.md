@@ -4,6 +4,14 @@ All notable changes to the Nexus Overseer Firefox addon (formerly Nexus Accounti
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Documentation
+- A local dashboard preview with fictional sample data for creating screenshots
+  without a game account.
+- A README gallery covering all eleven regular dashboard tabs, with screenshots
+  cropped to the height of the main navigation.
+
 ## [2.1.0] - 2026-10-18
 
 ### Added
