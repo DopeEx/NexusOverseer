@@ -4,26 +4,29 @@ All notable changes to the Nexus Overseer Firefox addon (formerly Nexus Accounti
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [2.1.0] - 2026-10-18
 
 ### Added
-- The in-game Live Search Belts window can be collapsed to a draggable title bar
-  without losing the fleet selection or editor inputs.
 - A **Dashboard** tab, now the default tab: total resources with hourly production
   across all planets and moons, active missions and fleet slots, a "Needs attention"
   box (idle research labs, planets without construction, nearly full storage, command
-  ship repair, damaged ships, unspent
-  talent points),
+  ship repair, damaged ships, unspent talent points),
   an empire summary and one card per planet or moon with its construction queue,
-  shipyard queue and hangar fleet by class. It refreshes every minute while visible.
+  shipyard queue and hangar fleet by class.
 - The *What's new* dialog is remembered once read and only reappears for a new version.
 - A GitHub link and the version number in the dashboard footer; clicking the version reopens *What's new*.
 - An **Options** tab: choose which "Needs attention" hints appear (including optional ones for
   idle shipyards and free fleet, colony or moon slots), the storage warning threshold, the
-  refresh interval, visible dashboard cards, moons shown last or right after their planet, the number format and the tab opened on start.
+  visible dashboard cards, moons shown last or right after their planet, the number format and the tab opened on start.
   Options are shared by all servers and included in the JSON export. Options-only export
   and import are available too. The automatic backup can be set to weekly, daily or off, and
   there are buttons to back up right now and to purge reports older than 3 days.
+- **Pirates**: choose the nearest owned planet with suitable ships as the fleet's
+  origin, and use a fleet template to select which ship types *Calculate fleet*
+  may use. The calculation determines the quantities from the available ships.
+- **Quartermaster**: *Fill* sets a resource amount to what the available transport
+  fleet can carry alongside the other goods. *Fit to fleet* reduces cargo amounts
+  proportionally when the selected load exceeds the fleet's capacity.
 
 ### Changed
 - Dashboard and Statistics status controls share a right-aligned header with the
@@ -35,16 +38,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   separate page, sharing the fleet controls, number formatting and theme.
 - The Quartermaster topbar button uses a larger control and label to match the
   other text buttons in the game toolbar.
-- In-game window styles now share their frame, heading, section-label and resource-row
-  rules. Live Search styles are centralized in the theme instead of injected at runtime;
-  unused menu/dialog styling and outdated comments were removed without changing layouts.
+- In-game planners and the Quartermaster now share frame, heading, section-label
+  and resource-row styles.
 - Planner opening buttons now sit beside the game's building, research and ship
   action controls, sharing the available row width without overlapping. Costs,
   demolition controls and the ship quantity picker keep their own full-width rows.
 - Building, Technology and Shipyard planners, their opening buttons and the shared
   to-do list now use the add-on theme, with consistent controls and responsive panels.
-- The in-game Live Search Belts window and its mining confirmation now use the
-  shared add-on theme, with matching controls and a wider, responsive results panel.
 - Export, import, *Rebuild stats* and the renamed *Reset stats data* moved from the Statistics
   bar to Options > Data. Resetting keeps your options. The records cap and the storage summary
   (formerly in the footer) moved there too. (The earlier hint to find **Export JSON**
@@ -56,6 +56,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   asteroid and fleet views), including a distinct colour per rare resource.
 - Resource amounts are shown as whole numbers throughout the add-on.
 - Status messages are classified consistently as warnings or errors.
+- Faster fleet calculations in the Pirates attack planner reuse matching
+  simulation results across sessions.
 - The User Guide now covers the Statistics sub-tabs, Simulator, Pirates, Market,
   Tech Tree and Options as they are today, plus the upgrade/build planners. The game
   sidebar link is now called *Nexus Overseer*. The guide is also available as its own
@@ -72,8 +74,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Quartermaster: dragging a resource or ship to the top/bottom edge now reliably scrolls
   the view, so colonies further down can be reached. Highlighted scroll zones show where
   to hold the item while dragging.
-- Fleet template changes and the asteroid live search status are picked up by open tabs
-  again without a reload.
+- Fleet template changes are picked up by open tabs again without a reload.
 
 ## [2.0.0] - 2026-10-15
 
