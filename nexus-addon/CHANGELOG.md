@@ -7,6 +7,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- The in-game Live Search Belts window can be collapsed to a draggable title bar
+  without losing the fleet selection or editor inputs.
 - A **Dashboard** tab, now the default tab: total resources with hourly production
   across all planets and moons, active missions and fleet slots, a "Needs attention"
   box (idle research labs, planets without construction, nearly full storage, command
@@ -24,6 +26,22 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   there are buttons to back up right now and to purge reports older than 3 days.
 
 ### Changed
+- Dashboard navigation now sits in a left sidebar, with a menu drawer on narrow
+  windows. The add-on name, icon and server picker stay together above the navigation.
+- The combat simulator is integrated into the dashboard instead of opening a
+  separate page, sharing the fleet controls, number formatting and theme.
+- The Quartermaster topbar button uses a larger control and label to match the
+  other text buttons in the game toolbar.
+- In-game window styles now share their frame, heading, section-label and resource-row
+  rules. Live Search styles are centralized in the theme instead of injected at runtime;
+  unused menu/dialog styling and outdated comments were removed without changing layouts.
+- Planner opening buttons now sit beside the game's building, research and ship
+  action controls, sharing the available row width without overlapping. Costs,
+  demolition controls and the ship quantity picker keep their own full-width rows.
+- Building, Technology and Shipyard planners, their opening buttons and the shared
+  to-do list now use the add-on theme, with consistent controls and responsive panels.
+- The in-game Live Search Belts window and its mining confirmation now use the
+  shared add-on theme, with matching controls and a wider, responsive results panel.
 - Export, import, *Rebuild stats* and the renamed *Reset stats data* moved from the Statistics
   bar to Options > Data. Resetting keeps your options. The records cap and the storage summary
   (formerly in the footer) moved there too. (The earlier hint to find **Export JSON**
@@ -35,6 +53,24 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   asteroid and fleet views), including a distinct colour per rare resource.
 - Resource amounts are shown as whole numbers throughout the add-on.
 - Status messages are classified consistently as warnings or errors.
+- The User Guide now covers the Statistics sub-tabs, Simulator, Pirates, Market,
+  Tech Tree and Options as they are today, plus the upgrade/build planners. The game
+  sidebar link is now called *Nexus Overseer*. The guide is also available as its own
+  *User Guide* tab below Options in the dashboard. In the game it now uses the
+  add-on's look (same panels as the dashboard tab).
+- The Quartermaster overlay now matches the dashboard design: panels, section labels,
+  buttons and input fields look the same as in the add-on. Outposts now sit below the
+  moons so the planet grid gets more room, and the *Total ships* / *In flight* boxes
+  were removed. The overlay now uses the full screen width, so wider screens fit more
+  planets per row.
+- *Empire View* is no longer listed in the game sidebar for now.
+
+### Fixed
+- Quartermaster: dragging a resource or ship to the top/bottom edge now reliably scrolls
+  the view, so colonies further down can be reached. Highlighted scroll zones show where
+  to hold the item while dragging.
+- Fleet template changes and the asteroid live search status are picked up by open tabs
+  again without a reload.
 
 ## [2.0.0] - 2026-10-15
 
@@ -47,8 +83,6 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 - A **Pirates** tab with pirate camp cards, scouting, attacks and an attack
   planner that uses the combat simulator.
-- Expedition cards now show the target zone, depth, fleet size and a
-  progress bar like the Scouting tab.
 - Live Search shows what it is doing: scan progress, the time of the last
   scan, the number of matches and when the next scan runs.
 
@@ -57,7 +91,6 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   filters give the same results.
 
 ### Fixed
-- Expedition progress is shown correctly while the fleet is exploring.
 - Requests are paused for all callers after a "Too Many Requests" response.
 - The "Live Search Belts" window reports a stale page after an add-on reload
   instead of failing silently.
@@ -177,15 +210,6 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [1.7.4] - 2026-07-20
 
 ### Added
-- **Xeno tab**: automatic ancient-moon ruins surveys — picks the nearest
-  unowned Ancient moon not already targeted (reusing Finder's shared scan
-  cache) and launches a xeno-survey there. Includes a transit list, a
-  "Moons on cooldown" table (48h per moon), and loot/loss graphs wired into
-  the Global tab.
-- **Expeditions** split out into its own tab: a launch panel with known-
-  working fleet/zone/depth presets or a Fleet Template, zone/depth
-  constrained to valid ranges, an editable fleet dialog before send, and a
-  transit list mirroring Scouting.
 - **Wormhole** is now its own tab too; Global's source-share breakdown
   splits Expedition vs. Wormhole gains/losses instead of folding them
   together.
@@ -288,11 +312,6 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - **Moon transfers** and correct moon-ownership id handling.
   - **Outpost supply / deploy / collect** actions.
   - **In-flight ships** shown from active missions.
-- **Scouting — nearest-planet debris collection**: a "Nearest planet" toggle in
-  the Live debris fields header. When on, each field's collection fleet launches
-  from your nearest owned planet (per-field, by galaxy-map distance) instead of
-  the single selected planet — driving both the Fuel Cost / Travel Time columns
-  and the actual launch. Persists across tabs/sessions.
 - **Battles — PvP combat**: ingest player-vs-player combat reports, show PvP rows
   in the Battles table, and a CSV export button (fleets + rounds included; Excel
   encoding fixed).
@@ -313,11 +332,6 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [1.6.9] - 2026-07-05
 
 ### Added
-- **Scouting — fleet progress bars**: in-transit fleets now show a phase-coloured
-  progress bar (En route → working → Returning) with ETA. Scanning fleets get a
-  dedicated panel; the investigation, debris and salvage tables each get a
-  Progress column after the action button. Bars advance every second; the mission
-  list is refetched right after a launch so the bar appears promptly.
 - **Galaxy — mining toggle**: a persisted "⛏ Mining" switch in the galaxy
   breadcrumb hides or shows the injected per-field mining picker + optimal-ships
   line across all cards at once (green on, grey-red off).
@@ -325,9 +339,6 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   lost and Stolen for a Fuel cost column (POST fuel-estimate for the stored fleet,
   source planet → mined system) and an ROI column (weighted: mined − breakdown −
   fuel − ship loss − stolen).
-- **Scouting — investigation return tracked**: the row now persists with a
-  "Returning…" bar until the investigate fleet is home, instead of vanishing when
-  the investigation completes.
 - **Fleet Templates — mining ship colours**: each mining ship's name is coloured
   by what it mines (Mining Vessel, Gas Collector, Ice Drill, Excavator, Freighter),
   with a "Mines: …" tooltip and a legend.
@@ -369,15 +380,6 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   so game re-renders never wipe it.
 
 ## [1.6.7] - 2026-07-04
-
-### Added
-- **Scouting → Uncollected salvage**: after a partial-recovery investigation,
-  leftover loot sits in-system (survey report `uncollectedLoot`, live until
-  `salvageExpiresAt`). A new table under *Live debris fields* lists these with
-  resource breakdown, total, planned haulers, fuel, travel time and an expiry
-  countdown. Collect launches the same cargo ships as debris via
-  `POST /api/fleet/collect-salvage`. Populated from the survey-reports fetch
-  already made — no extra API call.
 
 ### Fixed
 - **Galaxy field cards**: the optimal-ships line stopped rendering. `galaxy-fields.js`
@@ -423,9 +425,6 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   enter any two of offer / pay / ratio and it infers the third.
 - **Market** "Ratio wanted ≥" filter on the open-offers table.
 - **Asteroids** "Left % ≥" filter.
-- **Scouting**: independent, persisted debris zone filter; an "Investigated only"
-  switch backed by a 2-hour investigation history (a system drops once its debris
-  is collected). The survey zone filter is now persisted too.
 - **Mining**: drill-breakdown maintenance (75 alloy per breakdown) is now charged
   in the Net total.
 
@@ -433,21 +432,20 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Market** tab: removed the Trade Hub filter and the mini-map.
 
 ### Fixed
-- Scouting/Asteroids availability strip no longer blinks each poll, and no longer
+- The Asteroids availability strip no longer blinks each poll, and no longer
   disappears.
 
 ## [1.6.4] - 2026-06-26
 
 ### Added
-- **Travel Time** columns on the Scouting debris and investigation tables.
 - **Date-range "Days" picker** with **Last 3 days / Last 7 days / Last month**
   view presets. The selected range drives the stat cards, net, doughnuts and
   charts, and overrides "All time" when a range is set.
 - **Loot composition** doughnut on the Mining tab; Mining net now shows in every
   view, not just All-time.
 - A labelled legend (source — %) on Global's "Share by source" chart.
-- Scouting/Asteroids remember the selected planet, fleet template, and cargo
-  ship types across tab switches and restarts.
+- Asteroids remembers the selected planet and fleet template across tab switches
+  and restarts.
 
 ### Changed
 - Per-mission fuel uses the game's exact fuel-estimate (real fleet + route),
@@ -460,16 +458,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [1.6.3] - 2026-06-26
 
 ### Added
-- **Debris collection from Scouting**: the live debris fields table moved here
-  with a one-click **Collect** button per row.
-  - Pick cargo ship types (icon toggles) and the addon auto-plans the fewest
-    ships to collect 100% of a field, shown in **Number of Ships** and **Fuel
-    Cost** columns and capped to what's on the planet.
-  - Effective cargo accounts for cargo research and the commander cargo bonus.
-  - Sortable columns, per-row hide/unhide, and a guard against double-collecting.
-- **"On this planet" ship strips**: live counts (icon + qty) above the
-  investigation table (all ship types), the debris table (cargo ships), and the
-  Asteroids fields table (all ship types) — refreshed every 10s and after each
+- **"On this planet" ship strip**: live counts (icon + qty) above the
+  Asteroids fields table — refreshed every 10s and after each
   launch, so you can see fleets free up without reloading.
 
 ### Changed
@@ -502,12 +492,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Fleet/research launches no longer silently cancel: native `confirm()` is
   replaced by an in-page modal, so Firefox's "prevent additional dialogs"
   checkbox can't suppress launch confirmations anymore.
-- Scouting no longer re-targets a system that was just surveyed/investigated
-  while the missions API lags; the source system is now a valid survey target.
 
 ### Added
 - Launch confirmations show each ship's image + name instead of `#<id>`.
-- Used/max fleet slots shown on the Scouting and Asteroids tabs.
+- Used/max fleet slots shown on the Asteroids tab.
 
 ## [1.6.0] - 2026-06-25
 
@@ -521,15 +509,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     ships actually on the source planet.
 - **Fleet Templates tab**: named, reusable ship templates (planet-agnostic),
   styled like the simulator's attacker fleet and built from the full shipyard
-  catalog. Shared by the mining and scouting actions.
-- **Scouting tab**: probe surveys and anomaly investigations.
-  - **Launch Scan** sends a probe template to the nearest system (in the
-    selected security zones) that isn't on cooldown or already being surveyed.
-  - **Active surveys** lists anomalies awaiting investigation, auto-refreshing
-    with a live countdown, sorted by soonest expiry, with a Fuel Cost column
-    (`/api/fleet/fuel-estimate`) for the chosen investigate template.
-  - **Launch Investigation** dispatches the fleet and greys out when an
-    investigate mission to that system is already in flight.
+  catalog. Shared by mining actions.
 
 ### Fixed
 - Fleet-action POSTs (mine, survey, investigate, fuel-estimate) route through
