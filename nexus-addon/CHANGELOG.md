@@ -6,6 +6,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.2.2] - 2026-10-19
+
+### Added
+- A Check for updates button beside the footer version in manual installations,
+  with immediate checks, progress, results and a short repeat-click cooldown.
+
 ## [2.2.1] - 2026-10-19
 
 ### Fixed

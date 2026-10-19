@@ -30,7 +30,7 @@ async function requestJson(fetcher, url) {
   return response.json();
 }
 
-export async function getReleaseStatus({ installation, version, storage, fetcher = fetch, now = Date.now() }) {
+export async function getReleaseStatus({ installation, version, storage, fetcher = fetch, now = Date.now(), force = false }) {
   if (!['release', 'master'].includes(installation.channel)) return null;
   const revision = installation.revision || '';
   if (installation.channel === 'master' && !/^[a-f0-9]{40}$/i.test(revision)) {
@@ -38,7 +38,7 @@ export async function getReleaseStatus({ installation, version, storage, fetcher
   }
   const identity = `${installation.channel}:${revision}:${version}`;
   const cached = (await storage.get(CACHE_KEY))[CACHE_KEY];
-  if (cached?.identity === identity && Number.isFinite(cached.checkedAt) &&
+  if (!force && cached?.identity === identity && Number.isFinite(cached.checkedAt) &&
       now >= cached.checkedAt && now - cached.checkedAt < CHECK_INTERVAL) {
     return cached.result;
   }
@@ -76,7 +76,7 @@ export async function getReleaseStatus({ installation, version, storage, fetcher
   return result;
 }
 
-export async function initReleaseStatus({ versionLink, statusLink, runtime, storage, fetcher = fetch }) {
+export async function initReleaseStatus({ versionLink, statusLink, checkButton, runtime, storage, fetcher = fetch }) {
   const version = runtime.getManifest().version;
   const showFailure = message => {
     console.warn('[NexusOverseer] Release check:', message);
@@ -85,39 +85,85 @@ export async function initReleaseStatus({ versionLink, statusLink, runtime, stor
     statusLink.title = `${message} Open GitHub releases to check manually.`;
     statusLink.href = RELEASES;
   };
+  let installation;
   try {
     const response = await fetcher(runtime.getURL('.nexus-install.json'));
     if (!response.ok) throw new Error(`Installation metadata unavailable (HTTP ${response.status})`);
-    const installation = await response.json();
+    installation = await response.json();
     if (!['release', 'master'].includes(installation.channel)) return;
-    if (installation.channel === 'master') {
-      versionLink.textContent = `v${version} · dev · ${(installation.revision || '').slice(0, 7)}`;
-      versionLink.title = `Development build: ${installation.revision || 'unknown commit'}. Show what's new.`;
-    }
-    const check = () => getReleaseStatus({ installation, version, storage, fetcher });
-    const status = globalThis.navigator?.locks
-      ? await navigator.locks.request('nexus-manual-release-check', check)
-      : await check();
-    if (status.error) { showFailure(status.error); return; }
-    if (installation.channel === 'master') {
-      const relations = {
-        ahead: `${status.ahead} commits ahead of release v${status.latest}`,
-        behind: `Behind release v${status.latest}`,
-        identical: `Same commit as release v${status.latest}`,
-        diverged: `History diverges from release v${status.latest}`,
-      };
-      if (status.relation === 'ahead') versionLink.textContent += ' · ahead of release';
-      versionLink.title += ` ${relations[status.relation] || 'Release comparison unavailable.'}`;
-      if (status.comparisonError) showFailure(status.comparisonError);
-    }
-    if (status.newer) {
-      statusLink.hidden = false;
-      statusLink.href = status.url;
-      statusLink.textContent = `Update available: v${status.latest}`;
-      statusLink.title = 'Open the stable release. Use Update-Nexus.bat to install it, then reload the extension.';
-      if (status.comparisonError) statusLink.title += ` Commit comparison unavailable: ${status.comparisonError}`;
-    }
   } catch (error) {
     showFailure(error.message);
+    return;
   }
+  let busy = false;
+  let lastManualCheck = -Infinity;
+  const runCheck = async (force = false) => {
+    if (busy || (force && Date.now() - lastManualCheck < 30000)) return;
+    busy = true;
+    if (force) lastManualCheck = Date.now();
+    if (checkButton) {
+      checkButton.disabled = true;
+      checkButton.textContent = 'Checking…';
+    }
+    let newer = false;
+    try {
+      versionLink.textContent = installation.channel === 'master'
+        ? `v${version} · dev · ${(installation.revision || '').slice(0, 7)}`
+        : `v${version}`;
+      versionLink.title = installation.channel === 'master'
+        ? `Development build: ${installation.revision || 'unknown commit'}. Show what's new.`
+        : "Show what's new in this version";
+      statusLink.hidden = true;
+      const check = () => getReleaseStatus({ installation, version, storage, fetcher, force });
+      const status = globalThis.navigator?.locks
+        ? await navigator.locks.request('nexus-manual-release-check', check)
+        : await check();
+      if (checkButton) {
+        const cache = (await storage.get(CACHE_KEY))[CACHE_KEY];
+        checkButton.title = Number.isFinite(cache?.checkedAt)
+          ? `Last check: ${new Date(cache.checkedAt).toLocaleString()}. Check now (30-second click cooldown).`
+          : 'Check GitHub now (30-second click cooldown).';
+      }
+      if (status.error) { showFailure(status.error); return; }
+      newer = status.newer;
+      if (installation.channel === 'master') {
+        const relations = {
+          ahead: `${status.ahead} commits ahead of release v${status.latest}`,
+          behind: `Behind release v${status.latest}`,
+          identical: `Same commit as release v${status.latest}`,
+          diverged: `History diverges from release v${status.latest}`,
+        };
+        if (status.relation === 'ahead') versionLink.textContent += ' · ahead of release';
+        versionLink.title += ` ${relations[status.relation] || 'Release comparison unavailable.'}`;
+        if (status.comparisonError) showFailure(status.comparisonError);
+      }
+      if (status.newer) {
+        statusLink.hidden = false;
+        statusLink.href = status.url;
+        statusLink.textContent = `Update available: v${status.latest}`;
+        statusLink.title = 'Open the stable release. Use Update-Nexus.bat to install it, then reload the extension.';
+        if (status.comparisonError) statusLink.title += ` Commit comparison unavailable: ${status.comparisonError}`;
+      } else if (force && !status.comparisonError) {
+        statusLink.hidden = false;
+        statusLink.href = status.url;
+        statusLink.textContent = 'Up to date · just checked';
+        statusLink.title = `Latest stable release: v${status.latest}`;
+      }
+    } catch (error) {
+      showFailure(error.message);
+    } finally {
+      busy = false;
+      if (checkButton) {
+        checkButton.textContent = newer ? 'Check again' : 'Check for updates';
+        const remaining = Math.max(0, 30000 - (Date.now() - lastManualCheck));
+        if (remaining) setTimeout(() => { checkButton.disabled = busy; }, remaining);
+        else checkButton.disabled = false;
+      }
+    }
+  };
+  if (checkButton) {
+    checkButton.hidden = false;
+    checkButton.addEventListener('click', () => { void runCheck(true); });
+  }
+  await runCheck();
 }

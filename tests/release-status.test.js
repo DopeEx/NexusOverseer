@@ -66,6 +66,48 @@ test('changing installed revision invalidates cache even before six hours', asyn
   assert.equal(f.calls.length, 4);
 });
 
+test('explicit checks bypass the cache and update its result', async () => {
+  const f = fixture();
+  await getReleaseStatus(f);
+  await getReleaseStatus({ ...f, force: true });
+  assert.equal(f.calls.length, 2);
+  await getReleaseStatus(f);
+  assert.equal(f.calls.length, 2);
+});
+
+test('manual button shows progress, checks immediately and enforces cooldown', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const f = fixture({ latest: 'v2.1.0' });
+  let click;
+  f.checkButton = {
+    hidden: true,
+    addEventListener(event, handler) { assert.equal(event, 'click'); click = handler; },
+  };
+  await initReleaseStatus(f);
+  assert.equal(f.checkButton.hidden, false);
+  assert.equal(f.checkButton.disabled, false);
+  assert.match(f.checkButton.title, /Last check:/);
+  click();
+  assert.equal(f.checkButton.disabled, true);
+  assert.equal(f.checkButton.textContent, 'Checking…');
+  for (let i = 0; i < 40; i++) await Promise.resolve();
+  assert.equal(f.statusLink.textContent, 'Up to date · just checked');
+  const count = f.calls.length;
+  click();
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+  assert.equal(f.calls.length, count);
+  assert.equal(f.checkButton.disabled, true);
+  t.mock.timers.tick(30000);
+  assert.equal(f.checkButton.disabled, false);
+});
+
+test('store installations keep the manual check button hidden and unbound', async () => {
+  const f = fixture({ channel: 'store' });
+  f.checkButton = { hidden: true, addEventListener() { assert.fail('Store button bound'); } };
+  await initReleaseStatus(f);
+  assert.equal(f.checkButton.hidden, true);
+});
+
 test('dev ancestry distinguishes ahead, behind, identical and diverged, including equal versions', async () => {
   for (const relation of ['ahead', 'behind', 'identical', 'diverged']) {
     const f = fixture({ channel: 'master', revision: sha, latest: 'v2.1.0', relation });

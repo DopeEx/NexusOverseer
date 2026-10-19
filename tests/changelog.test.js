@@ -30,7 +30,7 @@ test('the bundled release notes include all sections for the manifest version', 
   const changelog = await readFile(new URL('../nexus-addon/CHANGELOG.md', import.meta.url), 'utf8');
   const notes = changelogForVersion(changelog, manifest.version);
   assert.ok(notes, 'Installed version has release notes');
-  assert.ok(notes.includes('### Fixed'));
+  assert.match(notes, /^### (Added|Changed|Fixed|Documentation)\b/m);
   const previous = changelogForVersion(changelog, '2.2.0');
   for (const heading of ['Added', 'Changed', 'Fixed', 'Documentation']) {
     assert.ok(previous.includes(`### ${heading}`), heading);

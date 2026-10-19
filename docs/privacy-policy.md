@@ -55,7 +55,9 @@ The extension also writes automatic backup files to your `Downloads/NexusOversee
 In the separate Windows manual package, opening the dashboard can contact
 `api.github.com` to check the latest stable release and, for development builds,
 compare the installed public commit with that release. Checks are cached locally
-for six hours, including failed attempts; no background checks run with the
+for six hours, including failed attempts. The footer's Check for updates button
+can request an immediate check, with a 30-second repeat-click cooldown.
+No background checks run with the
 dashboard closed. These requests contain only public repository references,
 omit credentials and referrers, and never include game data. GitHub receives
 normal connection information such as your IP address. Store packages do not

@@ -103,6 +103,9 @@ once every six hours, and links to a newer release. Master installations show
 `dev` and their short commit; a GitHub commit comparison identifies builds
 ahead of the latest release. The version button still opens What's new.
 These checks apply only to manual Windows packages, not store packages.
+Use **Check for updates** beside the footer version to check immediately,
+without waiting for the six-hour cache. The button shows progress and the result;
+manual checks have a 30-second click cooldown. Its tooltip shows the last check.
 
 <details>
 <summary>Update instructions, backups, troubleshooting and publishing</summary>

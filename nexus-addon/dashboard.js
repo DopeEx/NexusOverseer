@@ -780,6 +780,7 @@ if (versionLink) {
   void initReleaseStatus({
     versionLink,
     statusLink: document.getElementById('footer-release-status'),
+    checkButton: document.getElementById('footer-check-updates'),
     runtime: browser.runtime,
     storage: browser.storage.local,
   });
