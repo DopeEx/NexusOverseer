@@ -85,7 +85,81 @@ add-on author.
 Download the latest package from the [Releases](https://github.com/DopeEx/NexusOverseer/releases) page:
 
 - **Firefox**: the `.xpi` file
-- **Chrome** (and other Chromium browsers): the `.zip` file, extracted and loaded as an unpacked extension via `chrome://extensions` with developer mode enabled
+- **Chrome / Edge, manual installation on Windows**: the
+  `nexus-overseer-<version>-windows-manual.zip` asset. Extract it to a permanent,
+  writable folder, enable developer mode at `chrome://extensions` (Edge:
+  `edge://extensions`), and load **only its `addon` subfolder** as an unpacked
+  extension. Do not move that folder afterwards.
+- **Other manual Chromium installations**: the plain `nexus-overseer-<version>.zip`
+  contains only extension files, without the Windows updater.
+
+### Windows manual updates
+
+Double-click `Update-Nexus.bat` in the manual Windows package, then reload the
+extension in your browser. No Git or Python installation is needed. Stable
+releases are the default; testers can optionally select `master`.
+
+<details>
+<summary>Update instructions, backups, troubleshooting and publishing</summary>
+
+Double-click `Update-Nexus.bat` in the extracted manual package. No Git, Python,
+Node.js or administrator access is normally needed; Windows PowerShell 5.1
+(included with Windows 10/11) is required. The window stays open on completion
+or failure. Managed devices may block scripts; system policies are not changed.
+
+The default installs the latest **stable GitHub release**. Testers can explicitly
+select **master**, with a warning and confirmation. The updater resolves a
+specific commit before downloading it, and records the channel, revision and
+installation time in `addon/.nexus-install.json`. Release remains the default
+on every run, including after installing master. There is no automatic fallback
+to a different channel.
+
+After updating, click **Reload** for the extension on the browser's extensions
+page, then reload open game pages. **Do not uninstall the extension.** Keeping
+the same loaded path preserves its identity; export data under **Options > Data**
+before channel switches or downgrades. Older releases may not understand newer
+data formats. File backups do **not** back up browser storage.
+
+File backups and the error log are kept under `.update/backups` and
+`.update/updater.log`. Backups are not automatically removed. Interrupted file
+replacements are rolled back on the next start. A newer updater is offered
+separately and **only from stable releases**, even when testing master.
+Self-updates require confirmation and take effect on the next launch. The small
+protocol-1 batch starter is intentionally not self-updated: a future incompatible
+starter requires re-extracting the manual package while retaining the loaded
+`addon` path. SHA-256 checks detect damaged/mismatched payloads; they are not an
+independent publisher signature.
+
+For migration from an existing unpacked installation, retain the existing
+extension directory and its exact path. If it is named `addon`, place the new
+starter and `updater.ps1` in its parent directory. Otherwise a one-time
+installation-path change and data export/import may be necessary. See
+the included `Installation.txt` for recovery and migration instructions.
+
+Store packages do not contain this updater. Firefox's signed/store installation
+uses a different update mechanism; the Windows manual updater is for Chromium.
+
+#### Building and publishing manual packages
+
+`python nexus-addon/build.py --manual` builds only the Windows manual ZIP;
+the normal build also generates it alongside both store payloads. The release
+workflow attaches all three assets and first runs the Windows updater tests.
+The latest stable release must contain the new `*-windows-manual.zip` asset
+before release updates or updater checks can work. Older releases are not
+retroactively changed. A missing asset is reported explicitly; it never causes
+an automatic switch to master.
+
+The shared file list in `tools/windows-updater/addon-files.json` controls both
+store packaging and which files a master update copies. When adding extension
+files, update that list. Increment `$script:UpdaterVersion` in
+`tools/windows-updater/updater.ps1` for updater changes that existing users
+should receive. Publish them in a new stable release. Protocol-1 starters
+expect a single replaceable `updater.ps1` and the documented recovery markers;
+incompatible changes require a new launcher protocol and manual migration.
+The old source-tree `update-nexus-addon.bat` is not included in this package;
+use the new `Update-Nexus.bat` entry point for the supported manual workflow.
+
+</details>
 
 ## Usage
 
