@@ -574,10 +574,20 @@ export async function editFleetDialog({
 
 export function changelogForVersion(markdown, version) {
   const target = version.replace(/-demo$/, '');
+  if (!/^\d+\.\d+\.\d+$/.test(target)) return [];
+  const [major, minor, patch] = target.split('.').map(Number);
+  const releases = [];
   for (const match of markdown.matchAll(/^## \[([^\]]+)\][^\r\n]*\r?\n([\s\S]*?)(?=^## \[|(?![\s\S]))/gm)) {
-    if (match[1] === target) return match[2].trim() || null;
+    if (!/^\d+\.\d+\.\d+$/.test(match[1])) continue;
+    const [entryMajor, entryMinor, entryPatch] = match[1].split('.').map(Number);
+    const notes = match[2].trim();
+    if (entryMajor === major && entryMinor === minor && entryPatch <= patch && notes) {
+      releases.push({ version: match[1], notes, patch: entryPatch });
+    }
   }
-  return null;
+  return releases.sort((a, b) => b.patch - a.patch).map(({ version: releaseVersion, notes }) => ({
+    version: releaseVersion, notes,
+  }));
 }
 
 // Minimal Markdown → DOM for the changelog: ### headings, - bullets (with

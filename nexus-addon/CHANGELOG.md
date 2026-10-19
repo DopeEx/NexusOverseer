@@ -8,6 +8,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [2.2.2] - 2026-10-19
 
+### Changed
+- What's new groups all published changes in the installed minor-version series
+  under separate version headings, newest first.
+
 ### Added
 - A Check for updates button beside the footer version in manual installations,
   with immediate checks, progress, results and a short repeat-click cooldown.

@@ -754,14 +754,23 @@ async function showWhatsNew(version) {
     const response = await fetch(browser.runtime.getURL('CHANGELOG.md'));
     if (!response.ok) throw new Error(`Changelog request failed (HTTP ${response.status})`);
     const notes = changelogForVersion(await response.text(), version);
-    if (notes) {
+    if (notes.length) {
       body = document.createElement('div');
-      body.className = 'whatsnew-sections';
-      for (const part of notes.split(/\r?\n(?=### )/)) {
-        const section = document.createElement('section');
-        section.className = 'whatsnew-section';
-        section.append(renderMarkdown(part.trim()));
-        body.append(section);
+      for (const release of notes) {
+        const group = document.createElement('section');
+        const heading = document.createElement('h3');
+        heading.className = 'whatsnew-version';
+        heading.textContent = `v${release.version}`;
+        const cards = document.createElement('div');
+        cards.className = 'whatsnew-sections';
+        for (const part of release.notes.split(/\r?\n(?=### )/)) {
+          const section = document.createElement('section');
+          section.className = 'whatsnew-section';
+          section.append(renderMarkdown(part.trim()));
+          cards.append(section);
+        }
+        group.append(heading, cards);
+        body.append(group);
       }
     } else {
       console.warn(`[NexusOverseer] No changelog content for version ${version}.`);

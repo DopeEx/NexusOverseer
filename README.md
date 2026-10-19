@@ -101,7 +101,8 @@ releases are the default; testers can optionally select `master`.
 The dashboard footer checks GitHub for stable releases when opened, at most
 once every six hours, and links to a newer release. Master installations show
 `dev` and their short commit; a GitHub commit comparison identifies builds
-ahead of the latest release. The version button still opens What's new.
+ahead of the latest release. The version button still opens What's new, grouped by release for the installed
+minor-version series (for example, 2.2.2 through 2.2.0), newest first.
 These checks apply only to manual Windows packages, not store packages.
 Use **Check for updates** beside the footer version to check immediately,
 without waiting for the six-hour cache. The button shows progress and the result;
