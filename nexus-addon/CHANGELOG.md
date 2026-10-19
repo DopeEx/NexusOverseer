@@ -6,6 +6,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.2.1] - 2026-10-19
+
+### Fixed
+- The What's new dialog selects the installed version's release notes instead
+  of displaying an empty Unreleased section.
+
 ## [2.2.0] - 2026-10-19
 
 ### Added

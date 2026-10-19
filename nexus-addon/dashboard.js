@@ -7,6 +7,7 @@
 import { activeTab, appendStatusText, confirmDialog, dayKey, fuelForMode, getLabelKey, getMode, infoDialog, periodLabelFor, renderMarkdown, renderNetCards, setActiveTab, setStore, store } from './common.js';
 import { bindServerSelector } from './server-switch.js';
 import { initReleaseStatus } from './release-status.js';
+import { changelogForVersion } from './common.js';
 import { initSimulatorTab } from './tabs/simulator.js';
 import { renderBattlesTab } from './tabs/battles.js';
 import { renderDebrisTab } from './tabs/debris.js';
@@ -750,19 +751,24 @@ async function maybeShowWhatsNew() {
 async function showWhatsNew(version) {
   let body = 'See CHANGELOG.md for details.';
   try {
-    const md = await (await fetch(browser.runtime.getURL('CHANGELOG.md'))).text();
-    const m = md.match(/## \[[^\]]+\][^\n]*\n([\s\S]*?)(?=\n## \[|$)/);
-    if (m) {
+    const response = await fetch(browser.runtime.getURL('CHANGELOG.md'));
+    if (!response.ok) throw new Error(`Changelog request failed (HTTP ${response.status})`);
+    const notes = changelogForVersion(await response.text(), version);
+    if (notes) {
       body = document.createElement('div');
       body.className = 'whatsnew-sections';
-      for (const part of m[1].trim().split(/\n(?=### )/)) {
+      for (const part of notes.split(/\r?\n(?=### )/)) {
         const section = document.createElement('section');
         section.className = 'whatsnew-section';
         section.append(renderMarkdown(part.trim()));
         body.append(section);
       }
+    } else {
+      console.warn(`[NexusOverseer] No changelog content for version ${version}.`);
     }
-  } catch { /* keep fallback */ }
+  } catch (error) {
+    console.error('[NexusOverseer] Could not load release notes:', error);
+  }
   await infoDialog(`What's new in v${version}`, body, { width: 1100 });
 }
 

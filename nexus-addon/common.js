@@ -572,6 +572,14 @@ export async function editFleetDialog({
   });
 }
 
+export function changelogForVersion(markdown, version) {
+  const target = version.replace(/-demo$/, '');
+  for (const match of markdown.matchAll(/^## \[([^\]]+)\][^\r\n]*\r?\n([\s\S]*?)(?=^## \[|(?![\s\S]))/gm)) {
+    if (match[1] === target) return match[2].trim() || null;
+  }
+  return null;
+}
+
 // Minimal Markdown → DOM for the changelog: ### headings, - bullets (with
 // wrapped continuation lines), **bold**, *italic*, `code`. Returns a fragment.
 export function renderMarkdown(text) {
