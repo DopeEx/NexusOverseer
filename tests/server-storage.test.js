@@ -9,8 +9,8 @@ const uniqueImport = (spec) => import(`${spec}?ts=${crypto.randomUUID()}`);
 // Package the new server-aware storage shim so the built extension actually
 // contains the NX-S0 / NX-NF split instead of the old global storage behavior.
 test('build manifest includes the server-storage shim', () => {
-  const build = fs.readFileSync(new URL('../nexus-addon/build.py', import.meta.url), 'utf8');
-  assert.match(build, /'server-storage\.js'/);
+  const files = JSON.parse(fs.readFileSync(new URL('../tools/windows-updater/addon-files.json', import.meta.url), 'utf8'));
+  assert.ok(files.includes('server-storage.js'));
 });
 
 test('manifest requests tabs permission for active-game detection', () => {

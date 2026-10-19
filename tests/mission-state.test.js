@@ -263,7 +263,6 @@ test('refresh failures are logged and do not block later retries', async t => {
 });
 
 test('the shared mission evaluator is included in extension release packages', async () => {
-  const build = await readFile(new URL('../nexus-addon/build.py', import.meta.url), 'utf8');
-  const fileList = build.match(/FILES = \[([\s\S]*?)\n\]/)[1];
-  assert.ok(fileList.includes("'mission-state.js'"));
+  const files = JSON.parse(await readFile(new URL('../tools/windows-updater/addon-files.json', import.meta.url), 'utf8'));
+  assert.ok(files.includes('mission-state.js'));
 });
