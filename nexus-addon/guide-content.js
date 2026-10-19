@@ -47,6 +47,7 @@ globalThis.NX_GUIDE_SECTIONS = [
     ['What each drop does', 'Planet→planet: deliver resources / transfer (relocate) ships. Planet→outpost: supply resources / deploy ships. Drag an outpost resource onto a planet to collect it (choose source planet + resource types). Nothing sends until you press Send.'],
   ]],
   ['Good to know', [
+    ['Mission overview', 'The Dashboard shows Fleet slots used with its capacity bar. Next return is the earliest confirmed return that frees a normal fleet slot, not a mining cycle or outbound arrival. Expeditions count toward fleet slots; patrols use separate capacity and appear on their own line. Mission rows keep their current status and event countdown until fresh game data reports a change.'],
     ['Stats drift', 'If a "Stats drift detected" banner appears, click Options > Data > Rebuild stats once: it recomputes aggregates from the stored records.'],
     ['Fleet review', 'Check the ships and amounts in the fleet editor or confirmation dialog before sending. Quartermaster transfers are staged in the builder and are only sent when you press Send.'],
   ]],

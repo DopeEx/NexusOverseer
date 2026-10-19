@@ -15,20 +15,32 @@ shapes, see the [API integration reference](./api-reference.md).
 
 **Key Payload Fields:**
 - `missions[]`: Array of all active missions
-- `missionType`: survey, mine, raid, patrol, etc.
-- `status`: dispatched, surveying, mining, returning, completed
+- `missionType`: survey, mine, raid, patrol, expedition, attack_pirates, market_pickup, market_deliver, relocate_outpost, etc.
+- `status`: observed active phases include outbound, surveying, mining, exploring, patrolling and returning. Prefer the explicit status over timestamp-based phase inference.
+- `arrivesAt`: outbound arrival, but exploration/patrol end while exploring/patrolling
+- `returnDepartsAt` / `returnArrivesAt`: return departure / home arrival; either can be null while on site. Surveying can already have a scheduled return departure.
 - `fleetComposition[]`: Ships with quantities and properties
 - `distance`: Linear distance in galaxy units
 - `speed`: Effective fleet speed (affected by tech bonuses)
 - `travelTime`: In seconds
 - `cargo`: Resource contents and cycle tracking
+- `cargo._nextCycleAt`: Next mining cycle; not a return ETA
 - `targetFieldType`: ore, hydrogen, plasma, cryo_ice (null for non-mining)
 - `miningEfficiencyPercent`: 0-100+ efficiency at dispatch
 - `mineUntilFull`: Optional dispatch flag; mines past the usual 10 cycles until the hold is full or the field is depleted
 - `escortRetreatThreshold`: Optional combat-escort retreat threshold. When escort damage exceeds the selected threshold, the fleet returns early and mining stops; pirates may still steal cargo. The game UI offers 30%, 50%, and 70% thresholds. The request body takes a fraction (`0.3`, `0.5`, `0.7`); missions echo it as `cargo._escortRetreatThreshold`.
-- `patrolCoverage`: Coverage percentage for patrol missions
+- `patrolCoverage`: Patrol coverage scope; observed as `"system"` for a hunting patrol
+- `patrolMode` / `patrolCapacityUsed` / `patrolMetrics`: Patrol mode (e.g. hunt), capacity used and counters such as scanned systems and revealed camps
+- `raidParams.dockAfterDelivery`: Market-delivery docking option; does not change an outbound mission into a docked fleet
 - `isProbeFleet`: Boolean flag
 - `maxFleetSlots`: Total simultaneous active fleets allowed
+
+Mission phases and event times are evaluated centrally across the add-on;
+see [mission display rules](./api-reference.md#missions-and-fuel-estimates).
+Mining bars describe the current cycle, not progress toward a full hold.
+Patrols use separate patrol capacity, not normal fleet slots. Expeditions
+are included in normal slot usage; the add-on's existing two-expedition
+concurrency cap is an additional launch constraint.
 
 ### Fleet Fuel Estimate
 **Endpoint:** `POST /api/fleet/fuel-estimate`

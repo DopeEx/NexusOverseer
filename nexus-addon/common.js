@@ -2,6 +2,9 @@
 // Loaded first — all other dashboard scripts depend on it.
 
 import { getSetting } from './settings.js';
+import { missionProgress } from './mission-state.js';
+export { missionProgress } from './mission-state.js';
+export { usesFleetSlot, usedFleetSlots } from './mission-state.js';
 
 export let store = {};   // full storage snapshot
 export function setStore(s) { store = s; }   // setter: other modules can't reassign an import
@@ -740,56 +743,36 @@ export function fmtCountdown(ms) {
   return `${sec}s`;
 }
 
-const MISSION_WORK_LABEL = { survey: 'Surveying', investigate: 'Investigating',
-  collect_debris: 'Collecting', collect_salvage: 'Collecting', expedition: 'Exploring',
-  xeno_survey: 'Surveying ruins', mine: 'Mining', raid: 'Raiding', patrol: 'Patrolling',
-  scout_camp: 'Scouting', attack_pirates: 'Attacking' };
-const MISSION_WORK_COLOR = {
-  survey: '#3ec6ff', investigate: '#60a5fa', collect_debris: '#2dd4bf',
-  collect_salvage: '#8b5cf6', expedition: '#f59e0b', xeno_survey: '#a78bfa',
-  scout_camp: '#ffc070', attack_pirates: '#ff6b7a',
-};
-const MISSION_WORK_GRADIENT = {
-  survey: 'linear-gradient(90deg, #3ec6ff 0%, #7f77ff 100%)',
-  investigate: 'linear-gradient(90deg, #60a5fa 0%, #6366f1 100%)',
-  collect_debris: 'linear-gradient(90deg, #2dd4bf 0%, #38bdf8 100%)',
-  collect_salvage: 'linear-gradient(90deg, #8b5cf6 0%, #a78bfa 100%)',
-  expedition: 'linear-gradient(90deg, #f59e0b 0%, #ffc070 100%)',
-  xeno_survey: 'linear-gradient(90deg, #a78bfa 0%, #c4b5fd 100%)',
-};
-const MISSION_STAGE_COLOR = {
-  outbound: '#63dbe7', returning: '#8b5cf6', arriving: '#b9cbdc',
-};
-const MISSION_STAGE_GRADIENT = {
-  outbound: 'linear-gradient(90deg, #227eaa 0%, #63dbe7 100%)',
-  returning: 'linear-gradient(90deg, #8b5cf6 0%, #a78bfa 100%)',
-  arriving: 'linear-gradient(90deg, #8598a9 0%, #b9cbdc 100%)',
-};
+export function missionCountdown(progress) {
+  if (!progress.event) return '—';
+  if (progress.needsRefresh) return `${progress.event.label}: updating…`;
+  return `${progress.event.label}: ${fmtCountdown(progress.eta)}`;
+}
 
-// Where a fleet is in its round trip: outbound (departs→arrives), on-site work
-// (arrives→returnDeparts), or returning (returnDeparts→returnArrives). Returns
-// the active leg's label, colour, 0..1 fraction, and ETA (ms) to that leg's end.
-export function missionProgress(m) {
-  const g = k => (m[k] ? new Date(m[k]).getTime() : null);
-  const now = Date.now();
-  const dep = g('departsAt') ?? g('createdAt'), arr = g('arrivesAt');
-  const rdep = g('returnDepartsAt'), rarr = g('returnArrivesAt');
-  const work = MISSION_WORK_LABEL[m.missionType] || 'Working';
-  const stages = [];
-  // An exploring expedition reports the end of the exploration in `arrivesAt`;
-  // the actual arrival is departure + travelTime.
-  const travelMs = Number(m.travelTime) * 1000;
-  if (m.status === 'exploring' && dep && arr && travelMs > 0 && dep + travelMs < arr) {
-    const landed = dep + travelMs;
-    stages.push(['Outbound', MISSION_STAGE_COLOR.outbound, MISSION_STAGE_GRADIENT.outbound, dep, landed]);
-    stages.push([work, MISSION_WORK_COLOR[m.missionType] || '#47d4ff', MISSION_WORK_GRADIENT[m.missionType], landed, arr]);
-  } else if (dep && arr) stages.push(['Outbound', MISSION_STAGE_COLOR.outbound, MISSION_STAGE_GRADIENT.outbound, dep, arr]);
-  if (arr && rdep) stages.push([work, MISSION_WORK_COLOR[m.missionType] || '#47d4ff', MISSION_WORK_GRADIENT[m.missionType], arr, rdep]);
-  if (rdep && rarr) stages.push(['Returning', MISSION_STAGE_COLOR.returning, MISSION_STAGE_GRADIENT.returning, rdep, rarr]);
-  for (const [label, color, gradient, s, e] of stages) {
-    if (now < e) return { label, color, gradient, frac: now <= s ? 0 : Math.min(1, (now - s) / (e - s)), eta: e - now };
-  }
-  return { label: 'Arriving…', color: MISSION_STAGE_COLOR.arriving, gradient: MISSION_STAGE_GRADIENT.arriving, frac: 1, eta: 0 };
+// Refresh once per elapsed event, with periodic retries for server-side changes.
+export function createMissionRefresh(refresh) {
+  let lastRefreshAt = Date.now();
+  let pending = false;
+  let handled = new Set();
+  return async missions => {
+    const now = Date.now();
+    const due = missions.map(m => {
+      const p = missionProgress(m, now);
+      return p.needsRefresh ? `${m.id}:${p.status}:${p.event.at}` : null;
+    }).filter(Boolean);
+    const unseen = due.some(key => !handled.has(key));
+    if (pending || now - lastRefreshAt < (unseen ? 5000 : 30000)) return;
+    pending = true;
+    lastRefreshAt = now;
+    handled = new Set(due);
+    try {
+      await refresh();
+    } catch (error) {
+      console.error('[NexusOverseer] Mission refresh failed:', error);
+    } finally {
+      pending = false;
+    }
+  };
 }
 
 // Compact inline progress bar for a table cell or transit-list row. Returns
@@ -814,7 +797,7 @@ export function makeMissionBar(m) {
     fill.style.width = `${(p.frac * 100).toFixed(1)}%`;
     fill.style.background = p.gradient || p.color;
     ph.textContent = p.label; ph.style.color = p.color;
-    et.textContent = p.eta > 0 ? fmtCountdown(p.eta) : '—';
+    et.textContent = missionCountdown(p);
   };
   upd();
   return { el: wrap, upd };

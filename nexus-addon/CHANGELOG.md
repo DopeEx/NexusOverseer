@@ -6,6 +6,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- The Dashboard mission card groups fleet-slot usage with its capacity bar,
+  shows the next returning fleet and lists active patrols separately.
+
+### Fixed
+- Mission stages and countdowns now follow the reported fleet status instead
+  of assuming a return when an arrival time has passed.
+- Fleet-slot counts include expeditions and exclude patrols, which use their
+  own capacity.
+
 ### Documentation
 - A local dashboard preview with fictional sample data for creating screenshots
   without a game account.

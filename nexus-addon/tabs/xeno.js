@@ -14,7 +14,8 @@
 
 import { SCAN_CACHE_MAX, getSystemPlanets } from './finder.js';
 import { loadFleetTemplates } from './fleets.js';
-import { RESOURCE_SERIES, appendExtraResourceCards, applySort, attachSortable, clearAvailStrip, computeRawLossCost, computeSeries, confirmDialog, fillResourceCards, filterZone, fmt, fmtCountdown, fuelForMode, getLabelKey, getMode, inWindowRange, makeMissionBar, makeResourceDoughnut, makeResourceLineChart, makeStatCard, periodLabelFor, renderAvailStrip, renderPagedTable, rememberSelection, rememberedSelections, store, windowActive, zeroCell, setStatusText } from '../common.js';
+import { usedFleetSlots } from '../mission-state.js';
+import { RESOURCE_SERIES, appendExtraResourceCards, applySort, attachSortable, clearAvailStrip, computeRawLossCost, computeSeries, confirmDialog, createMissionRefresh, fillResourceCards, filterZone, fmt, fmtCountdown, fuelForMode, getLabelKey, getMode, inWindowRange, makeMissionBar, makeResourceDoughnut, makeResourceLineChart, makeStatCard, periodLabelFor, renderAvailStrip, renderPagedTable, rememberSelection, rememberedSelections, store, windowActive, zeroCell, setStatusText } from '../common.js';
 
 const XENO_CACHE_TTL = 24 * 3600 * 1000;   // moon ownership rarely changes
 const XENO_COOLDOWN_MS = 48 * 3600 * 1000; // local cooldown after we survey a moon
@@ -191,9 +192,11 @@ export async function initXenoTab() {
   document.getElementById('xn-template').addEventListener('change', e => rememberSelection('xn-template', e.target.value));
   document.getElementById('xn-scan').addEventListener('click', launchRuinsSurvey);
 
+  const refreshMissionsIfDue = createMissionRefresh(refreshMissions);
   setInterval(() => {
     if (document.getElementById('xeno-content').style.display === 'none') return;
     for (const upd of xnTicks) upd();
+    refreshMissionsIfDue(xnMissions);
     renderCooldownTable();   // re-render each tick so "time left" counts down / expired rows drop
   }, 1000);
 
@@ -268,9 +271,9 @@ async function loadMap() {
 
 async function refreshMissions() {
   const mi = await browser.runtime.sendMessage({ type: 'GET_MISSIONS' });
-  if (mi.error) return;
+  if (mi.error) { console.error('[NexusOverseer] Ruins mission refresh failed:', mi.error); return; }
   if (mi.maxFleetSlots != null) {
-    document.getElementById('xn-slots').textContent = `${(mi.missions || []).length}/${mi.maxFleetSlots} fleet slots`;
+    document.getElementById('xn-slots').textContent = `${usedFleetSlots(mi.missions)}/${mi.maxFleetSlots} fleet slots`;
   }
   xnMissions = (mi.missions || []).filter(m => m.missionType === 'xeno_survey');
   renderTransit();
