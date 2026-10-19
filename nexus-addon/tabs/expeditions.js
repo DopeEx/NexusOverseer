@@ -2,8 +2,9 @@
 // both kinds share one background store (exp_*), tagged per-record by `kind`.
 
 import { loadFleetTemplates } from './fleets.js';
+import { usedFleetSlots } from '../mission-state.js';
 import { pauseAutomationsForHumanVerification } from '../human-verification.js';
-import { RESOURCE_SERIES, appendExtraResourceCards, applySort, attachSortable, clearAvailStrip, computeRawLossCost, computeSeries, editFleetDialog, fillResourceCards, filterZone, fmt, fmtCountdown, fuelForMode, getLabelKey, getMode, inWindowRange, missionProgress, makeResourceDoughnut, makeResourceLineChart, makeStatCard, periodLabelFor, renderAvailStrip, renderPagedTable, rememberSelection, rememberedSelections, store, windowActive, zeroCell, zoneCell, setStatusText } from '../common.js';
+import { RESOURCE_SERIES, appendExtraResourceCards, applySort, attachSortable, clearAvailStrip, computeRawLossCost, computeSeries, createMissionRefresh, editFleetDialog, fillResourceCards, filterZone, fmt, missionCountdown, fuelForMode, getLabelKey, getMode, inWindowRange, missionProgress, makeResourceDoughnut, makeResourceLineChart, makeStatCard, periodLabelFor, renderAvailStrip, renderPagedTable, rememberSelection, rememberedSelections, store, windowActive, zeroCell, zoneCell, setStatusText } from '../common.js';
 
 export let chartExpeditions, chartExpComp;
 
@@ -86,13 +87,11 @@ async function initExpeditionLaunch() {
   updateExpeditionAvail();
   refreshExpeditionMissions();
 
-  // Tick progress bars every second, refetch missions every 30s — both only
-  // while the tab is visible (mirrors the Scouting tab's transit list).
-  let eTick = 0;
+  const refreshMissionsIfDue = createMissionRefresh(refreshExpeditionMissions);
   setInterval(() => {
     if (document.getElementById('expeditions-content').style.display === 'none') return;
     for (const upd of eTicks) upd();
-    if (++eTick % 30 === 0) refreshExpeditionMissions();
+    refreshMissionsIfDue(eMissions);
   }, 1000);
 
   document.getElementById('e-launch-planet').addEventListener('change', e => {
@@ -208,18 +207,25 @@ async function updateExpeditionAvail() {
 // the send itself is what the game actually enforces the cap on, this just
 // saves a guaranteed-to-fail attempt.
 let eMissions = [];
+let eFleetSlots = { used: 0, max: null };
 let eTicks = [];   // progress-bar updaters for the current renderExpeditionTransit()
 
 async function refreshExpeditionMissions() {
   const mi = await browser.runtime.sendMessage({ type: 'GET_MISSIONS' });
-  if (mi.error) return;
+  if (mi.error) {
+    console.error('[NexusOverseer] Expedition mission refresh failed:', mi.error);
+    setStatusText(document.getElementById('e-launch-status'), `Mission refresh failed: ${mi.error}`, 'error');
+    return false;
+  }
+  eFleetSlots = { used: usedFleetSlots(mi.missions), max: mi.maxFleetSlots ?? null };
   eMissions = (mi.missions || []).filter(m => m.missionType === 'expedition');
   const activeEl = document.getElementById('e-launch-active');
-  if (activeEl) activeEl.textContent = `${eMissions.length}/${MAX_EXPEDITION_SLOTS} expeditions active`;
+  if (activeEl) activeEl.textContent = `${eMissions.length}/${MAX_EXPEDITION_SLOTS} expeditions active · ${eFleetSlots.used}/${eFleetSlots.max ?? '?'} fleet slots`;
   renderExpeditionTransit();
+  return true;
 }
 
-// Expeditions have their own slots, separate from the general fleet slots.
+// Keep the existing expedition concurrency cap in addition to normal fleet slots.
 const MAX_EXPEDITION_SLOTS = 2;
 let eAutoRunning = false;
 let eLastLaunch = { at: 0, count: 0 };
@@ -232,12 +238,20 @@ export async function runExpeditionAutomations() {
   eAutoRunning = true;
   const status = document.getElementById('e-auto-status');
   try {
-    await refreshExpeditionMissions();
+    if (!await refreshExpeditionMissions()) {
+      setStatusText(status, 'Cannot launch: mission refresh failed.', 'error');
+      return;
+    }
     let active = eMissions.length;
     // The missions list can lag behind a fresh launch; count it until it shows up.
     if (Date.now() - eLastLaunch.at < 20_000 && active <= eLastLaunch.count) active = eLastLaunch.count + 1;
     if (active >= MAX_EXPEDITION_SLOTS) {
-      setStatusText(status, `Waiting… ${active}/${MAX_EXPEDITION_SLOTS} expedition slots in use.`);
+      setStatusText(status, `Waiting… ${active}/${MAX_EXPEDITION_SLOTS} expeditions active.`);
+      return;
+    }
+    const used = eFleetSlots.used + Math.max(0, active - eMissions.length);
+    if (eFleetSlots.max != null && used >= eFleetSlots.max) {
+      setStatusText(status, `Waiting… ${used}/${eFleetSlots.max} fleet slots in use.`);
       return;
     }
     const planetId = Number(document.getElementById('e-launch-planet').value);
@@ -267,7 +281,10 @@ export async function runExpeditionAutomations() {
     eLastLaunch = { at: Date.now(), count: eMissions.length };
     setStatusText(status, `Expedition launched (${zone}, depth ${depth}) ✓`);
     updateExpeditionAvail();
-    await refreshExpeditionMissions();
+    if (!await refreshExpeditionMissions()) return;
+  } catch (error) {
+    console.error('[NexusOverseer] Expedition automation failed:', error);
+    setStatusText(status, error.message, 'error');
   } finally {
     eAutoRunning = false;
   }
@@ -350,7 +367,7 @@ function renderExpeditionTransit() {
       fill.style.background = p.gradient || p.color;
       status.textContent = p.label;
       status.style.color = p.color;
-      eta.textContent = p.eta > 0 ? fmtCountdown(p.eta) : '—';
+      eta.textContent = missionCountdown(p);
     };
     upd();
     eTicks.push(upd);
@@ -359,6 +376,17 @@ function renderExpeditionTransit() {
 
 async function launchExpedition() {
   const status = document.getElementById('e-launch-status');
+  try {
+    if (!await refreshExpeditionMissions()) return;
+  } catch (error) {
+    console.error('[NexusOverseer] Expedition mission refresh failed:', error);
+    setStatusText(status, error.message, 'error');
+    return;
+  }
+  if (eFleetSlots.max != null && eFleetSlots.used >= eFleetSlots.max) {
+    setStatusText(status, `Cannot launch expedition: ${eFleetSlots.used}/${eFleetSlots.max} fleet slots in use.`, 'warning');
+    return;
+  }
   const planetId = Number(document.getElementById('e-launch-planet').value);
   const planet = ePlanets.find(p => p.id === planetId);
   const zone = document.getElementById('e-launch-zone').value;

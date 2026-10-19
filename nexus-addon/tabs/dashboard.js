@@ -4,7 +4,7 @@
 // tick locally every second, the data itself is re-fetched on a slower interval
 // and whenever a countdown reaches zero.
 
-import { fmt } from '../common.js';
+import { fmt, missionProgress, usedFleetSlots, usesFleetSlot } from '../common.js';
 import { getSetting, onSettingsChange } from '../settings.js';
 import { AUTOMATIONS } from '../human-verification.js';
 
@@ -42,10 +42,13 @@ function fmtCountdown(ms) {
   return `${sec}s`;
 }
 
-function countdown(endsAt) {
+function countdown(endsAt, awaitingUpdate = false) {
   const span = el('span', 'ov-countdown');
   const target = new Date(endsAt).getTime();
-  const update = () => { span.textContent = `⏱ ${fmtCountdown(target - Date.now())}`; };
+  const update = () => {
+    const ms = target - Date.now();
+    span.textContent = `⏱ ${awaitingUpdate && ms <= 0 ? 'updating…' : fmtCountdown(ms)}`;
+  };
   update();
   tickers.push({ update, target });
   return span;
@@ -113,61 +116,55 @@ function totalsPanel(d) {
   return panel;
 }
 
-function missionEta(m) {
-  const t = [m.arrivesAt, m.returnArrivesAt]
-    .map(x => (x ? new Date(x).getTime() : null))
-    .filter(x => x && x > Date.now());
-  return t.length ? Math.min(...t) : null;
-}
-
-function missionStage(m) {
-  const now = Date.now();
-  const arr = m.arrivesAt ? new Date(m.arrivesAt).getTime() : null;
-  const ret = m.returnDepartsAt ? new Date(m.returnDepartsAt).getTime() : null;
-  if (arr && now < arr) return 'Outbound';
-  if (ret && now < ret) return 'On site';
-  return 'Returning';
-}
-
-function missionsCard(d) {
+export function missionsCard(d) {
   const card = section('Active Missions');
   card.classList.add('ov-missions');
   const missions = d.missions;
-  const etas = missions.map(missionEta).filter(Boolean).sort((a, b) => a - b);
-  card.appendChild(kv('Total active', String(missions.length)));
+  const max = d.maxFleetSlots;
+  const used = usedFleetSlots(missions);
+  const patrols = missions.length - used;
+  const returns = missions
+    .filter(usesFleetSlot)
+    .map(m => missionProgress(m))
+    .filter(p => p.status === 'returning' && p.event)
+    .map(p => p.event)
+    .sort((a, b) => a.at - b.at);
+  card.appendChild(kv('Fleet slots used', `${used} / ${max ?? '?'}`));
+  card.appendChild(bar(max ? used / max : 0, '#7ed4ff'));
   const next = el('div', 'ov-kv');
-  next.appendChild(el('span', 'ov-kv-label', 'Next arrival'));
-  if (etas.length) {
+  next.appendChild(el('span', 'ov-kv-label', 'Next return'));
+  if (returns.length) {
     const v = el('span', 'ov-kv-value ov-warn');
-    v.appendChild(countdown(new Date(etas[0]).toISOString()));
+    v.appendChild(countdown(returns[0].at, true));
     next.appendChild(v);
   } else {
     next.appendChild(el('span', 'ov-kv-value ov-dim', '-'));
   }
   card.appendChild(next);
-  const max = d.maxFleetSlots;
-  card.appendChild(bar(max ? missions.length / max : 0, '#7ed4ff'));
-  card.appendChild(el('div', 'ov-hint', `${missions.length} / ${max ?? '?'} fleet slots used`));
+  if (patrols) card.appendChild(kv('Active patrols (no fleet slot)', String(patrols)));
 
   if (missions.length) {
     const groups = new Map();
     for (const m of missions) {
-      const g = groups.get(m.type) || { type: m.type, fleets: 0, ships: 0, stages: {}, eta: null };
+      const g = groups.get(m.type) || { type: m.type, fleets: 0, ships: 0, stages: {}, event: null };
       g.fleets++;
       g.ships += m.ships || 0;
-      const st = missionStage(m);
+      const progress = missionProgress(m);
+      const st = progress.label;
       g.stages[st] = (g.stages[st] || 0) + 1;
-      const eta = missionEta(m);
-      if (eta && (!g.eta || eta < g.eta)) g.eta = eta;
+      const event = progress.event;
+      if (event && (!g.event || event.at < g.event.at)) g.event = event;
       groups.set(m.type, g);
     }
     const list = el('div', 'ov-list');
-    for (const g of [...groups.values()].sort((a, b) => (a.eta || Infinity) - (b.eta || Infinity))) {
+    for (const g of [...groups.values()].sort((a, b) => (a.event?.at ?? Infinity) - (b.event?.at ?? Infinity))) {
       const row = el('div', 'ov-row');
       const label = el('span', 'ov-row-name', `${g.type.replace(/_/g, ' ')} · ${g.fleets} ${g.fleets === 1 ? 'fleet' : 'fleets'} · ${g.ships.toLocaleString()} ships`);
       const right = el('span', 'ov-row-right');
       right.appendChild(el('span', 'ov-dim', Object.entries(g.stages).map(([k, n]) => `${n} ${k.toLowerCase()}`).join(', ')));
-      if (g.eta) right.appendChild(countdown(new Date(g.eta).toISOString()));
+      if (g.event) {
+        right.append(el('span', 'ov-dim', `${g.event.label}:`), countdown(g.event.at, true));
+      }
       row.append(label, right);
       list.appendChild(row);
     }
@@ -238,9 +235,10 @@ function attentionItems(d) {
   if (idleYards.length) {
     items.push({ level: 'warn', text: `${idleYards.length} shipyard location${idleYards.length > 1 ? 's' : ''} idle`, tip: idleYards.map(p => `${p.name}${p.isMoon ? ' (moon)' : ''}`) });
   }
-  if (on('fleetSlots') && d.maxFleetSlots && d.missions.length < d.maxFleetSlots) {
-    const free = d.maxFleetSlots - d.missions.length;
-    items.push({ level: 'warn', text: `${free} free fleet slot${free > 1 ? 's' : ''}`, tip: [`${d.missions.length} / ${d.maxFleetSlots} in use`] });
+  const used = usedFleetSlots(d.missions);
+  if (on('fleetSlots') && d.maxFleetSlots && used < d.maxFleetSlots) {
+    const free = d.maxFleetSlots - used;
+    items.push({ level: 'warn', text: `${free} free fleet slot${free > 1 ? 's' : ''}`, tip: [`${used} / ${d.maxFleetSlots} in use`] });
   }
   if (on('colonySlots') && d.slots) {
     if (d.slots.colonies > d.planets.length) items.push({ level: 'warn', text: 'Free colony slot', tip: [`${d.planets.length} / ${d.slots.colonies}`] });

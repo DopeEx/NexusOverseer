@@ -457,6 +457,7 @@ body { margin: 0 auto; }
 .ov-kv-row .ov-kv { gap: 8px; }
 .ov-bar { height: 6px; margin-top: 8px; border-radius: 3px; background: var(--bg-panel); overflow: hidden; }
 .ov-bar-fill { height: 100%; }
+.ov-missions > .ov-bar { margin: 4px 0 10px; }
 .ov-hint { margin-top: 4px; font-size: 0.75rem; color: var(--color-subtle); }
 .ov-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
 .ov-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 10px;

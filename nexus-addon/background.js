@@ -3,6 +3,8 @@
 // is defined here on both Chrome (polyfilled) and Firefox (native). Tests import
 // this file directly with a stubbed `browser`, skipping the polyfill entirely.
 
+import { missionProgress } from './mission-state.js';
+
 let GAME_URL = 'https://s0.nexuslegacy.space';
 let GAME_ORIGIN = 'https://s0.nexuslegacy.space/';
 
@@ -1110,6 +1112,10 @@ async function getDashboardOverview({ polite = true } = {}) {
       arrivesAt: m.arrivesAt || null,
       returnArrivesAt: m.returnArrivesAt || null,
       returnDepartsAt: m.returnDepartsAt || null,
+      nextCycleAt: m.cargo?._nextCycleAt || null,
+      cycleStartedAt: m.cargo?._cycleStartedAt || null,
+      departsAt: m.departsAt || m.createdAt || null,
+      travelTime: m.travelTime ?? null,
       ships: (m.fleetComposition || []).reduce((s, f) => s + (f.quantity || 0), 0),
     }));
 
@@ -2595,7 +2601,7 @@ async function processMissions(missions, zoneById = {}, ships = {}) {
     // Collection now runs in repeating ticks (cargo grows each tick, same mission
     // id); `returnDepartsAt` is set from the first tick on as a rolling ETA, so it
     // no longer means the haul is final. `raidParams.collectionComplete` does.
-    const returning = m.status === 'returning' || m.returnDepartsAt != null;
+    const progress = missionProgress(m);
     const collectionDone = m.raidParams?.collectionComplete === true || m.status === 'returning';
 
     active.push({
@@ -2604,8 +2610,10 @@ async function processMissions(missions, zoneById = {}, ships = {}) {
       system: m.targetSystemName || (m.targetSystemId != null ? `System #${m.targetSystemId}` : '—'),
       system_id: m.targetSystemId ?? null,   // so the UI can mark a field already collecting
       zone: zoneById[m.targetSystemId] || 'unknown',
-      status: m.status || (returning ? 'returning' : 'outbound'),
-      eta: m.returnArrivesAt || m.arrivesAt || null,
+      status: progress.status,
+      statusLabel: progress.label,
+      eta: progress.event ? new Date(progress.event.at).toISOString() : null,
+      etaLabel: progress.event?.label || null,
       ore: cargo.ore || 0, silicates: cargo.silicates || 0,
       alloys: cargo.alloys || 0, hydrogen: cargo.hydrogen || 0,
     });

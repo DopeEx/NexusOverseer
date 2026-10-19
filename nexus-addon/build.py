@@ -29,7 +29,7 @@ FILES = [
     'CHANGELOG.md',
     'background-sw.js', 'server-storage.js', 'server-switch.js', 'background.js', 'sidebar-inject.js',
     'galaxy-fetch-hook.js', 'game-api-bridge.js', 'galaxy-fields.js', 'empire-view.js', 'guide-content.js', 'guide-view.js', 'logistics-view.js', 'upgrade-queue.js', 'building-upgrade.js', 'tech-upgrade.js', 'ship-upgrade.js',
-    'dashboard.html', 'theme.css', 'dashboard.css', 'dashboard.js', 'automation-scheduler.js', 'common.js', 'settings.js', 'tabs/options.js', 'pirate-planner.js', 'pirate-plan-cache.js', 'human-verification.js',
+    'dashboard.html', 'theme.css', 'dashboard.css', 'dashboard.js', 'automation-scheduler.js', 'common.js', 'mission-state.js', 'settings.js', 'tabs/options.js', 'pirate-planner.js', 'pirate-plan-cache.js', 'human-verification.js',
     'tabs/global.js', 'tabs/dashboard.js', 'tabs/surveys.js', 'tabs/pirates.js', 'tabs/mining.js',
     'tabs/battles.js', 'tabs/debris.js', 'tabs/expeditions.js', 'tabs/wormholes.js', 'tabs/finder.js', 'tabs/asteroids.js', 'tabs/fleets.js', 'tabs/scouting.js', 'tabs/xeno.js', 'tabs/market.js', 'tabs/techtree.js',
     'tabs/simulator.js', 'tabs/guide.js', 'simulator-intel.js',

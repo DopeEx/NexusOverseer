@@ -8,7 +8,8 @@
 
 import { SCAN_CACHE_MAX, getSystemPlanets } from './finder.js';
 import { loadFleetTemplates } from './fleets.js';
-import { ALL_RES_COLORS, clearAvailStrip, editFleetDialog, fmt, fuelEstimate, rememberSelection, rememberedSelections, renderAvailStrip, setStatusText, ZONE_COLORS, ZONE_DEFS } from '../common.js';
+import { usedFleetSlots } from '../mission-state.js';
+import { ALL_RES_COLORS, clearAvailStrip, editFleetDialog, fmt, fuelEstimate, missionProgress, rememberSelection, rememberedSelections, renderAvailStrip, setStatusText, ZONE_COLORS, ZONE_DEFS } from '../common.js';
 
 const ICON_BASE = 'https://s0.nexuslegacy.space/images/resources/';
 // asteroid fieldType → resource icon + label
@@ -673,7 +674,7 @@ async function sendMineMission(f) {
 async function refreshSlots() {
   const mi = await browser.runtime.sendMessage({ type: 'GET_MISSIONS' });
   if (mi.maxFleetSlots != null) {
-    document.getElementById('af-slots').textContent = `${(mi.missions || []).length}/${mi.maxFleetSlots} fleet slots`;
+    document.getElementById('af-slots').textContent = `${usedFleetSlots(mi.missions)}/${mi.maxFleetSlots} fleet slots`;
   }
   afMiningFieldIds = new Set(
     (mi.missions || []).filter(m => m.missionType === 'mine' && m.targetFieldId != null).map(m => m.targetFieldId));
@@ -700,14 +701,7 @@ function applyMissionMarkers() {
     badge.className = 'af-mission-badge';
     badge.style.cssText = 'display:inline-block;margin-left:5px;font-size:0.7rem;padding:1px 5px;border-radius:4px;background:#f0883e22;border:1px solid var(--orange);color:var(--orange);vertical-align:middle;';
     badge.textContent = missions.length > 1 ? `⛏ ×${missions.length}` : '⛏';
-    badge.title = missions.map(mission => {
-      const now = Date.now();
-      const arrivesAt = mission.arrivesAt ? new Date(mission.arrivesAt).getTime() : null;
-      const returnDepartsAt = mission.returnDepartsAt ? new Date(mission.returnDepartsAt).getTime() : null;
-      const stage = arrivesAt && now < arrivesAt ? 'En route'
-        : returnDepartsAt && now < returnDepartsAt ? 'Mining' : 'Returning';
-      return `Fleet: ${stage}`;
-    }).join('\n');
+    badge.title = missions.map(mission => `Fleet: ${missionProgress(mission).label}`).join('\n');
     systemCell.append(badge);
   }
 }

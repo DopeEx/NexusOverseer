@@ -1,9 +1,10 @@
 // Pirates tab.
 
 import { loadFleetTemplates } from './fleets.js';
+import { usedFleetSlots } from '../mission-state.js';
 import { suggestAttackFleet } from '../pirate-planner.js';
 import { pauseAutomationsForHumanVerification } from '../human-verification.js';
-import { appendExtraResourceCards, applySort, attachSortable, computeResourcesLost, computeSeries, cssVar, editFleetDialog, emptyResources, EXTRA_RES_KEYS_UI, filterZone, fmt, fmtCountdown, fuelForMode, getLabelKey, getMode, isUnfiltered, makeResourceLineChart, makeStatCard, missionProgress, PER_PAGE, periodLabelFor, recordsForMode, rememberedSelections, rememberSelection, renderLostCards, renderNetCards, SERIES_GETTERS, setStatusText, store, windowActive, ZONE_COLORS, zoneCell } from '../common.js';
+import { appendExtraResourceCards, applySort, attachSortable, computeResourcesLost, computeSeries, createMissionRefresh, cssVar, editFleetDialog, emptyResources, EXTRA_RES_KEYS_UI, filterZone, fmt, missionCountdown, fuelForMode, getLabelKey, getMode, isUnfiltered, makeResourceLineChart, makeStatCard, missionProgress, PER_PAGE, periodLabelFor, recordsForMode, rememberedSelections, rememberSelection, renderLostCards, renderNetCards, SERIES_GETTERS, setStatusText, store, windowActive, ZONE_COLORS, zoneCell } from '../common.js';
 
 export let chartPirateLoot, chartPirateOutcomes;
 
@@ -386,9 +387,11 @@ async function initPirateCamps() {
     if (area === 'local' && changes.fleet_templates) refreshPirateTemplates();
   });
 
+  const refreshMissionsIfDue = createMissionRefresh(refreshPirateMissions);
   setInterval(() => {
     if (document.getElementById('pirates-content').style.display === 'none') return;
     for (const upd of pcCardTicks) upd();
+    refreshMissionsIfDue(pcMissions);
   }, 1000);
 }
 
@@ -541,8 +544,8 @@ let pcCampsLoaded = false;
 
 async function refreshPirateMissions() {
   const mi = await browser.runtime.sendMessage({ type: 'GET_MISSIONS' });
-  if (mi.error) return;
-  pcSlots = { max: mi.maxFleetSlots ?? null, used: (mi.missions || []).length };
+  if (mi.error) { console.error('[NexusOverseer] Pirate mission refresh failed:', mi.error); return; }
+  pcSlots = { max: mi.maxFleetSlots ?? null, used: usedFleetSlots(mi.missions) };
   pcMissions = (mi.missions || []).filter(m => PIRATE_MISSION_LABELS[m.missionType]);
   if (pcCampsLoaded) renderPirateCamps();
 }
@@ -688,7 +691,7 @@ function mountCardProgress(m, host, systemItem, etaVal) {
     fill.style.background = p.gradient || p.color;
     status.textContent = `${p.label} · ${kind}`;
     status.style.color = p.color;
-    etaVal.textContent = p.eta > 0 ? fmtCountdown(p.eta) : '—';
+    etaVal.textContent = missionCountdown(p);
   };
   upd();
   pcCardTicks.push(upd);

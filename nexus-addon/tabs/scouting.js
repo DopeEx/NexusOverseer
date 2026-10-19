@@ -7,8 +7,9 @@
 // All routed through the game tab (same-origin) like the asteroid mine call.
 
 import { loadFleetTemplates } from './fleets.js';
+import { usedFleetSlots } from '../mission-state.js';
 import { pauseAutomationsForHumanVerification } from '../human-verification.js';
-import { applySort, attachSortable, confirmDialog, fmt, fmtCountdown, fuelEstimate, missionProgress, rememberSelection, rememberedSelections, setStatusMessage, setStatusText, ZONE_COLORS, ZONE_DEFS } from '../common.js';
+import { applySort, attachSortable, confirmDialog, createMissionRefresh, fmt, fmtCountdown, fuelEstimate, missionCountdown, missionProgress, rememberSelection, rememberedSelections, setStatusMessage, setStatusText, ZONE_COLORS, ZONE_DEFS } from '../common.js';
 
 let inited = false;
 let scPlanets = [];          // [{ id, name, systemId, systemName }]
@@ -17,7 +18,7 @@ let scTemplates = [];
 
 const scZoneFilter = new Set();   // empty = any zone
 let scPending = [];               // anomalies awaiting investigation
-let scReturning = [];             // investigated systems whose fleet is still homebound
+let scReturning = [];             // investigated systems whose fleet is still active
 let scInvestigating = new Set();  // systemIds with an investigate mission in flight
 const scJustSurveyed = new Set(); // systemIds surveyed this session — the missions API lags, so exclude them locally
 const scJustInvestigated = new Set(); // same, for investigate missions
@@ -196,7 +197,7 @@ function renderTransit() {
       fill.style.background = p.gradient || p.color;
       status.textContent = p.label;
       status.style.color = p.color;
-      eta.textContent = p.eta > 0 ? fmtCountdown(p.eta) : '—';
+      eta.textContent = missionCountdown(p);
     };
     upd();
     scTicks.scan.push(upd);
@@ -309,14 +310,13 @@ async function initializeScoutingTab() {
   updateAvail();
 
   // Update countdowns and visible fleet availability only while this tab is open.
+  const refreshMissionsIfDue = createMissionRefresh(refreshScoutingData);
   scUiTimer = setInterval(() => {
     if (document.getElementById('scouting-content').style.display === 'none') return;
     tickTimers();
     for (const k in scTicks) for (const upd of scTicks[k]) upd();   // advance all progress bars
     if (++scTick % 10 === 0) updateAvail();       // catch returning fleets
-    if (Date.now() - (scLastRefreshAt || 0) >= 30_000) {
-      refreshScoutingData().catch(error => console.error('[NexusOverseer] Scouting refresh failed:', error));
-    }
+    refreshMissionsIfDue(scMissions);
   }, 1000);
 
   setStatusText(status, '');
@@ -432,8 +432,8 @@ async function automateScouting() {
       const mi = await browser.runtime.sendMessage({ type: 'GET_MISSIONS' });
       if (mi.error) { setStatusText(status, `Error: ${mi.error}`); return; }
       const maxSlots = getEffectiveMaxFleetSlots(mi);
-      if (maxSlots != null && maxSlots <= (mi.missions || []).length) {
-        setStatusText(status, `Cannot launch survey: ${(mi.missions || []).length}/${mi.maxFleetSlots} fleet slots in use${reservedSlotMessage()}.`, 'warning');
+      if (maxSlots != null && maxSlots <= usedFleetSlots(mi.missions)) {
+        setStatusText(status, `Cannot launch survey: ${usedFleetSlots(mi.missions)}/${mi.maxFleetSlots} fleet slots in use${reservedSlotMessage()}.`, 'warning');
         return;
       }
       const inflight = new Set((mi.missions || [])
@@ -479,8 +479,8 @@ async function automateInvestigate() {
     if (res.error) { setStatusText(status, `Error: ${res.error}`); return; }
 
     const maxSlots = getEffectiveMaxFleetSlots(mi);
-    if (maxSlots != null && maxSlots <= (mi.missions || []).length) {
-      setStatusText(status, `Cannot launch investigation: ${(mi.missions || []).length}/${mi.maxFleetSlots} fleet slots in use${reservedSlotMessage()}.`); return;
+    if (maxSlots != null && maxSlots <= usedFleetSlots(mi.missions)) {
+      setStatusText(status, `Cannot launch investigation: ${usedFleetSlots(mi.missions)}/${mi.maxFleetSlots} fleet slots in use${reservedSlotMessage()}.`); return;
     }
 
     const invCount = (mi.missions || []).filter(m => m.missionType === 'investigate').length;
@@ -531,8 +531,8 @@ async function automateSalvage() {
     if (res.error) { setStatusText(status, `Error: ${res.error}`); return; }
 
     const maxSlots = getEffectiveMaxFleetSlots(mi);
-    if (maxSlots != null && maxSlots <= (mi.missions || []).length) {
-      setStatusText(status, `Cannot launch salvage: ${(mi.missions || []).length}/${mi.maxFleetSlots} fleet slots in use${reservedSlotMessage()}.`); return;
+    if (maxSlots != null && maxSlots <= usedFleetSlots(mi.missions)) {
+      setStatusText(status, `Cannot launch salvage: ${usedFleetSlots(mi.missions)}/${mi.maxFleetSlots} fleet slots in use${reservedSlotMessage()}.`); return;
     }
 
     const salvCount = (mi.missions || []).filter(m => m.missionType === 'collect_salvage').length;
@@ -605,8 +605,8 @@ async function automateDebris() {
     if (mi.error) { setStatusText(status, `Error: ${mi.error}`); return; }
 
     const maxSlots = getEffectiveMaxFleetSlots(mi);
-    if (maxSlots != null && maxSlots <= (mi.missions || []).length) {
-      setStatusText(status, `Cannot launch debris collection: ${(mi.missions || []).length}/${mi.maxFleetSlots} fleet slots in use${reservedSlotMessage()}.`);
+    if (maxSlots != null && maxSlots <= usedFleetSlots(mi.missions)) {
+      setStatusText(status, `Cannot launch debris collection: ${usedFleetSlots(mi.missions)}/${mi.maxFleetSlots} fleet slots in use${reservedSlotMessage()}.`);
       return;
     }
 
@@ -758,8 +758,8 @@ async function launchScan() {
     browser.runtime.sendMessage({ type: 'GET_MISSIONS' }),
   ]);
   const maxSlots = getEffectiveMaxFleetSlots(mi);
-  if (maxSlots != null && maxSlots <= (mi.missions || []).length) {
-    setStatusText(status, `Cannot launch survey: ${(mi.missions || []).length}/${mi.maxFleetSlots} fleet slots in use${reservedSlotMessage()}.`); return;
+  if (maxSlots != null && maxSlots <= usedFleetSlots(mi.missions)) {
+    setStatusText(status, `Cannot launch survey: ${usedFleetSlots(mi.missions)}/${mi.maxFleetSlots} fleet slots in use${reservedSlotMessage()}.`); return;
   }
   if (cd.error) { setStatusText(status, `Error: ${cd.error}`); return; }
   const now = Date.now();
@@ -812,8 +812,8 @@ async function loadActiveSurveys() {
   if (mi.maxFleetSlots != null) {
     const reserve = getReservedFleetSlots();
     document.getElementById('sc-slots').textContent = reserve > 0
-      ? `${(mi.missions || []).length}/${mi.maxFleetSlots} fleet slots in use (${reserve} reserved)`
-      : `${(mi.missions || []).length}/${mi.maxFleetSlots} fleet slots`;
+      ? `${usedFleetSlots(mi.missions)}/${mi.maxFleetSlots} fleet slots in use (${reserve} reserved)`
+      : `${usedFleetSlots(mi.missions)}/${mi.maxFleetSlots} fleet slots`;
   }
   scMissions = (mi.missions || []).filter(m => MISSION_LABELS[m.missionType]);
   renderTransit();
@@ -878,8 +878,9 @@ function renderSurveys() {
   const planetId = Number(document.getElementById('sc-planet').value);
   const templateId = document.getElementById('sc-inv-template').value;
   const templateSignature = JSON.stringify(scTemplates.find(t => String(t.id) === templateId)?.ships || {});
+  const returning = scMissions.filter(m => m.missionType === 'investigate' && missionProgress(m).status === 'returning').length;
   document.getElementById('sc-count').textContent =
-    `${scPending.length} awaiting investigation` + (scReturning.length ? ` · ${scReturning.length} returning` : '');
+    `${scPending.length} awaiting investigation` + (returning ? ` · ${returning} returning` : '');
   const now = Date.now();
 
   const mountProgress = (host, systemId, statusHost, etaHost) => {
@@ -906,7 +907,7 @@ function renderSurveys() {
         statusHost.textContent = p.label;
         statusHost.style.color = p.color;
       }
-      if (etaHost) etaHost.textContent = p.eta > 0 ? fmtCountdown(p.eta) : '—';
+      if (etaHost) etaHost.textContent = missionCountdown(p);
     };
     upd();
     scTicks.invest.push(upd);
@@ -986,8 +987,7 @@ function renderSurveys() {
     list.appendChild(card);
   }
 
-  // Returning fleets: investigation done, keep the row (with the returning
-  // progress bar) until the fleet is home. No launch button, no fuel/expiry.
+  // Keep completed investigations visible until their fleet leaves the feed.
   for (const r of scReturning) {
     const card = document.createElement('div');
     card.className = 'sc-inv-card';
@@ -998,8 +998,10 @@ function renderSurveys() {
     const btn = document.createElement('button');
     btn.disabled = true;
     btn.className = 'sc-inv-icon-btn sc-inv-icon-btn-disabled';
-    btn.setAttribute('aria-label', 'Returning');
-    btn.title = 'Returning…';
+    const mission = findMission('investigate', r.systemId);
+    const phase = missionProgress(mission).label;
+    btn.setAttribute('aria-label', phase);
+    btn.title = phase;
     action.appendChild(btn);
 
     const meta = document.createElement('div');
@@ -1470,7 +1472,7 @@ function renderDebris() {
         statusHost.textContent = progress.label;
         statusHost.style.color = progress.color;
       }
-      if (etaHost) etaHost.textContent = progress.eta > 0 ? fmtCountdown(progress.eta) : '—';
+      if (etaHost) etaHost.textContent = missionCountdown(progress);
     };
     update();
     scTicks.debris.push(update);
@@ -1751,7 +1753,7 @@ function renderSalvage() {
         statusHost.textContent = p.label;
         statusHost.style.color = p.color;
       }
-      if (etaHost) etaHost.textContent = p.eta > 0 ? fmtCountdown(p.eta) : '—';
+      if (etaHost) etaHost.textContent = missionCountdown(p);
     };
     upd();
     scTicks.salvage.push(upd);

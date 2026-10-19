@@ -381,6 +381,9 @@ test('debris collection: mid-tick cargo not committed until collectionComplete',
   await bg.processMissions(mission({ ore: 1476, silicates: 794, alloys: 231 }, false), zoneById);
   assert.equal(store.debris_collected.ore, 0);
   assert.equal(store.debris_collection_log.length, 0);
+  assert.equal(store.debris_active_runs[0].status, 'collecting');
+  assert.equal(store.debris_active_runs[0].statusLabel, 'Collecting');
+  assert.equal(store.debris_active_runs[0].eta, null);
 
   await bg.processMissions(mission({ ore: 2952, silicates: 1588, alloys: 462 }, false), zoneById);
   assert.equal(store.debris_collected.ore, 0);
@@ -390,6 +393,23 @@ test('debris collection: mid-tick cargo not committed until collectionComplete',
   assert.equal(store.debris_collected.ore, 6804);
   assert.equal(store.debris_collected.silicates, 3661);
   assert.equal(store.debris_collection_log.length, 1);
+});
+
+test('saved debris runs use phase-specific event times from the shared evaluator', async () => {
+  const store = makeBrowserStub({});
+  const bg = await loadBackground();
+  const arrivesAt = '2026-10-19T10:00:00.000Z';
+  const returnDepartsAt = '2026-10-19T10:10:00.000Z';
+  const returnArrivesAt = '2026-10-19T10:20:00.000Z';
+  const missions = ['outbound', 'collecting', 'returning'].map((status, id) => ({
+    id, missionType: 'collect_debris', status, arrivesAt, returnDepartsAt, returnArrivesAt,
+  }));
+  await bg.processMissions(missions, {});
+  assert.deepEqual(store.debris_active_runs.map(r => [r.statusLabel, r.eta, r.etaLabel]), [
+    ['Outbound', arrivesAt, 'Arrival'],
+    ['Collecting', returnDepartsAt, 'Collection update'],
+    ['Returning', returnArrivesAt, 'Return'],
+  ]);
 });
 
 test('zone back-fill stamps existing records once', async () => {

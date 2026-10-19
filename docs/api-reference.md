@@ -13,6 +13,14 @@ The add-on does not read or extract the session token. It sends requests through
 the logged-in game tab, where the browser attaches the game's HttpOnly session
 cookie. This keeps requests same-origin with the game. If the bridge content
 script is not available, the background service worker attempts to inject it.
+Both game-tab bridge listeners abort API requests after 20 seconds, including
+response-body reads, and return an explicit network error. This prevents a
+stalled fetch from holding the serialized background request queue indefinitely.
+Live-search panel errors include the failed message type (such as
+`GET_PLANET_SHIPS`) instead of silently treating a failed API response as empty
+data. An extension update can still invalidate scripts in already-open game
+pages; reload those pages after updating. A closed message channel alone does
+not identify whether navigation, an update or a background shutdown caused it.
 
 GET requests are used for loading and refreshing data. POST requests are also
 used for actions initiated from the add-on, as well as for the fuel-estimate
@@ -145,6 +153,83 @@ The missions feed returns `{ "missions": [...], "maxFleetSlots": number }`.
 Missions identify their type and status and can include fleet composition,
 source and target, travel timing, cargo, and mining-specific fields.
 
+Observed in the 2026-10-19 feed (15 missions, `maxFleetSlots: 18`):
+
+| `missionType` | `status` | Relevant next timestamp |
+|---|---|---|
+| `attack_pirates`, `relocate_outpost` | `outbound` | `arrivesAt`: arrival |
+| `survey` | `surveying` | `returnDepartsAt`: survey ends / return departure; `returnArrivesAt` can still be `null` |
+| `mine` | `mining` | `cargo._nextCycleAt`: next mining cycle; both return timestamps can be `null` |
+| `patrol` | `patrolling` | `arrivesAt`: patrol ends, not outbound arrival; observed with `patrolMode: "hunt"` |
+| `market_pickup`, `expedition` | `returning` | `returnArrivesAt`: home arrival |
+
+A second 2026-10-19 feed (16 missions, `maxFleetSlots: 18`) added no new
+status values, but included `missionType: "market_deliver"` with
+`status: "outbound"`. Its `arrivesAt` is arrival at the market hub; the observed
+flight had `travelTime: 2125` seconds, `cargo: { hydrogen: 500000 }` and
+`raidParams: { dockAfterDelivery: true }`, with both return timestamps `null`.
+The docking option does not imply that the fleet is already docked, and no
+return leg should be invented from the outbound duration. A later payload is
+needed to establish the post-delivery state.
+
+The same feed's hunting patrol had `patrolCoverage: "system"` and
+`patrolCapacityUsed: 2`. Its `patrolMetrics` included `huntSystemsScanned`,
+`huntCampsRevealed`, `huntFurthestDistance`, `huntIntelGained`, `raidsPrevented`,
+`minesIntercepted`, `sweepMinesCleared`, `spyDefenseApplications` and
+`spyDefensePointsApplied`. These are operation metrics, not additional phases
+or countdown timestamps.
+
+All mission displays use the shared `missionProgress()` evaluator in
+`nexus-addon/mission-state.js`: the dashboard, Scouting (survey, investigation,
+debris and salvage), Expeditions, Pirates, Xeno, asteroid markers and saved
+debris runs. The evaluator accepts raw API missions and dashboard summaries
+and returns `status`, `label`, `event: { label, at } | null`, `eta` (milliseconds),
+`frac` (0..1), `determinate`, colors and `needsRefresh`.
+
+Explicit `status` takes precedence over timestamp-based fallback. Mining,
+surveying, exploring and patrolling remain distinct stages. Countdowns are
+labeled by event rather than treating every timestamp as an arrival. Mining
+progress covers only `_cycleStartedAt` to `_nextCycleAt`, not the whole mining
+operation. Missing/invalid timing yields no event or determinate progress;
+unknown statuses remain visible without an invented return countdown.
+
+An elapsed deadline requests fresh data instead of changing the reported phase.
+Visible transit lists refresh once per elapsed event (at least 5 seconds
+between requests, no overlapping refreshes), with periodic 30-second retries.
+The dashboard retains its configured refresh interval and refresh-on-expiry.
+The Active Missions card highlights **Fleet slots used** (`used / max`) rather
+than a combined mission total. Active patrols appear in a separate
+**Active patrols (no fleet slot)** row when present.
+Its Active Missions summary shows **Next return**: the earliest confirmed
+`returning` fleet with a valid `returnArrivesAt`, indicating when a general
+fleet slot becomes available. Mining cycles, outbound arrivals and on-site
+departures are excluded. Expeditions count toward normal fleet slots and are
+included in this summary. Patrols use separate patrol capacity and are excluded
+from both normal slot usage and the next-slot-return summary. If no qualifying return is known, it shows
+`-` rather than estimating a return. Mission-group rows retain their own
+phase-specific countdowns.
+The same slot-counting helpers are used by Scouting, Asteroids, Pirates, Xeno
+and Expeditions, including launch/automation checks. The Expeditions tab keeps
+its existing two-expedition concurrency cap as an additional constraint, not
+as an exemption from normal fleet slots.
+The [official patrol guide](https://s0.nexuslegacy.space/guide/de/combat.html#patrols)
+explicitly separates patrol capacity from normal fleet slots; the
+[expedition guide](https://s0.nexuslegacy.space/guide/de/pve.html#expeditions)
+does not establish a normal-slot exemption or document the two-expedition cap.
+The player confirmed on 2026-10-19 that the cap of two simultaneous expeditions
+still applies in addition to normal fleet-slot usage.
+Asteroid markers update with their mission fetch; saved debris runs update
+when the background processes the missions feed. A collecting fleet's rolling
+`returnDepartsAt` is labeled as a collection update, not proof of return.
+
+Additional observed fields: `combinedAssaultId` and `convoyArrivesAt` for a
+coordinated pirate attack (its `arrivesAt` matches `convoyArrivesAt`),
+`leadershipVessel: { id, callsign, level }` when a command ship accompanies a
+fleet, and `fleetComposition[].damagedQuantity` on mining ships. Mining cargo
+includes `_cycleStartedAt`, `_cyclesDone`, `_mineUntilFull`,
+`_miningCargoCapacity`, `_drillBreakdowns` and other internal metadata; these
+underscore-prefixed fields are not resource quantities.
+
 Pirate missions appear with `missionType` `scout_camp` or `attack_pirates`
 (status `outbound` while flying) and carry `raidParams.campId`. In this feed the
 `fleetComposition` entries are enriched with `shipName` and `shipKey`, and
@@ -173,8 +258,8 @@ While `returning`, `returnDepartsAt` equals the end of the exploration
 (`arrivesAt`, +25 ms) and `returnArrivesAt` is `returnDepartsAt + travelTime`
 (1849 s in the sample, the same as the outbound leg). `fleetComposition` then
 reflects losses (30 → 28 Cruisers in the sample) and `cargo` is an empty object
-`{}`. The status is not read by the addon's progress bar for this leg: the
-timestamps alone give the correct phase.
+`{}`. The shared evaluator uses `status: "returning"` to select this leg and
+the return timestamps to calculate its progress, regardless of `arrivesAt`.
 
 `POST /api/fleet/fuel-estimate` is a calculation endpoint. It accepts a source
 planet, target system, and ship quantities; its response includes values such

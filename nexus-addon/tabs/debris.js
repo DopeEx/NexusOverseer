@@ -102,10 +102,11 @@ export function renderActiveRuns() {
     const tr = document.createElement('tr');
     const tdFleet = document.createElement('td'); tdFleet.textContent = fleetText(r.fleet);
     const tdSys = document.createElement('td'); tdSys.textContent = r.system;
-    const tdStatus = document.createElement('td'); tdStatus.textContent = r.status;
+    const tdStatus = document.createElement('td'); tdStatus.textContent = r.statusLabel || r.status;
     const tdCargo = document.createElement('td'); tdCargo.textContent = cargoText(r);
     const tdEta = document.createElement('td');
     tdEta.textContent = r.eta ? new Date(r.eta).toLocaleString() : '—';
+    tdEta.title = r.etaLabel || '';
     tr.append(tdFleet, tdSys, zoneCell(r.zone), tdStatus, tdCargo, tdEta);
     tbody.appendChild(tr);
   }
