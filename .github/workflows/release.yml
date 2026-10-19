@@ -1,5 +1,5 @@
 # Release workflow: push a tag like v1.3.3 and this submits that version to
-# AMO (listed channel) and attaches the built xpi to a GitHub release.
+# AMO (listed channel) and attaches store and Windows-manual packages.
 #
 # Required repository secrets (Settings → Secrets and variables → Actions):
 #   WEB_EXT_API_KEY      AMO JWT issuer (user:12345678:123)
@@ -15,7 +15,21 @@ on:
     tags: ['v*']
 
 jobs:
+  windows-updater:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s tests -p test_manual_build.py
+      - run: node --test tests/windows-updater.test.js
+
   release:
+    needs: windows-updater
     runs-on: ubuntu-latest
     permissions:
       contents: write   # create the GitHub release

@@ -1,0 +1,59 @@
+NEXUS OVERSEER - MANUELLE INSTALLATION (WINDOWS 10/11)
+
+Nur fuer Chrome und Chromium-Browser, beispielsweise Edge.
+Firefox: die signierte XPI bzw. die Mozilla-Store-Installation verwenden.
+
+ERSTE INSTALLATION
+1. Die gesamte ZIP in einen dauerhaft beschreibbaren Ordner entpacken,
+   beispielsweise Dokumente\NexusOverseer. Nicht aus der ZIP heraus starten.
+2. chrome://extensions (Edge: edge://extensions) oeffnen.
+3. Entwicklermodus einschalten, "Entpackte Erweiterung laden" waehlen
+   und NUR den Unterordner "addon" auswaehlen.
+4. Diesen Ordner danach nicht verschieben, umbenennen oder loeschen.
+
+UPDATES
+Update-Nexus.bat doppelklicken. Git, Python und Administratorrechte sind
+normalerweise nicht erforderlich. Windows PowerShell 5.1 wird benoetigt.
+Die Standardauswahl installiert das neueste stabile GitHub-Release.
+Optional kann ein ungepruefter master-Stand fuer Tests installiert werden.
+Der genaue Commit wird angezeigt und in addon\.nexus-install.json gespeichert.
+Die Release-Auswahl bleibt auch nach einem master-Update der Standard.
+Anschliessend die Erweiterung unter chrome://extensions neu laden und
+geoeffnete Spielseiten neu laden. Nicht deinstallieren.
+
+Vor Kanalwechseln und Downgrades Daten unter Options > Data exportieren.
+Ein aelteres Release kann neuere Datenformate eventuell nicht verstehen.
+Die Backups dieses Updaters enthalten Dateien, NICHT die Browserdaten.
+
+BESTEHENDE MANUELLE INSTALLATION
+Zuerst Browserdaten exportieren. Das manuelle Paket ausserhalb des bisherigen
+Erweiterungsordners entpacken. Den bisherigen Erweiterungsordner dann als
+Unterordner "addon" beibehalten: Starter, updater.ps1 und Installation.txt
+in dessen uebergeordneten Ordner legen. Der Updater ersetzt genau "addon".
+Wenn das nicht moeglich ist (z.B. anderer Ordnername), ist ein einmaliger
+Wechsel der geladenen Erweiterung mit anschliessendem Datenimport erforderlich.
+Ein Pfad-/ID-Wechsel kann zu einem anderen lokalen Datenspeicher fuehren.
+
+UPDATER-SELBSTUPDATE
+Neue Updater werden nur aus stabilen Releases angeboten, auch bei master.
+Der Austausch erfordert eine gesonderte Bestaetigung und gilt ab dem
+naechsten Start. Der kleine Protokoll-1-Starter aktualisiert sich nicht selbst.
+Bei inkompatiblem Starter-Protokoll muss das manuelle Paket neu entpackt
+werden, wobei der geladene addon-Pfad erhalten bleiben muss.
+Ein beim Austausch unterbrochener Updater wird beim naechsten Start durch
+Update-Nexus.bat aus der vorherigen Fassung wiederhergestellt.
+
+FEHLER UND BACKUPS
+Das Fenster bleibt am Ende offen. Protokoll: .update\updater.log.
+Datei-Backups: .update\backups. Sie werden nicht automatisch geloescht.
+Ein unterbrochener Add-on-Austausch wird beim naechsten Start zurueckgesetzt.
+Bei Wiederherstellungsfehlern .update nicht loeschen, sondern Protokoll und
+Fehlermeldung fuer den Support sichern. Nicht parallel Dateien austauschen.
+
+Downloads erfolgen ueber HTTPS von DopeEx/NexusOverseer auf GitHub.
+Pruefsummen schuetzen gegen beschaedigte/falsche Downloads, sind aber keine
+unabhaengige kryptografische Signatur des Herausgebers.
+Windows SmartScreen oder Unternehmensrichtlinien koennen Skripte blockieren.
+Der Starter verwendet eine prozessbezogene PowerShell-Ausfuehrungsoption,
+aendert aber keine systemweiten Richtlinien und umgeht keine Gruppenrichtlinie.
+Nur aus vertrauenswuerdiger Quelle heruntergeladene Skripte starten.
