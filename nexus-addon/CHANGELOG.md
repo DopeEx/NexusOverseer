@@ -7,6 +7,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- The manual Windows package checks for stable releases from the dashboard
+  footer at most every six hours. Master builds show their commit and whether
+  they are ahead of the latest release; the version button still opens What's new.
 - A separate Windows manual-installation ZIP for Chromium, with a PowerShell
   updater requiring no Git or Python. It offers stable releases or an explicit
   master commit, file backups, interrupted-update recovery and visible errors.

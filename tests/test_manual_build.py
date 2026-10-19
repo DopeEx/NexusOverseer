@@ -26,10 +26,12 @@ class ManualBuildTests(unittest.TestCase):
                 self.assertEqual(set(chrome.namelist()), set(BUILD['FILES']))
                 self.assertNotIn('scripts', json.loads(chrome.read('manifest.json'))['background'])
                 addon = {name: chrome.read(name) for name in chrome.namelist()}
+                self.assertEqual(json.loads(addon['.nexus-install.json'])['channel'], 'store')
             with zipfile.ZipFile(directory / f'nexus-overseer-{version}.xpi') as firefox:
                 self.assertEqual(set(firefox.namelist()), set(BUILD['FILES']))
                 background = json.loads(firefox.read('manifest.json'))['background']
                 self.assertEqual(background['scripts'], ['background-sw.js'])
+                self.assertEqual(json.loads(firefox.read('.nexus-install.json'))['channel'], 'store')
             with zipfile.ZipFile(directory / f'nexus-overseer-{version}-windows-manual.zip') as manual:
                 metadata = json.loads(manual.read('manual-package.json'))
                 self.assertEqual(metadata['format'], 1)
@@ -40,6 +42,12 @@ class ManualBuildTests(unittest.TestCase):
                 for name, digest in metadata['files'].items():
                     self.assertEqual(hashlib.sha256(manual.read(name)).hexdigest(), digest, name)
                 for name, content in addon.items():
+                    if name == '.nexus-install.json':
+                        state = json.loads(manual.read(f'addon/{name}'))
+                        self.assertEqual(state['channel'], 'release')
+                        self.assertEqual(state['revision'], f'v{version}')
+                        self.assertEqual(state['version'], version)
+                        continue
                     self.assertEqual(manual.read(f'addon/{name}'), content)
                 starter = manual.read('Update-Nexus.bat')
                 self.assertIn(b'\r\n', starter)

@@ -1,5 +1,7 @@
 [
   "manifest.json",
+  ".nexus-install.json",
+  "release-status.js",
   "package.json",
   "CHANGELOG.md",
   "background-sw.js", "server-storage.js", "server-switch.js", "background.js", "sidebar-inject.js",

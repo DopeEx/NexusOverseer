@@ -39,6 +39,10 @@ def build_manual(version):
     for name in FILES:
         with open(os.path.join(HERE, name), 'rb') as f:
             payload[f'addon/{name}'] = f.read()
+    payload['addon/.nexus-install.json'] = (json.dumps({
+        'channel': 'release', 'revision': f'v{version}', 'version': version,
+        'installedAt': None,
+    }, indent=2) + '\n').encode('utf-8')
     for name in ('Update-Nexus.bat', 'updater.ps1', 'Installation.txt'):
         with open(os.path.join(UPDATER_DIR, name), 'rb') as f:
             content = f.read()

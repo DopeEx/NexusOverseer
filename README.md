@@ -98,6 +98,11 @@ Download the latest package from the [Releases](https://github.com/DopeEx/NexusO
 Double-click `Update-Nexus.bat` in the manual Windows package, then reload the
 extension in your browser. No Git or Python installation is needed. Stable
 releases are the default; testers can optionally select `master`.
+The dashboard footer checks GitHub for stable releases when opened, at most
+once every six hours, and links to a newer release. Master installations show
+`dev` and their short commit; a GitHub commit comparison identifies builds
+ahead of the latest release. The version button still opens What's new.
+These checks apply only to manual Windows packages, not store packages.
 
 <details>
 <summary>Update instructions, backups, troubleshooting and publishing</summary>
@@ -113,6 +118,17 @@ specific commit before downloading it, and records the channel, revision and
 installation time in `addon/.nexus-install.json`. Release remains the default
 on every run, including after installing master. There is no automatic fallback
 to a different channel.
+
+Dashboard checks also cache failures for six hours; offline or rate-limited
+checks are shown as unavailable, not as "up to date". An unavailable commit
+comparison leaves the `dev` label in place without claiming the build is ahead.
+A master commit behind the latest release triggers a release notice even if
+the extension version numbers are equal. Builds ahead of or identical to the
+release do not suggest installing that release as an update. These checks send
+only public repository references to GitHub, never game data or credentials,
+and do not run while the dashboard is closed. The plain Chromium/store ZIP
+cannot distinguish a store upload from a manual installation; only the separate
+Windows package and updater-managed installations enable these checks.
 
 After updating, click **Reload** for the extension on the browser's extensions
 page, then reload open game pages. **Do not uninstall the extension.** Keeping
