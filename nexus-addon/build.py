@@ -2,7 +2,8 @@
 """Build (and optionally submit) the addon.
 
 Usage, from nexus-addon/:
-    python3 build.py            build the unsigned xpi at the repo root
+    python3 build.py            build store packages and the Windows manual ZIP
+    python3 build.py --manual   build only the Windows manual ZIP
     python3 build.py --sign     submit the version to AMO (LISTED channel)
                                 for review and public distribution
 
@@ -13,8 +14,10 @@ AMO itself — there is no self-hosted update channel. Track review status at
 https://addons.mozilla.org/developers/addons.
 """
 import glob
+import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -23,19 +26,42 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 ARTIFACT_BASENAME = 'nexus-overseer'
 
-FILES = [
-    'manifest.json',
-    'package.json',
-    'CHANGELOG.md',
-    'background-sw.js', 'server-storage.js', 'server-switch.js', 'background.js', 'sidebar-inject.js',
-    'galaxy-fetch-hook.js', 'game-api-bridge.js', 'galaxy-fields.js', 'empire-view.js', 'guide-content.js', 'guide-view.js', 'logistics-view.js', 'upgrade-queue.js', 'building-upgrade.js', 'tech-upgrade.js', 'ship-upgrade.js',
-    'dashboard.html', 'theme.css', 'dashboard.css', 'dashboard.js', 'automation-scheduler.js', 'common.js', 'mission-state.js', 'settings.js', 'tabs/options.js', 'pirate-planner.js', 'pirate-plan-cache.js', 'human-verification.js',
-    'tabs/global.js', 'tabs/dashboard.js', 'tabs/surveys.js', 'tabs/pirates.js', 'tabs/mining.js',
-    'tabs/battles.js', 'tabs/debris.js', 'tabs/expeditions.js', 'tabs/wormholes.js', 'tabs/finder.js', 'tabs/asteroids.js', 'tabs/fleets.js', 'tabs/scouting.js', 'tabs/xeno.js', 'tabs/market.js', 'tabs/techtree.js',
-    'tabs/simulator.js', 'tabs/guide.js', 'simulator-intel.js',
-    'chart.umd.js', 'browser-polyfill.js',
-    'icons/icon128.png',
-]
+UPDATER_DIR = os.path.join(ROOT, 'tools', 'windows-updater')
+with open(os.path.join(UPDATER_DIR, 'addon-files.json'), encoding='utf-8') as f:
+    FILES = json.load(f)
+
+
+def build_manual(version):
+    """Build the Windows-only manual package, separate from store payloads."""
+    import zipfile
+    target = os.path.join(ROOT, f'{ARTIFACT_BASENAME}-{version}-windows-manual.zip')
+    payload = {}
+    for name in FILES:
+        with open(os.path.join(HERE, name), 'rb') as f:
+            payload[f'addon/{name}'] = f.read()
+    for name in ('Update-Nexus.bat', 'updater.ps1', 'Installation.txt'):
+        with open(os.path.join(UPDATER_DIR, name), 'rb') as f:
+            content = f.read()
+        # A double-clickable batch file must also work when built on Linux CI.
+        if name.endswith('.bat'):
+            content = content.replace(b'\r\n', b'\n').replace(b'\n', b'\r\n')
+        payload[name] = content
+    match = re.search(rb"(?m)^\$script:UpdaterVersion = '(\d+\.\d+\.\d+)'", payload['updater.ps1'])
+    if match is None:
+        raise ValueError('Missing updater version')
+    metadata = {
+        'format': 1,
+        'launcherProtocol': 1,
+        'addonVersion': version,
+        'updaterVersion': match[1].decode('ascii'),
+        'files': {name: hashlib.sha256(content).hexdigest() for name, content in payload.items()},
+    }
+    with zipfile.ZipFile(target, 'w', zipfile.ZIP_DEFLATED) as z:
+        for name, content in payload.items():
+            z.writestr(name, content)
+        z.writestr('manual-package.json', json.dumps(metadata, indent=2) + '\n')
+    print(f'built {os.path.basename(target)} ({os.path.getsize(target) // 1024} KB)')
+    return target
 
 
 def read_version():
@@ -54,8 +80,7 @@ def firefox_manifest():
 
 
 def build(version):
-    """Write the package as .xpi (Firefox/AMO, with the scripts fallback in
-    its manifest) and .zip (Chrome Web Store)."""
+    """Build store payloads and a separate Windows manual-installation ZIP."""
     import zipfile
     targets = []
     for ext in ('xpi', 'zip'):
@@ -73,6 +98,7 @@ def build(version):
         size = os.path.getsize(target) // 1024
         print(f'built {os.path.basename(target)} ({size} KB, {len(FILES)} files)')
         targets.append(target)
+    build_manual(version)
     return targets[0]
 
 
@@ -163,6 +189,11 @@ def publish_chrome(version):
 
 def main():
     version = read_version()
+    if '--manual' in sys.argv:
+        if '--sign' in sys.argv or '--chrome' in sys.argv:
+            sys.exit('--manual cannot be combined with store submission options.')
+        build_manual(version)
+        return
     build(version)
     if '--sign' in sys.argv:
         sign(version)

@@ -6,6 +6,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- A separate Windows manual-installation ZIP for Chromium, with a PowerShell
+  updater requiring no Git or Python. It offers stable releases or an explicit
+  master commit, file backups, interrupted-update recovery and visible errors.
+- Confirmed, recoverable updater self-updates from stable releases only.
+  Store packages remain free of updater scripts.
+
 ### Changed
 - The Dashboard mission card groups fleet-slot usage with its capacity bar,
   shows the next returning fleet and lists active patrols separately.
