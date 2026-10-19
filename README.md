@@ -178,8 +178,8 @@ files, update that list. Increment `$script:UpdaterVersion` in
 should receive. Publish them in a new stable release. Protocol-1 starters
 expect a single replaceable `updater.ps1` and the documented recovery markers;
 incompatible changes require a new launcher protocol and manual migration.
-The old source-tree `update-nexus-addon.bat` is not included in this package;
-use the new `Update-Nexus.bat` entry point for the supported manual workflow.
+Use `Update-Nexus.bat` from the Windows manual package for the supported
+manual update workflow.
 
 </details>
 
