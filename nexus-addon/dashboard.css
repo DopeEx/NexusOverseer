@@ -3239,6 +3239,7 @@ th.sortable .arrow { margin-left: 4px; color: var(--accent); }
 }
 .app-footer-brand {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   color: var(--text-subtle);
@@ -3273,6 +3274,7 @@ th.sortable .arrow { margin-left: 4px; color: var(--accent); }
 }
 .footer-link svg { width: 14px; height: 14px; fill: currentColor; }
 .footer-link:hover { background: var(--bg-raised); color: var(--text); }
+#footer-release-status[hidden] { display: none; }
 
 /* What's new dialog: one card per changelog section (Added, Changed, …). */
 .whatsnew-sections {

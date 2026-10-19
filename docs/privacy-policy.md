@@ -1,6 +1,6 @@
 # Privacy Policy — Nexus Overseer
 
-**Last updated: 2026-10-11**
+**Last updated: 2026-10-19**
 
 Nexus Overseer is a browser extension that reads your Nexus Legacy game data and displays it locally as a personal accounting dashboard. This policy describes exactly what data the extension accesses, how it is used, and where it goes.
 
@@ -50,7 +50,18 @@ The extension also writes automatic backup files to your `Downloads/NexusOversee
 
 ## 4. Data sharing and third parties
 
-**No data is shared with any third party.** All network communication is exclusively between your browser and `nexuslegacy.space` (the game's own servers). The extension does not contact any analytics service, telemetry endpoint, or server operated by the extension author.
+**No game data is shared with any third party.** Game requests are between your browser and `nexuslegacy.space` (the game's own servers). The extension does not contact any analytics service, telemetry endpoint, or server operated by the extension author.
+
+In the separate Windows manual package, opening the dashboard can contact
+`api.github.com` to check the latest stable release and, for development builds,
+compare the installed public commit with that release. Checks are cached locally
+for six hours, including failed attempts; no background checks run with the
+dashboard closed. These requests contain only public repository references,
+omit credentials and referrers, and never include game data. GitHub receives
+normal connection information such as your IP address. Store packages do not
+make these dashboard update checks. Clicking a release link opens GitHub.
+The external Windows updater also downloads public packages from GitHub when
+you run it.
 
 ---
 

@@ -23,6 +23,11 @@ export function createDemoServer() {
     }
     try {
       const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+      if (pathname === '/.nexus-install.json') {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+          .end(req.method === 'HEAD' ? undefined : JSON.stringify({ channel: 'demo' }));
+        return;
+      }
       const icon = /^\/images\/resources\/([a-z_]+)\.webp$/.exec(pathname);
       if (icon && resourceColors[icon[1]]) {
         const color = resourceColors[icon[1]];

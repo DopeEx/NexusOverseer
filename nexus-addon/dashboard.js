@@ -6,6 +6,7 @@
 
 import { activeTab, appendStatusText, confirmDialog, dayKey, fuelForMode, getLabelKey, getMode, infoDialog, periodLabelFor, renderMarkdown, renderNetCards, setActiveTab, setStore, store } from './common.js';
 import { bindServerSelector } from './server-switch.js';
+import { initReleaseStatus } from './release-status.js';
 import { initSimulatorTab } from './tabs/simulator.js';
 import { renderBattlesTab } from './tabs/battles.js';
 import { renderDebrisTab } from './tabs/debris.js';
@@ -770,6 +771,12 @@ if (versionLink) {
   const version = browser.runtime.getManifest().version;
   versionLink.textContent = `v${version}`;
   versionLink.addEventListener('click', e => { e.preventDefault(); void showWhatsNew(version); });
+  void initReleaseStatus({
+    versionLink,
+    statusLink: document.getElementById('footer-release-status'),
+    runtime: browser.runtime,
+    storage: browser.storage.local,
+  });
 }
 
 browser.storage.local.onChanged.addListener((changes, area) => {

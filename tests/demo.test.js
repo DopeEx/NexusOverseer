@@ -100,6 +100,7 @@ test('demo server isolates the real UI, blocks external connections and does not
   const asteroidJs = await (await fetch(`${origin}/tabs/asteroids.js`)).text();
   assert.ok(!asteroidJs.includes('https://s0.nexuslegacy.space/images/resources/'));
   assert.ok(asteroidJs.includes('/images/resources/'));
+  assert.deepEqual(await (await fetch(`${origin}/.nexus-install.json`)).json(), { channel: 'demo' });
   const icon = await fetch(`${origin}/images/resources/ore.webp`);
   assert.equal(icon.headers.get('content-type'), 'image/svg+xml');
   for (const path of ['/package.json', '/.env', '/demo/server.js', '/..%5cpackage.json', '/%ZZ']) {
