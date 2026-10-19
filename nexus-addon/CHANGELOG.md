@@ -6,6 +6,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-10-19
+
 ### Added
 - The manual Windows package checks for stable releases from the dashboard
   footer at most every six hours. Master builds show their commit and whether
@@ -21,6 +23,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   shows the next returning fleet and lists active patrols separately.
 
 ### Fixed
+- A failed updater check after a completed Windows add-on update now reports
+  a separate warning instead of incorrectly reporting the add-on update as failed.
 - Mission stages and countdowns now follow the reported fleet status instead
   of assuming a return when an arrival time has passed.
 - Fleet-slot counts include expeditions and exclude patrols, which use their

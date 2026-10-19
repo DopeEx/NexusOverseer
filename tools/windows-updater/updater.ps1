@@ -2,7 +2,7 @@ param([switch]$Library)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-$script:UpdaterVersion = '1.0.0'
+$script:UpdaterVersion = '1.1.0'
 $script:LauncherProtocol = 1
 $script:Api = 'https://api.github.com/repos/DopeEx/NexusOverseer'
 $script:Root = $PSScriptRoot
@@ -319,14 +319,22 @@ function Invoke-Updater {
             channel = $channel; revision = $revision; version = $version; installedAt = (Get-Date -Format o)
         }
         Write-Status 'Jetzt unter chrome://extensions (bzw. edge://extensions) auf Neu laden klicken und Spielseiten neu laden.'
-        # Updater code is taken ONLY from a validated stable package, never from master.
-        if (!$stable) { $stable = Get-StablePackage $work }
-        if ([version]$stable.Metadata.updaterVersion -gt [version]$script:UpdaterVersion) {
-            Write-Status "Stabiler Updater verfuegbar: $($stable.Metadata.updaterVersion)"
-            if (Confirm-Action 'Auch den Updater aktualisieren?') {
-                Install-Updater $script:Root (Join-Path $stable.Folder 'updater.ps1')
-            } else { Write-Status 'Updater unveraendert gelassen.' }
-        } else { Write-Status 'Updater ist aktuell; keine Selbstaktualisierung erforderlich.' }
+        try {
+            # Updater code is taken ONLY from a validated stable package, never from master.
+            if (!$stable) { $stable = Get-StablePackage $work }
+            if ([version]$stable.Metadata.updaterVersion -gt [version]$script:UpdaterVersion) {
+                Write-Status "Stabiler Updater verfuegbar: $($stable.Metadata.updaterVersion)"
+                if (Confirm-Action 'Auch den Updater aktualisieren?') {
+                    Install-Updater $script:Root (Join-Path $stable.Folder 'updater.ps1')
+                } else { Write-Status 'Updater unveraendert gelassen.' }
+            } else { Write-Status 'Updater ist aktuell; keine Selbstaktualisierung erforderlich.' }
+        } catch {
+            Write-Status "WARNUNG: Updater-Pruefung oder Selbstupdate fehlgeschlagen: $($_.Exception.Message)"
+            Write-Status 'Das Add-on wurde erfolgreich aktualisiert. Updater beim naechsten Start erneut pruefen.'
+            Write-Status 'Bei unterbrochenem Selbstupdate stellt Update-Nexus.bat zuerst die vorherige Updater-Fassung wieder her.'
+            return
+        }
+        Write-Status 'Add-on-Update erfolgreich abgeschlossen.'
     } catch {
         Write-Status "FEHLER: $($_.Exception.Message)"
         Write-Status 'Falls das Add-on bereits installiert wurde, bleibt dieses Update bestehen. Abschlussmeldungen oben beachten.'

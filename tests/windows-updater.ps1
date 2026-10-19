@@ -241,6 +241,16 @@ try {
     $script:Answers.Enqueue('n')
     Invoke-Updater
     Assert ((Get-FileHash -LiteralPath (Join-Path $script:Root 'updater.ps1')).Hash -eq $oldUpdaterHash) 'Self-update requires separate consent'
+    $handle = [IO.File]::Open((Join-Path $script:Root 'updater.ps1'), 'Open', 'Read', 'None')
+    try {
+        $script:Answers.Enqueue('1')
+        $script:Answers.Enqueue('j')
+        $script:Answers.Enqueue('j')
+        Invoke-Updater
+    } finally { $handle.Dispose() }
+    Assert ((Get-FileHash -LiteralPath (Join-Path $script:Root 'updater.ps1')).Hash -eq $oldUpdaterHash) 'Failed self-update retains existing updater'
+    Assert ((Read-Json (Join-Path $script:Root 'addon\.nexus-install.json')).channel -eq 'release') 'Failed self-update does not undo completed addon update'
+    Assert ((Get-Content -LiteralPath (Join-Path $script:Root '.update\updater.log') -Raw) -match 'WARNUNG: Updater-Pruefung oder Selbstupdate fehlgeschlagen') 'Failed self-update explicitly warned'
     $script:Answers.Enqueue('1')
     $script:Answers.Enqueue('j')
     $script:Answers.Enqueue('j')
@@ -255,6 +265,19 @@ try {
     $script:Answers.Enqueue('n')
     Invoke-Updater
     Assert ((Read-Json (Join-Path $script:Root 'addon\.nexus-install.json')).channel -eq 'release') 'Decline leaves addon untouched'
+    $stableResponse = ${function:Get-Response}
+    function Get-Response([string]$Url, [string]$OutFile = '') {
+        if ($Url -like '*/releases/latest') { throw 'STABLE_CHECK_UNAVAILABLE' }
+        return & $stableResponse $Url $OutFile
+    }
+    $script:Answers.Enqueue('2')
+    $script:Answers.Enqueue('j')
+    $script:Answers.Enqueue('j')
+    Invoke-Updater
+    Assert ((Read-Json (Join-Path $script:Root 'addon\.nexus-install.json')).channel -eq 'master') 'Master update survives unavailable stable updater check'
+    $log = Get-Content -LiteralPath (Join-Path $script:Root '.update\updater.log') -Raw
+    Assert ($log -match 'WARNUNG:.*STABLE_CHECK_UNAVAILABLE') 'Optional updater failure logged as warning'
+    Assert ($log -match 'Das Add-on wurde erfolgreich aktualisiert') 'Successful addon update explicitly preserved'
     function Get-Response { throw 'OFFLINE_FIXTURE' }
     $script:Answers.Enqueue('')
     Assert-Throws { Invoke-Updater } 'OFFLINE_FIXTURE'

@@ -45,6 +45,9 @@ Update-Nexus.bat aus der vorherigen Fassung wiederhergestellt.
 
 FEHLER UND BACKUPS
 Das Fenster bleibt am Ende offen. Protokoll: .update\updater.log.
+Wenn nach erfolgreichem Add-on-Austausch nur die Updater-Pruefung oder das
+Selbstupdate scheitert, erscheint eine gesonderte Warnung. Das installierte
+Add-on bleibt aktualisiert; die Erweiterung trotzdem im Browser neu laden.
 Datei-Backups: .update\backups. Sie werden nicht automatisch geloescht.
 Ein unterbrochener Add-on-Austausch wird beim naechsten Start zurueckgesetzt.
 Bei Wiederherstellungsfehlern .update nicht loeschen, sondern Protokoll und

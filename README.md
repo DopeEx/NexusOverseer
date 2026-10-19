@@ -140,6 +140,8 @@ File backups and the error log are kept under `.update/backups` and
 `.update/updater.log`. Backups are not automatically removed. Interrupted file
 replacements are rolled back on the next start. A newer updater is offered
 separately and **only from stable releases**, even when testing master.
+If this later check or self-update fails after the add-on files were installed,
+the updater reports a separate warning; the add-on update remains successful.
 Self-updates require confirmation and take effect on the next launch. The small
 protocol-1 batch starter is intentionally not self-updated: a future incompatible
 starter requires re-extracting the manual package while retaining the loaded
