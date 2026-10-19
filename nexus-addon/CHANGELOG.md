@@ -15,6 +15,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   of assuming a return when an arrival time has passed.
 - Fleet-slot counts include expeditions and exclude patrols, which use their
   own capacity.
+- Game-tab requests now time out instead of remaining pending indefinitely,
+  and failed requests report more useful details.
 
 ### Documentation
 - A local dashboard preview with fictional sample data for creating screenshots

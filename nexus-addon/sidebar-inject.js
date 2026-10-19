@@ -94,6 +94,7 @@ rt.onMessage.addListener((msg, sender, sendResponse) => {
   fetch(msg.path, {
     method: msg.method || 'POST',
     credentials: 'include',
+    signal: AbortSignal.timeout(20000),
     headers: { 'Content-Type': 'application/json' },
     body: msg.body != null ? JSON.stringify(msg.body) : undefined,
   }).then(async r => {
@@ -121,7 +122,12 @@ rt.onMessage.addListener((msg, sender, sendResponse) => {
       }
       sendResponse({ ok: true, data, ...meta });
     }
-  }).catch(e => sendResponse({ error: e.message, networkError: true }));
+  }).catch(e => sendResponse({
+    error: e.name === 'TimeoutError'
+      ? `API ${msg.path} timed out after 20 seconds.`
+      : e.message,
+    networkError: true,
+  }));
   return true;   // keep the channel open for the async sendResponse
 });
 
@@ -145,6 +151,19 @@ const EXCAVATOR_BONUS = 1.2;
 // Mining ships the recommendation manages; escort/combat ships in the editor
 // are kept when the recommendation swaps in the mining ships.
 const MINING_SHIPS = new Set([...Object.values(REC_SHIP).map(s => s[0]), 'Excavator']);
+async function fieldsRequest(message) {
+  let response;
+  try {
+    response = await ext.runtime.sendMessage(message);
+  } catch (error) {
+    throw new Error(`${message.type}: ${error.message}`, { cause: error });
+  }
+  if (!response || response.error) {
+    throw new Error(`${message.type}: ${response?.error || 'No response from extension background.'}`);
+  }
+  return response;
+}
+
 // Returns { count, name } for a match, or null when it can't be computed.
 function recommend(m, excavator) {
   const spec = REC_SHIP[m.type];
@@ -305,15 +324,15 @@ async function openFieldsPanel() {
   const templates = (fleet_templates || []).slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''));   // alphabetical picker
   let avail = {};
   if (planetId) {
-    const av = await ext.runtime.sendMessage({ type: 'GET_PLANET_SHIPS', planetId });
-    if (av && !av.error) avail = av.available || {};
+    const av = await fieldsRequest({ type: 'GET_PLANET_SHIPS', planetId });
+    avail = av.available || {};
   }
   // Source planet name + ship catalog (names/icons) for the confirmation dialog.
-  const planets = (await ext.runtime.sendMessage({ type: 'GET_PLANETS' })).planets || [];
+  const planets = (await fieldsRequest({ type: 'GET_PLANETS' })).planets || [];
   const planetName = (planets.find(p => p.id === planetId) || {}).name || planetId;
   const shipDefs = {};
   const nameToId = {};   // ship name → shipDefId, for the recommendation
-  for (const s of ((await ext.runtime.sendMessage({ type: 'GET_SHIP_DEFS' })).ships || [])) {
+  for (const s of ((await fieldsRequest({ type: 'GET_SHIP_DEFS' })).ships || [])) {
     shipDefs[s.shipDefId] = s;
     if (s.name) nameToId[s.name] = s.shipDefId;
   }
@@ -328,19 +347,20 @@ async function openFieldsPanel() {
 
   // "Already mining" row highlight: fields we already control, or with an
   // active mine mission en route. Mirrors the Asteroids tab's criteria.
-  const me = await ext.runtime.sendMessage({ type: 'GET_AUTH_ME' });
+  const me = await fieldsRequest({ type: 'GET_AUTH_ME' });
   const myUsername = (me && !me.error && me.user) ? me.user.username : null;
   let miningFieldIds = new Set();
   async function refreshMiningFieldIds() {
-    const mi = await ext.runtime.sendMessage({ type: 'GET_MISSIONS' });
+    const mi = await fieldsRequest({ type: 'GET_MISSIONS' });
     miningFieldIds = new Set(
       (mi.missions || []).filter(m => m.missionType === 'mine' && m.targetFieldId != null).map(m => m.targetFieldId));
   }
   await refreshMiningFieldIds();
   const miningRefreshTimer = setInterval(() => {
     if (!panel.isConnected) { clearInterval(miningRefreshTimer); return; }
-    refreshMiningFieldIds().then(renderRows).catch(() => {
-      // Extension was reloaded: this script is orphaned, stop polling.
+    refreshMiningFieldIds().then(renderRows).catch(error => {
+      console.warn('[NexusOverseer] Live-search mission refresh failed:', error);
+      sub.textContent = `Mission refresh failed: ${error.message}`;
       clearInterval(miningRefreshTimer);
     });
   }, 10000);
@@ -677,10 +697,10 @@ async function openFieldsPanel() {
 }
 
 ext.runtime.onMessage.addListener(msg => {
-  if (msg && msg.type === 'SHOW_LS_RESULTS') openFieldsPanel();
+  if (msg && msg.type === 'SHOW_LS_RESULTS') openFieldsPanelSafe();
 });
 
 // Game tab opened from a notification with no tab previously open: show the panel.
 ext.storage.local.get('live_search_open_panel').then(({ live_search_open_panel }) => {
-  if (live_search_open_panel) { ext.storage.local.set({ live_search_open_panel: false }); openFieldsPanel(); }
+  if (live_search_open_panel) { ext.storage.local.set({ live_search_open_panel: false }); openFieldsPanelSafe(); }
 });

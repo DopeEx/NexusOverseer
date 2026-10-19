@@ -14,6 +14,7 @@
     fetch(msg.path, {
       method: msg.method || 'POST',
       credentials: 'include',
+      signal: AbortSignal.timeout(20000),
       headers: { 'Content-Type': 'application/json' },
       body: msg.body != null ? JSON.stringify(msg.body) : undefined,
     }).then(async response => {
@@ -47,7 +48,12 @@
         }
       }
       sendResponse({ ok: true, data, ...meta });
-    }).catch(error => sendResponse({ error: error.message, networkError: true }));
+    }).catch(error => sendResponse({
+      error: error.name === 'TimeoutError'
+        ? `API ${msg.path} timed out after 20 seconds.`
+        : error.message,
+      networkError: true,
+    }));
 
     return true;
   }

@@ -13,6 +13,14 @@ The add-on does not read or extract the session token. It sends requests through
 the logged-in game tab, where the browser attaches the game's HttpOnly session
 cookie. This keeps requests same-origin with the game. If the bridge content
 script is not available, the background service worker attempts to inject it.
+Both game-tab bridge listeners abort API requests after 20 seconds, including
+response-body reads, and return an explicit network error. This prevents a
+stalled fetch from holding the serialized background request queue indefinitely.
+Live-search panel errors include the failed message type (such as
+`GET_PLANET_SHIPS`) instead of silently treating a failed API response as empty
+data. An extension update can still invalidate scripts in already-open game
+pages; reload those pages after updating. A closed message channel alone does
+not identify whether navigation, an update or a background shutdown caused it.
 
 GET requests are used for loading and refreshing data. POST requests are also
 used for actions initiated from the add-on, as well as for the fuel-estimate
