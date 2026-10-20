@@ -116,8 +116,8 @@
     return serverFromUrl(active.url)?.key || null;
   }
 
-  async function getActiveServerKey() {
-    if (forcedServerKey) return forcedServerKey;
+  async function getActiveServerKey(ignoreScope = false) {
+    if (!ignoreScope && forcedServerKey) return forcedServerKey;
 
     const pageKey = pageServerKey();
     if (pageKey) return pageKey;
@@ -134,6 +134,10 @@
 
   async function getActiveServer() {
     return serverForKey(await getActiveServerKey());
+  }
+
+  async function getSelectedServer() {
+    return serverForKey(await getActiveServerKey(true));
   }
 
   async function setActiveServer(key) {
@@ -432,6 +436,7 @@
     onChanged,
     servers: SERVERS,
     getActiveServer,
+    getSelectedServer,
     setActiveServer,
     withServer,
     serverFromUrl,

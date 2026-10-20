@@ -241,10 +241,20 @@ async function automatePirateAttacks() {
     const shipsCache = new Map();
     for (const target of targets) {
       const pick = await pickSourcePlanet(target, async available => {
-        const plan = await suggestAttackFleet(target, available, attackPlannerOptions());
+        const plan = await suggestAttackFleet(target, available, {
+          ...attackPlannerOptions(),
+          onProgress: text => setStatusText(autoStatus, `${target.name}: ${text}`),
+        });
         return plan;
       }, shipsCache);
-      if (pick.error) { lastError = `${target.name}: ${pick.error}`; continue; }
+      if (pick.error) {
+        lastError = `${target.name}: ${pick.error}`;
+        if (pick.status === 429) {
+          setStatusText(autoStatus, lastError, 'warning');
+          return;
+        }
+        continue;
+      }
       const { planet: source, result: plan } = pick;
       const planetId = source.id;
       const ships = Object.entries(plan.ships).map(([id, quantity]) => ({ shipDefId: Number(id), quantity }));
@@ -489,6 +499,7 @@ async function pickSourcePlanet(camp, check, shipsCache = new Map()) {
     if (av.error) { firstError ||= av.error; continue; }
     const result = await check(av.available, planet);
     if (!result.error) return { planet, av, result };
+    if (result.status === 429) return result;
     firstError ||= result.error;
   }
   return { error: firstError || 'No suitable planet found.' };
@@ -517,7 +528,10 @@ async function sendCampFleet(camp, { title, messageType, doneText, useTemplate }
     ships = pick.result.ships;
   } else {
     const planner = isAttack
-      ? { label: 'Calculate fleet', run: () => suggestAttackFleet(camp, av.available, attackPlannerOptions()) }
+      ? {
+        label: 'Calculate fleet',
+        run: onProgress => suggestAttackFleet(camp, av.available, { ...attackPlannerOptions(), onProgress }),
+      }
       : null;
     ships = await editFleetDialog({
       title,

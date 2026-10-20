@@ -384,7 +384,7 @@ export async function editFleetDialog({
         planBtn.style.opacity = '0.5';
         planMsg.textContent = 'Calculating…';
         try {
-          const r = await planner.run();
+          const r = await planner.run(text => { planMsg.textContent = text; });
           if (r.error) {
             planMsg.textContent = r.error;
           } else {
@@ -763,8 +763,8 @@ export function fmtCountdown(ms) {
 
 export function missionCountdown(progress) {
   if (!progress.event) return '—';
-  if (progress.needsRefresh) return `${progress.event.label}: updating…`;
-  return `${progress.event.label}: ${fmtCountdown(progress.eta)}`;
+  if (progress.needsRefresh) return 'updating…';
+  return fmtCountdown(progress.eta);
 }
 
 // Refresh once per elapsed event, with periodic retries for server-side changes.

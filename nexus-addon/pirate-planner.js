@@ -9,7 +9,6 @@ import {
 
 const SAFETY_MARGIN = 0.1;
 const MAX_CANDIDATE_TYPES = 5;
-const SIM_CONCURRENCY = 2;
 // The simulator was ~11 points optimistic on remaining HP in a real comparison.
 // Bump CACHE_VERSION in pirate-plan-cache.js whenever this changes.
 const MIN_REMAINING_HP = 50;
@@ -57,7 +56,9 @@ async function simulate(camp, shipDefId, quantity) {
       fleet: camp.fleetIntel.map(s => ({ shipDefId: s.shipDefId, quantity: s.quantity })),
     },
   });
-  if (response?.error) throw new Error(response.error);
+  if (response?.error) {
+    throw Object.assign(new Error(response.error), { status: response.status, retryAfter: response.retryAfter });
+  }
   const result = reportOf(response);
   if (!result) throw new Error('The simulator reply did not contain a combat report.');
   const outcome = result.exact?.outcome || result.report.outcome;
@@ -75,14 +76,18 @@ async function minCleanQuantity(ctx, shipDefId, max) {
   const key = cacheKey({ ...ctx.keyParts, shipDefId });
   let rec = cacheEntries[key] || newRecord();
   const probe = async quantity => {
+    ctx.progress(`Simulating ${quantity} ships`);
     const r = await simulate(ctx.camp, shipDefId, quantity);
+    ctx.simulations++;
     rec = recordResult(rec, quantity, r.clean, r.scaled);
     cacheEntries[key] = rec;
   };
 
   // A remembered answer is re-checked once per session with a single simulator run.
   if (!validatedKeys.has(key) && rec.hi !== NEVER) {
+    ctx.progress('Checking cached result');
     const check = await simulate(ctx.camp, shipDefId, rec.hi);
+    ctx.simulations++;
     if (!check.clean) rec = newRecord();
   }
   validatedKeys.add(key);
@@ -94,20 +99,6 @@ async function minCleanQuantity(ctx, shipDefId, max) {
   // Now rec.lo < rec.hi <= max: the answer lies in (rec.lo, rec.hi].
   while (rec.hi - rec.lo > 1) await probe(Math.floor((rec.lo + rec.hi) / 2));
   return { quantity: rec.hi, scaled: rec.scaled };
-}
-
-// Runs fn over items with at most `limit` in flight, to respect the game's rate limit.
-async function mapLimited(items, limit, fn) {
-  const out = new Array(items.length);
-  let next = 0;
-  const worker = async () => {
-    while (next < items.length) {
-      const i = next++;
-      out[i] = await fn(items[i]);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return out;
 }
 
 // available: {shipDefId → count on the source planet}. options.allowedShipIds
@@ -135,6 +126,8 @@ export async function suggestAttackFleet(camp, available, options = {}) {
 
   const ctx = {
     camp,
+    simulations: 0,
+    progress: () => {},
     keyParts: {
       fingerprint: bonusFingerprint(boot),
       zone: camp.securityZone,
@@ -144,14 +137,22 @@ export async function suggestAttackFleet(camp, available, options = {}) {
   const found = [];
   try {
     cacheEntries = await loadCache();
-    await mapLimited(candidates, SIM_CONCURRENCY, async def => {
+    for (const [index, def] of candidates.entries()) {
+      ctx.progress = phase => options.onProgress?.(
+        `${index + 1}/${candidates.length}: ${def.name} — ${phase} (${ctx.simulations} simulations completed)`,
+      );
+      ctx.progress('Reading cached bounds');
       const r = await minCleanQuantity(ctx, def.id, available[def.id]);
       if (r) found.push({ def, ...r });
-    });
+    }
   } catch (error) {
-    return { error: `Simulation failed: ${error.message}` };
+    return { error: `Simulation failed: ${error.message}`, status: error.status, retryAfter: error.retryAfter };
   } finally {
-    if (cacheEntries) await saveCache(cacheEntries).catch(() => {});
+    if (cacheEntries) {
+      await saveCache(cacheEntries).catch(error => {
+        console.error('[NexusOverseer] Failed to save pirate planner cache:', error);
+      });
+    }
   }
   if (!found.length) {
     return { error: `No single ship type on this planet wins with ≥${MIN_REMAINING_HP}% HP left.` };

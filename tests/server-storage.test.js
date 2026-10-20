@@ -110,6 +110,21 @@ test('server operations serialize across universes while allowing nested storage
   assert.equal(store['nexus_server:nf:next'], 'nf');
 });
 
+test('selected server remains independent of temporary background storage scopes', async () => {
+  makeBrowserStub();
+  await uniqueImport('../nexus-addon/server-storage.js');
+  const storage = globalThis.nexusStorage;
+  await storage.setActiveServer('s0');
+  await storage.withServer('beta', async () => {
+    assert.equal((await storage.getActiveServer()).key, 'beta');
+    assert.equal((await storage.getSelectedServer()).key, 's0');
+    await storage.setActiveServer('nf');
+    assert.equal((await storage.getActiveServer()).key, 'beta');
+    assert.equal((await storage.getSelectedServer()).key, 'nf');
+  });
+  assert.equal((await storage.getActiveServer()).key, 'nf');
+});
+
 test('storage wrapper is active in normal extension pages', async () => {
   const store = makeBrowserStub();
   globalThis.location = { hostname: 'nf.nexuslegacy.space', href: 'https://nf.nexuslegacy.space/' };
