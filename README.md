@@ -77,6 +77,13 @@ No player account, actual coordinates or real economy data is shown.
 
 Recording is **off by default** and separate from the console log level. Enable
 it in **Options > Developer / Debug**, then use the game to capture new traffic.
+Logs stay local and server-separated. Use JSONL export to keep them; regular
+backups do not include diagnostic logs. Review exports for private game data
+before sharing.
+
+<details>
+<summary>Capture behavior, storage limits and privacy details</summary>
+
 Reload existing game tabs after updating or reloading the extension to ensure
 diagnostic capture is active. Toggling recording on or off takes effect
 immediately without reloading game tabs. Reloading also attaches capture to
@@ -118,6 +125,8 @@ payloads contain no personal information: review JSONL exports before sharing.
 The Analytics panel derives its data from retained reports, fuel logs and mining
 costs, independent of traffic recording. It is not a complete resource ledger
 and cannot reconstruct deleted history or unrecorded expenses.
+
+</details>
 
 ## How it works
 
