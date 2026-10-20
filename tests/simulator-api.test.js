@@ -283,7 +283,9 @@ test('SIM_RUN keeps longer server cooldowns even after retry exhaustion', async 
 
 test('SIM_RUN only speeds up after ten consecutive successes and stops at the 500 ms floor', async t => {
   let calls = 0;
+  const times = [];
   const listener = await simulationListener(async () => {
+    times.push(Date.now());
     calls++;
     return calls === 1 ? { status: 429, error: 'Too many requests' } : { ok: true, data: { report } };
   });
@@ -294,10 +296,11 @@ test('SIM_RUN only speeds up after ten consecutive successes and stops at the 50
   assert.equal((await pending).ok, true);
   for (let success = 1; success <= 111; success++) {
     const interval = Math.max(500, 1000 - Math.floor(success / 10) * 50);
+    const wait = Math.max(interval, (times.at(-3) ?? 0) + 10100 - Date.now());
     const before = calls;
     const next = listener(simulationRequest);
     await settle();
-    t.mock.timers.tick(interval - 1);
+    t.mock.timers.tick(wait - 1);
     await settle();
     assert.equal(calls, before);
     t.mock.timers.tick(1);
@@ -322,12 +325,11 @@ test('SIM_RUN resets recovery progress when another 429 interrupts successful re
   for (let success = 0; success < 8; success++) {
     const next = listener(simulationRequest);
     await settle();
-    t.mock.timers.tick(1000);
+    t.mock.timers.tick(10100);
     await next;
   }
+  t.mock.timers.tick(10100);
   const interrupted = listener(simulationRequest);
-  await settle();
-  t.mock.timers.tick(1000);
   await settle();
   assert.equal(calls, 11);
   t.mock.timers.tick(5000);
@@ -348,9 +350,11 @@ test('full five-type fleet searches stay bounded and survive a transient 429 wit
         id: i + 1, name: `Ship ${i + 1}`, attack: 30, hp: 250,
       }));
       const probes = [];
+      const times = [];
       const listener = await simulationListener(async (_tab, message) => {
         if (message.path.endsWith('/bootstrap')) return { ok: true, data: { playerShips: ships } };
         const fleet = message.body.attacker.fleet[0];
+        times.push(Date.now());
         probes.push({ ...fleet });
         if (limited && probes.length === 5) return { status: 429, error: 'Too many requests' };
         return {
@@ -371,7 +375,7 @@ test('full five-type fleet searches stay bounded and survive a transient 429 wit
         hasFleetIntel: true, securityZone: 'open', fleetIntel: [{ shipDefId: 101, quantity: 2 }],
       }, Object.fromEntries(ships.map(ship => [ship.id, 1024]))).then(value => { result = value; });
       await settle();
-      const maxElapsed = limited ? 60000 : 28000;
+      const maxElapsed = limited ? 240000 : 210000;
       for (let elapsed = 0; !result && elapsed < maxElapsed; elapsed += 250) {
         t.mock.timers.tick(250);
         await settle();
@@ -381,6 +385,10 @@ test('full five-type fleet searches stay bounded and survive a transient 429 wit
       assert.deepEqual(result.ships, { 1: 8 });
       assert.match(result.note, /minimum 7/);
       assert.equal(probes.length, limited ? 56 : 55);
+      for (const time of times) {
+        assert.ok(times.filter(value => value > time - 10000 && value <= time).length <= 3,
+          'fleet searches must respect three physical attempts per ten seconds, including retries');
+      }
       if (limited) assert.deepEqual(probes[4], probes[5], 'retry the failed probe without restarting the search');
       assert.ok(Date.now() - 100000 <= maxElapsed);
     });

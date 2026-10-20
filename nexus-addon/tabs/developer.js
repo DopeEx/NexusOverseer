@@ -1,6 +1,7 @@
 import { ANALYTICS_KEYS, LOG_KEY, analyticsEntries, analyticsBuckets } from '../diagnostics.js';
 import { readDiagnosticLogs } from '../diagnostics-store.js';
 import { getSetting, onSettingsChange } from '../settings.js';
+import { summarizeTraffic } from '../api-telemetry.js';
 
 let bound = false;
 let page = 1;
@@ -10,6 +11,7 @@ let refreshVersion = 0;
 let analyticsView = 'entries';
 const PAGE_SIZE = 10;
 const STREAMS = [
+  ['scheduling', 'API Wait Times', 'Retained scheduling metadata only. Counts cover retained events, not lifetime totals. Sources identify the initiating operation, not necessarily the cause of congestion.'],
   ['api', 'API Tracker Logs', 'Captured HTTP requests from the game client and addon game bridge.'],
   ['galaxy', 'Galaxy Delta Updates', 'Galaxy delta events extracted from incoming WebSocket messages.'],
   ['websocket', 'WebSocket Event Logs', 'Incoming text frames, including decoded Socket.IO events.'],
@@ -158,7 +160,9 @@ function renderStream(kind) {
   const container = el(`debug-stream-${kind}`);
   const items = logs.filter(item => item.kind === kind);
   container.replaceChildren();
-  if (!items.length) container.append(element('p', 'No entries captured. Enable recording and use or reload the game. Existing WebSocket connections may require a game-tab reload.', 'opt-note'));
+  if (!items.length) container.append(element('p', kind === 'scheduling'
+    ? 'No scheduling events. Enable Record API wait times; no game-tab reload is needed.'
+    : 'No entries captured. Enable recording and use or reload the game. Existing WebSocket connections may require a game-tab reload.', 'opt-note'));
   for (const item of items) {
     const details = element('details', undefined, 'debug-entry');
     const heading = element('summary');
@@ -172,7 +176,8 @@ function renderStream(kind) {
     }
     const description = kind === 'api'
       ? data.path || (data.truncated ? 'API request (details unavailable in older truncated entry)' : 'API request')
-      : kind === 'galaxy' ? `System ID: ${data.payload?.systemId ?? '-'}` : websocketTitle(data);
+      : kind === 'scheduling' ? `${data.source} · ${data.event} · ${data.scope}${data.durationMs != null ? ` · ${data.durationMs} ms · ${data.outcome}` : ''}`
+        : kind === 'galaxy' ? `System ID: ${data.payload?.systemId ?? '-'}` : websocketTitle(data);
     heading.append(element('span', description, 'debug-entry-path'));
     if (kind === 'api' && data.status != null) {
       const category = data.status >= 200 && data.status < 300 ? 'success'
@@ -221,7 +226,26 @@ async function refresh() {
   logs = [...savedLogs, ...(store[LOG_KEY] || [])];
   renderAnalytics();
   for (const [kind] of STREAMS) renderStream(kind);
-  status(`${server.id || server.name || server.key} | Recording ${getSetting('developer.recording') ? 'on' : 'off'} | ${logs.length} diagnostic entries. Refreshed ${time(Date.now())}.`);
+  const traffic = el('debug-traffic-summary');
+  traffic.textContent = '';
+  const groups = summarizeTraffic(logs).groups;
+  if (!groups.length) traffic.append(element('p', 'No recorded scheduling events. Enable Record API wait times to begin.', 'opt-note'));
+  else {
+    const table = element('table');
+    const heading = element('tr');
+    for (const text of ['Source', 'Requests', 'API budget pauses', 'Wait (s)', '429', 'Interrupted']) heading.append(element('th', text));
+    const head = element('thead');
+    head.append(heading);
+    const body = element('tbody');
+    for (const group of groups) {
+      const row = element('tr');
+      for (const value of [group.source, group.requests, group.pauses, (group.waitMs / 1000).toFixed(1), group.limited, group.interrupted]) row.append(element('td', String(value)));
+      body.append(row);
+    }
+    table.append(head, body);
+    traffic.append(table);
+  }
+  status(`${server.id || server.name || server.key} | Traffic recording ${getSetting('developer.recording') ? 'on' : 'off'} | Wait recording ${getSetting('developer.apiWaitRecording') ? 'on' : 'off'} | ${logs.length} diagnostic entries. Refreshed ${time(Date.now())}.`);
 }
 
 function buildStreams() {
@@ -232,6 +256,11 @@ function buildStreams() {
     const body = element('div', undefined, 'debug-body');
     const toolbar = element('div', undefined, 'debug-toolbar');
     toolbar.append(element('span', description, 'opt-note'));
+    if (kind === 'scheduling') {
+      const overview = element('div', undefined, 'debug-table-scroll');
+      overview.id = 'debug-traffic-summary';
+      body.append(overview);
+    }
     if (kind === 'api') {
       const search = element('input');
       search.type = 'search';
@@ -261,7 +290,7 @@ function buildStreams() {
       const response = await browser.runtime.sendMessage({ type: 'DIAGNOSTICS_CLEAR', kind, serverKey: server.key });
       if (!response?.ok) throw new Error(response?.error || 'Could not clear diagnostic logs.');
       await refresh();
-      status(`${title} cleared for ${server.id || server.name || server.key}. Recording ${getSetting('developer.recording') ? 'remains on; new entries may appear immediately' : 'is off'}.`);
+      status(`${title} cleared for ${server.id || server.name || server.key}. Recording ${getSetting(kind === 'scheduling' ? 'developer.apiWaitRecording' : 'developer.recording') ? 'remains on; new entries may appear immediately' : 'is off'}.`);
     }));
     const items = element('div');
     items.id = `debug-stream-${kind}`;

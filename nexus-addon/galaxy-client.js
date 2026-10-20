@@ -6,9 +6,9 @@ export async function loadGalaxyScans() {
   return response.scans;
 }
 
-export async function getSystemPlanets(systemId, cache, { purpose = 'ownership', group = 'both', maxAge, force = false } = {}) {
+export async function getSystemPlanets(systemId, cache, { purpose = 'ownership', group = 'both', maxAge, force = false, priority = 'bulk', source = 'galaxy-cache' } = {}) {
   if (!force && systemCacheFresh(cache[systemId], purpose, maxAge, Date.now(), group)) return cache[systemId].data;
-  const data = await browser.runtime.sendMessage({ type: 'GET_SYSTEM_PLANETS', systemId, purpose, group, maxAge, force });
+  const data = await browser.runtime.sendMessage({ type: 'GET_SYSTEM_PLANETS', systemId, purpose, group, maxAge, force, priority, source });
   if (data.error) {
     const error = new Error(data.error);
     error.status = data.status;

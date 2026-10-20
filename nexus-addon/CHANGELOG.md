@@ -7,6 +7,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Optional local API wait recording with an independent switch in Developer /
+  Debug, source summaries, wait reasons/durations, budget snapshots and recent
+  contributors. Retained scheduling events support detail inspection, JSONL
+  export and clearing without capturing request or response contents.
+- Global API status above Options in the navigation, moving beside the hamburger
+  button when navigation collapses, with running/queued counts,
+  scope-specific budget and server pauses, and expandable local/server budget
+  details in compact lines without nested navigation scrolling. Galaxy Search shows its request or wait reason after its progress,
+  including a countdown, without additional game API requests.
 - Persistent galaxy knowledge per universe, shared with asteroid searches.
   Physical properties do not expire; ownership and changing field data stay
   separate. Existing scans migrate, normal gameplay grows saved knowledge, and
@@ -34,6 +43,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   logs stay separate per universe and are not part of regular data backups.
 
 ### Changed
+- All add-on game API reads and actions now share central priority scheduling,
+  including overlays, upgrade planners and retries. Background work leaves
+  capacity for interactions. Native game fetch/XHR traffic is observed, not delayed.
 - Galaxy Scout shows saved ownership first and checks unknown owners only in
   matching, fully visible systems. Manual checks include locally hidden matches.
   Player-rank columns and rank requests have been removed.
@@ -50,6 +62,21 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   data, private backups and the danger zone; detailed explanations are collapsible.
 
 ### Fixed
+- Simulator requests now obey the captured three-per-ten-second budget before
+  dispatch, including retries and observed native traffic. The server's
+  `combat-simulator` scope maps to the local simulator budget, so its exhausted
+  headers and 429 cooldowns no longer incorrectly pause unrelated endpoints.
+- Galaxy searches no longer wait behind network-bound background operations when
+  loading saved galaxy data. Stopped searches can be restarted immediately, and
+  late replies from the old run cannot overwrite the new search.
+- Galaxy search rate-window slots no longer expire before transport latency is
+  accounted for, and include a small boundary margin. Loading the fallback API
+  bridge alongside the sidebar no longer duplicates request receivers.
+- Fuel estimates and system details respect their separate short and minute
+  limits. Scope-specific 429 responses pause the affected scope instead of
+  unrelated work; unknown scopes retain a conservative origin-wide cooldown.
+  Request windows and cooldowns survive service-worker restarts within a browser
+  session, and add-on requests no longer trigger their own realtime re-fetches.
 - Shared API requests respect rate-limit cooldowns across concurrent reads and
   writes, honor Retry-After dates and slow repeated background requests after
   throttling. Exhausted galaxy requests stop visibly while preserving results.

@@ -8,6 +8,7 @@ import { activeTab, appendStatusText, confirmDialog, dayKey, fuelForMode, getLab
 import { bindServerSelector } from './server-switch.js';
 import { exportGalaxyCache, restoreGalaxyCache, validateGalaxyBackup } from './galaxy-cache.js';
 import { initReleaseStatus } from './release-status.js';
+import { initApiStatus } from './api-status.js';
 import { changelogForVersion } from './common.js';
 import { initSimulatorTab } from './tabs/simulator.js';
 import { renderBattlesTab } from './tabs/battles.js';
@@ -711,6 +712,7 @@ async function maybeWarnStorage() {
 }
 
 positionControls();
+initApiStatus();
 registerAutomationTask('scouting', () => {
   if (expertModeEnabled) return runScoutingAutomations();
 });

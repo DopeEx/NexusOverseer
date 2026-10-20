@@ -75,6 +75,8 @@ function directoryState() {
 }
 
 export function resetFinderTab() {
+  delete document.getElementById('f-progress').dataset.apiPath;
+  document.getElementById('f-api-wait').textContent = '';
   finderGeneration++;
   finderServerKey = null;
   galaxyCatalogReadAt = 0;
@@ -1733,6 +1735,8 @@ async function restoreLastSearch(generation) {
 }
 
 document.getElementById('f-clear-search').addEventListener('click', async function () {
+  delete document.getElementById('f-progress').dataset.apiPath;
+  document.getElementById('f-api-wait').textContent = '';
   clearingSearch = true;
   this.disabled = true;
   finderGeneration++;
@@ -1791,8 +1795,17 @@ function buildMoonCell(td, list) {
 document.getElementById('f-search').addEventListener('click', async function () {
   if (ownershipRunning || clearingSearch) return;
   if (finderRunning) {
+    delete document.getElementById('f-progress').dataset.apiPath;
+    document.getElementById('f-api-wait').textContent = '';
+    finderGeneration++;
     finderRunning = false;
-    this.disabled = true;
+    this.textContent = 'Search';
+    this.disabled = false;
+    document.getElementById('f-check-ownership').disabled = !finderHits.length;
+    setStatusText(document.getElementById('f-progress'),
+      `Stopped: ${finderHits.length} matches retained. Search again to continue using saved data.`);
+    lastSearch.phase = 'stopped';
+    await storeLastSearch();
     return;
   }
   if (!galaxySystems) return;
@@ -1832,6 +1845,8 @@ document.getElementById('f-search').addEventListener('click', async function () 
   document.getElementById('f-check-ownership').disabled = true;
   setStatusText(document.getElementById('f-ownership-progress'), '');
   setStatusText(status, 'Searching saved data…');
+  delete status.dataset.apiPath;
+  document.getElementById('f-api-wait').textContent = '';
   finderHits = [];
   searchSummary = summary;
   document.getElementById('f-search-issues').hidden = true;
@@ -1900,16 +1915,17 @@ document.getElementById('f-search').addEventListener('click', async function () 
       if (!finderRunning) break;
       let data;
       try {
+        status.dataset.apiPath = `/api/galaxy/systems/${s.id}/planets`;
         setStatusText(status, `${systemCacheFresh(cache[s.id], 'static', undefined, Date.now(), 'planets')
-          ? 'Searching saved data' : 'Loading missing data'} · system ${done + 1}/${candidates.length}`);
-        data = await getSystemPlanets(s.id, cache, { purpose: 'static', group: 'planets' });
+          ? 'Searching saved data' : 'Loading missing data'} · system ${done + 1}/${candidates.length} · ${finderHits.length} matches`);
+        data = await getSystemPlanets(s.id, cache, { purpose: 'static', group: 'planets', source: 'galaxy-search' });
         if (generation !== finderGeneration || !finderRunning) break;
         if (needsMoons && (data.planets || []).some(matchesPlanet)) {
           const forceMoons = publicMoonSlotsMissing(data);
           if (forceMoons || !systemCacheFresh(cache[s.id], 'static', undefined, Date.now(), 'moons')) {
-            setStatusText(status, `Loading missing moon data · system ${done + 1}/${candidates.length}`);
+            setStatusText(status, `Loading missing moon data · system ${done + 1}/${candidates.length} · ${finderHits.length} matches`);
           }
-          data = await getSystemPlanets(s.id, cache, { purpose: 'static', group: 'moons', force: forceMoons });
+          data = await getSystemPlanets(s.id, cache, { purpose: 'static', group: 'moons', force: forceMoons, source: 'galaxy-search' });
         }
       } catch (error) {
         if (generation !== finderGeneration || !finderRunning) break;
@@ -1928,6 +1944,11 @@ document.getElementById('f-search').addEventListener('click', async function () 
         }
         done++;
         continue;
+      } finally {
+        if (generation === finderGeneration) {
+          delete status.dataset.apiPath;
+          document.getElementById('f-api-wait').textContent = '';
+        }
       }
       if (generation !== finderGeneration || !finderRunning) break;
       finderHits.push(...searchSystemHits(s, data, config));
@@ -2002,7 +2023,7 @@ async function checkResultOwnership(force) {
       setStatusText(status, `Checking ownership… ${checked}/${systemIds.length} matching systems.`);
       try {
         const group = finderHits.some(hit => hit.systemId === systemId && hit.minMoonSlots > 0) ? 'both' : 'planets';
-        const data = await getSystemPlanets(systemId, cache, { group, force: true });
+        const data = await getSystemPlanets(systemId, cache, { group, force: true, source: 'ownership-check' });
         if (generation !== finderGeneration) return;
         finderScans[systemId] = { data, at: Date.now() };
         updateResultOwnership(systemId, data);

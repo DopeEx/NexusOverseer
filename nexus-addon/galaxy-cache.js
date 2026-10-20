@@ -437,19 +437,19 @@ export function restoreGalaxyCache(snapshot = { version: 1, entries: [] }) {
 
 // The service owns request coalescing and legacy migration; the database remains
 // the source of truth across dashboards and MV3 worker restarts.
-export function createGalaxyCache({ fetcher, storage }) {
+export function createGalaxyCache({ fetcher, storage, promote }) {
   const pending = new Map();
   const unavailable = new Map();
   const migrations = new Map();
   async function migrate(serverKey) {
     if (migrations.has(serverKey)) return migrations.get(serverKey);
     const promise = (async () => {
-      const { planet_scan_cache } = await storage.get('planet_scan_cache');
+      const { planet_scan_cache } = await storage.get('planet_scan_cache', serverKey);
       if (!planet_scan_cache) return;
       for (const [id, entry] of Object.entries(planet_scan_cache)) {
         await saveSystem(serverKey, Number(id), entry.data, entry.at);
       }
-      await storage.remove('planet_scan_cache');
+      await storage.remove('planet_scan_cache', serverKey);
     })();
     migrations.set(serverKey, promise);
     try { await promise; }
@@ -485,7 +485,7 @@ export function createGalaxyCache({ fetcher, storage }) {
       await migrate(serverKey);
       return exportPublicGalaxy(serverKey);
     },
-    async system(serverKey, systemId, { purpose = 'ownership', group = 'both', maxAge, force = false } = {}) {
+    async system(serverKey, systemId, { purpose = 'ownership', group = 'both', maxAge, force = false, priority, source = 'galaxy-cache' } = {}) {
       if (!['static', 'ownership', 'dynamic'].includes(purpose)) throw new Error('Invalid galaxy cache purpose.');
       if (!['both', 'planets', 'moons'].includes(group)) throw new Error('Invalid galaxy cache group.');
       if (maxAge !== undefined && (!Number.isFinite(maxAge) || maxAge < 0)) throw new Error('Invalid galaxy cache age.');
@@ -496,8 +496,9 @@ export function createGalaxyCache({ fetcher, storage }) {
       const previousFailure = unavailable.get(unavailableKey);
       if (!force && purpose === 'static' && previousFailure?.until > Date.now()) throw previousFailure.error;
       unavailable.delete(unavailableKey);
+      promote?.(serverKey, `/api/galaxy/systems/${systemId}/planets`, priority);
       const updated = await once(`${serverKey}:${systemKey(systemId)}`, async () => {
-        const data = await fetcher(`/api/galaxy/systems/${systemId}/planets`);
+        const data = await fetcher(`/api/galaxy/systems/${systemId}/planets`, { serverKey, source, ...(priority ? { priority } : {}) });
         await saveSystem(serverKey, systemId, data);
         return { source: data, entry: await readSystem(serverKey, systemId) };
       });
@@ -514,13 +515,14 @@ export function createGalaxyCache({ fetcher, storage }) {
       }
       return updated.entry.data;
     },
-    async catalog(serverKey, path, { force = false } = {}) {
+    async catalog(serverKey, path, { force = false, priority } = {}) {
       if (!catalogPath(path)) throw new Error('Invalid galaxy catalog path.');
       const cached = await readRow(serverKey, path);
       if (!force && cached && Date.now() - cached.at < MAP_TTL) return applyPublicCatalog(serverKey, path,
         await applyGalaxyDeltas(serverKey, catalogData(cached), cached.at));
+      promote?.(serverKey, path, priority);
       const fresh = await once(`${serverKey}:${path}`, async () => {
-        const data = await fetcher(path);
+        const data = await fetcher(path, { serverKey, ...(priority ? { priority } : {}) });
         const at = Date.now();
         await saveCatalog(serverKey, path, data, at);
         if (path === '/api/galaxy/station-index') {
@@ -533,7 +535,7 @@ export function createGalaxyCache({ fetcher, storage }) {
     },
     async clear(serverKey) {
       for (const key of unavailable.keys()) if (key.startsWith(`${serverKey}:`)) unavailable.delete(key);
-      await storage.remove('planet_scan_cache');
+      await storage.remove('planet_scan_cache', serverKey);
       await clearGalaxyCache(serverKey);
     },
   };

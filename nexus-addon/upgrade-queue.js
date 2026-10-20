@@ -164,9 +164,7 @@ async function renderAgg() {
     }));
     if (token !== aggToken) return;
     for (const part of parts) for (const [k, v] of Object.entries(part || {})) need[k] = (need[k] || 0) + v;
-    const r = await fetch(`/api/planets/${planetId}`, { credentials: 'include' });
-    if (!r.ok) throw new Error(`planet ${planetId} → ${r.status}`);
-    const d = await r.json();
+    const d = await globalThis.nexusGameApi(`/api/planets/${planetId}`, { source: 'upgrade-queue' });
     pl = d.planet || d;
   } catch (e) {
     if (token !== aggToken) return;

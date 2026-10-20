@@ -3,26 +3,48 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import vm from 'node:vm';
 
-async function loadBridge(file, fetch) {
-  let source = await readFile(new URL(`../nexus-addon/${file}`, import.meta.url), 'utf8');
-  if (file === 'sidebar-inject.js') source = source.split('// ── Live-search matches window')[0];
+async function loadBridge(files, fetch) {
   const listeners = [];
   const timeouts = [];
   const runtime = {
     getURL: path => path,
     onMessage: {
       addListener: fn => listeners.push(fn),
-      removeListener() {},
+      removeListener: fn => {
+        const index = listeners.indexOf(fn);
+        if (index !== -1) listeners.splice(index, 1);
+      },
     },
   };
-  vm.runInNewContext(source, {
+  const context = vm.createContext({
     browser: { runtime },
     fetch,
     AbortSignal: { timeout: ms => { timeouts.push(ms); return { timeout: ms }; } },
     document: { addEventListener() {}, getElementById: () => ({}), documentElement: {} },
     MutationObserver: class { observe() {} },
   });
-  return { listener: listeners[0], timeouts };
+  for (const file of Array.isArray(files) ? files : [files]) {
+    let source = await readFile(new URL(`../nexus-addon/${file}`, import.meta.url), 'utf8');
+    if (file === 'sidebar-inject.js') source = source.split('// ── Live-search matches window')[0];
+    vm.runInContext(source, context);
+  }
+  return { listener: listeners[0], listeners, timeouts };
+}
+
+for (const files of [
+  ['game-api-bridge.js', 'sidebar-inject.js'],
+  ['sidebar-inject.js', 'game-api-bridge.js', 'game-api-bridge.js'],
+]) {
+  test(`bridge registration executes one transport per message: ${files.join(' then ')}`, async () => {
+    let requests = 0;
+    const { listeners } = await loadBridge(files, async () => {
+      requests++;
+      return { ok: true, status: 200, text: async () => '{}', headers: { get: () => null } };
+    });
+    assert.equal(listeners.length, 1, 'fallback injection and sidebar must share one receiver');
+    await new Promise(resolve => listeners[0]({ type: 'GAME_FETCH', path: '/api/planets', method: 'GET' }, {}, resolve));
+    assert.equal(requests, 1);
+  });
 }
 
 for (const file of ['game-api-bridge.js', 'sidebar-inject.js']) {
@@ -33,7 +55,10 @@ for (const file of ['game-api-bridge.js', 'sidebar-inject.js']) {
       return {
         ok: true, status: 200,
         text: async () => '{"planets":[]}',
-        headers: { get: () => null },
+        headers: { get: name => ({
+          'X-RateLimit-Scope': 'system-details', 'RateLimit-Limit': '400',
+          'RateLimit-Policy': '400;w=60', 'RateLimit-Remaining': '270', 'RateLimit-Reset': '30',
+        })[name] || null },
       };
     });
     assert.equal(listener({ type: 'OTHER' }, {}, () => assert.fail('unexpected response')), undefined);
@@ -46,6 +71,9 @@ for (const file of ['game-api-bridge.js', 'sidebar-inject.js']) {
       });
       assert.equal(response.ok, true);
       assert.equal(response.status, 200);
+      assert.equal(response.rateLimitScope, 'system-details');
+      assert.equal(response.rateLimitLimit, '400');
+      assert.equal(response.rateLimitPolicy, '400;w=60');
       assert.equal(response.data.planets.length, 0);
     }
     assert.deepEqual(timeouts, [20000, 20000]);

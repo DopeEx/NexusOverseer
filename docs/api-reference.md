@@ -12,6 +12,7 @@ The add-on sends requests to the currently selected game server, for example
 ## Contents
 
 - [Authentication and request handling](#authentication-and-request-handling)
+- [Traffic limits and central scheduling (2026-10-20)](#traffic-limits-and-central-scheduling-2026-10-20)
 - [Observed WebSocket events](#observed-websocket-events)
 - [Data endpoints](#data-endpoints)
 - [Response shapes used by the add-on](#response-shapes-used-by-the-add-on)
@@ -26,7 +27,7 @@ cookie. This keeps requests same-origin with the game. If the bridge content
 script is not available, the background service worker attempts to inject it.
 Both game-tab bridge listeners abort API requests after 20 seconds, including
 response-body reads, and return an explicit network error. This prevents a
-stalled fetch from holding the serialized background request queue indefinitely.
+stalled fetch from holding a background request slot indefinitely.
 Live-search panel errors include the failed message type (such as
 `GET_PLANET_SHIPS`) instead of silently treating a failed API response as empty
 data. An extension update can still invalidate scripts in already-open game
@@ -41,24 +42,33 @@ feature is used; a periodic report scrape does not launch missions or research.
 The background API client observes the server's rate-limit headers, throttles
 requests before the remaining budget gets low, and retries transient network,
 HTTP 429, and server errors. A 401 means the user needs to log in to the game.
-Polite background reads share a minimum 200 ms start interval, including galaxy
+Polite background reads share a per-origin minimum 200 ms start interval, including galaxy
 cache misses; cached reads do not wait. Each non-simulator 429 doubles this
 shared polite interval, capped at 2000 ms, including if an internal retry later
 succeeds. After 60 seconds without another observed 429 it returns to 200 ms.
 This adaptive spacing supplements, rather than replaces, Retry-After and budget
-gates. Non-simulator 429 responses establish a
-shared GET/POST cooldown independent of budget headers on other in-flight replies,
-including the final failed retry. Retry-After accepts seconds or an HTTP date;
+gates. A 429 with a matching known `X-RateLimit-Scope` pauses that scope; an
+unknown/missing scope pauses gated GET/POST requests for that origin. Cooldowns
+are independent of budget headers on other in-flight replies, including after
+the final failed retry. Retry-After accepts seconds or an HTTP date;
 absent/invalid values use at least five seconds with the existing retry backoff.
 An exhausted 429 stops Galaxy Scout search/ownership loops with a visible
 message instead of continuing to the next system or owner. Collected matches and
 cached data are retained; rerunning reuses saved knowledge.
-Some API reads are also made directly by the add-on UI in the game tab.
-Those direct reads and the game's own traffic are not paced by the background
-gate; these changes do not guarantee that the shared server limit cannot be hit.
+Game-tab overlays and upgrade planners also route API requests through the
+central background scheduler. Native game fetch/XHR starts and allowlisted
+budget response headers are observed passively, without delaying the game or
+requiring diagnostic recording. This is best-effort observation, not a guarantee
+that all traffic from other tabs, devices or transports is known.
 
-Combat simulations from the planner and simulator tab share a background queue:
-only one simulation is in flight, initially with a 500 ms pause after each
+Combat simulations from the planner and simulator tab share a per-origin background queue:
+central admission allows at most three simulator requests per rolling ten-second
+window, with slots retained until ten seconds after response completion plus a
+100 ms safety margin. This is based on the captured `combat-simulator` response
+scope and `RateLimit-Policy: 3;w=10` (2026-10-20). The server scope is mapped to
+the internal `simulator` scope. Conservatively, bootstrap requests share this
+local limit until their server-side coverage is verified.
+Only one simulation is in flight, initially with a 500 ms pause after each
 response. Each HTTP 429 doubles this interval up to two seconds; every ten
 consecutive successful responses reduce it by 50 ms back toward 500 ms.
 Errors reset this success counter, so a single success after a 429 does not
@@ -88,6 +98,300 @@ simulator queue and shared API-budget gate. The manual fleet dialog and automati
 pirate attack status show the current ship type, probe quantity and completed
 simulation count. Search time includes actual server response times and any
 budget/backoff waits, not just the 500 ms client pacing.
+
+## Traffic limits and central scheduling (2026-10-20)
+
+The observations below are based on source inspection and supplied game
+screenshots from 20 October 2026. The game's changelog and captured responses
+are different evidence sources; neither establishes undocumented server
+internals. The central scheduler described here is implemented in
+[api-scheduler.js](../nexus-addon/api-scheduler.js).
+
+### Observed limits and response headers
+
+A supplied game-changelog screenshot, under "Notes for Tool Developers", states:
+
+| Scope | Ten-second limit | Minute limit |
+|---|---:|---:|
+| `fuel-estimate` | 40 | 120 |
+| `system-details` | 30 | 180 |
+
+The same note states that HTTP 429 responses expose `X-RateLimit-Scope` and
+`Retry-After`, and tools should respect both without immediate retries. Both
+time windows must be respected, not just the minute limit. The screenshot does
+not specify the window algorithm, quota identity or exact endpoint matching.
+
+Supplied response-header screenshots from `https://s0.nexuslegacy.space` show:
+
+| Request | Status | `RateLimit-Limit` | `RateLimit-Policy` | `RateLimit-Remaining` | `RateLimit-Reset` |
+|---|---:|---:|---|---:|---:|
+| `GET /api/galaxy/systems/2877/planets` | 304 | 400 | `400;w=60` | 271 | 40 |
+| `GET /api/planets/4699` | 200 | 400 | `400;w=60` | 266 | 35 |
+| `GET /api/galaxy/systems/786/planets?include=planets,moons,fields` | 200 | 400 | `400;w=60` | 328 | 20 |
+| `POST /api/fleet/fuel-estimate` | 200 | 400 | `400;w=60` | 357 | 50 |
+
+These responses establish an advertised 400-request/60-second policy, including
+on successful fuel-estimate and system-detail responses. Their headers do not
+advertise the smaller scope budgets. Plan conservatively for the general budget
+and the applicable scope limits together; do not interpret a large general
+remaining value as permission to exceed a scope limit.
+
+The first two responses have server `Date` values of `20:57:25 GMT` and
+`20:57:30 GMT` on 20 October 2026. Reset falls from 40 to 35 over those five
+seconds, supporting the current interpretation as seconds until reset, not an
+epoch timestamp. This does not prove fixed versus sliding windows.
+
+The screenshots list
+`Access-Control-Expose-Headers: X-Server-Time,X-RateLimit-Scope,Retry-After`.
+That declares cross-origin header accessibility; it does not mean all three
+headers are present. No actual `X-RateLimit-Scope` or `Retry-After` field appears
+in these successful/304 samples.
+
+A subsequent Galaxy Search screenshot captured an actual 429 for
+`GET /api/galaxy/systems/3493/planets`, with server date
+`20 October 2026 21:43:37 GMT`. It reports `X-RateLimit-Scope: system-details`,
+`RateLimit-Limit: 30`, `RateLimit-Policy: 30;w=10`,
+`RateLimit-Remaining: 0`, `RateLimit-Reset: 1` and `Retry-After: 1`.
+The JSON body reports `code: RATE_LIMITED` and
+`error: Too many system detail requests, slow down`. This confirms that the
+scope-specific response can advertise the ten-second budget instead of the
+general 400/minute budget. The screenshots alone do not establish which requests
+consumed the preceding window.
+
+Regression tests exposed two client-side risks during investigation: rolling
+slots could expire relative to background admission before the corresponding
+server-receipt window ended, and loading both API bridge implementations could
+leave duplicate request listeners. Slots now remain counted for the full window
+after transport completion, with an additional 100 ms boundary margin. Both bridge
+implementations share one replaceable listener registration. These fixes address
+reproducible defects, not proof of the exact cause of the captured incident.
+
+For HTTP semantics, see [RFC 6585 section 4](https://www.rfc-editor.org/rfc/rfc6585.html#section-4)
+and [Retry-After in RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html#name-retry-after).
+
+A 304 is still a network request: it allows reuse of a cached representation,
+not avoidance of the server request. It must not be assumed free for client
+budget planning. A direct hit in the add-on's own cache can avoid the API request.
+
+A separate `POST /api/security/signal` sample returned 404 with the same general
+policy and budget headers. Its payload shape included a web source, component
+version, page path and device fingerprint. The fingerprint value is deliberately
+not reproduced here. The stack passes through the diagnostic and galaxy XHR
+wrappers, which forward the original send; two wrapper frames do not establish
+two requests. No caller for this endpoint was found in the add-on code, and the
+remaining stack points to game scripts. Its purpose and the reason for the 404
+remain unknown; this is not evidence of add-on detection. A 404 is not a
+rate-limit response and must not trigger a 429-style retry. Budget headers on
+non-success responses are nevertheless relevant observations. These samples
+alone do not prove whether the individual 304 or 404 reduced the server counter.
+
+A separate community discussion dated 21 July 2026 described throttling at
+about 370/minute against a 400/minute cap, queueing and respecting retry headers.
+That is context, not an official recommendation to allocate 370/minute to this
+add-on. Game traffic also needs budget, and a queue without rate control does
+not enforce a quota.
+
+### Request paths and scheduling
+
+The following inventory is based on source inspection, not a measured traffic
+profile. Timer intervals are triggers, not guaranteed request frequencies.
+
+| Producer or path | Current behavior | Scheduling details |
+|---|---|---|
+| Background reads and fleet actions | `apiFetch` and `gamePost` schedule every attempt centrally | Priorities, bounded concurrency, rolling windows and optional polite spacing |
+| Fuel estimation and system details | Local rolling 10-second and 60-second gates | Every actual retry counts; observed native starts count too |
+| Game-tab API bridges | Forward retry, scope, limit, policy, remaining and reset headers | Only the transport executes authenticated API fetches |
+| 429 handling | Known matching scope pauses that scope; unknown/missing/mismatched scope pauses the origin | Optimistic responses cannot erase the cooldown; explicit general policy distinguishes general budget headers |
+| General budget state | Conservative shared local ceiling plus per-origin header observations and scope state | Saved in `storage.session` before dispatch and after observations, surviving worker restarts within a browser session |
+| Simulator | Central rolling limit of 3/10 s, plus per-origin serialized queue and adaptive pacing | Captured `combat-simulator` policy `3;w=10`; bootstrap conservatively shares the local window |
+| Empire and logistics overlays | GETs and POSTs use `nexusGameApi` through background messages | No direct game API fetches |
+| Building, technology and ship upgrade planners; aggregate upgrade planner | Reads use `nexusGameApi` | Share scheduling and pending GET coalescing |
+| Research start | Uses scheduled POST and initiates a separate follow-up scrape | Returns the confirmed action result without awaiting the entire scrape |
+| Runtime message handling | Network-only reads/actions and explicit-server local galaxy scan/delta reads bypass `withServer`; storage-processing operations retain protected scopes | Request origins are pinned; explicit server storage access protects galaxy-cache migration from another operation's temporary scope |
+| Background scrape | 15-minute alarm, installation/update and manual triggers; loads multiple endpoints in parallel and visits open universes | Classify periodic versus explicit work; do not let an entire scrape inherit action-level priority |
+| Asteroid live search | Five-minute alarm plus an immediate run when enabled/changed; can examine up to 500 systems depending on filters | Long-running scan needs cancellation and bounded access to scope budget |
+| Dashboard overview | Manual/automatic distinction via `polite`; automatic refresh depends on settings and displayed completions | Existing distinction is not a full priority model |
+| Dashboard automations | Scouting, pirates and expeditions run sequentially in a shared 15-second cycle, gated by expert mode and feature readiness/switches | Long tasks delay later tasks; no overlapping cycle starts |
+| Visible Scouting view | One-second UI timer calls ship availability every ten ticks while the subview is open; mission refresh has a separate due check | Display polling is distinct from executing an automation |
+| Realtime report/status observer | Observes successful watched requests and actively re-fetches their pathname at background priority | Additional traffic, not passive response reuse; query parameters are not retained; active add-on transport is excluded |
+| Galaxy response observer/cache | Passively relays selected fetch/XHR responses; cache coalesces matching pending system/catalog reads | Reuse existing mechanisms rather than duplicating requests or cache logic |
+| Universe catalog | Scheduled request to `https://nexuslegacy.space/api/universes` | Separate origin, conservatively included in the shared local ceiling; its quota relationship is unknown |
+
+Source entry points:
+[background request handling and observers](../nexus-addon/background.js),
+[server-storage serialization](../nexus-addon/server-storage.js),
+[game API bridge](../nexus-addon/game-api-bridge.js),
+[sidebar bridge](../nexus-addon/sidebar-inject.js),
+[automation scheduler](../nexus-addon/automation-scheduler.js),
+[dashboard task registration](../nexus-addon/dashboard.js),
+[Scouting UI and automations](../nexus-addon/tabs/scouting.js),
+[empire overlay](../nexus-addon/empire-view.js),
+[logistics overlay](../nexus-addon/logistics-view.js),
+[building planner](../nexus-addon/building-upgrade.js),
+[technology planner](../nexus-addon/tech-upgrade.js),
+[ship planner](../nexus-addon/ship-upgrade.js),
+[aggregate upgrade planner](../nexus-addon/upgrade-queue.js),
+[galaxy observer](../nexus-addon/galaxy-fetch-hook.js) and
+[galaxy cache](../nexus-addon/galaxy-cache.js).
+
+The realtime observer's three-second host/path debounce reduces repeated
+re-fetches but does not make capture passive. It excludes completions matching an
+active add-on transport's tab/path, as well as `tabId === -1`, to avoid feeding its
+own re-fetches back into the observer. Simultaneous native completions for that
+same tab/path may also be suppressed; the add-on request already supplies fresh
+data. Passive reuse of report/status response bodies is a candidate for
+investigation, not a completed
+replacement. The galaxy observer already demonstrates passive response reuse.
+
+Galaxy Search loads saved scans before evaluating individual systems. This local
+read must not queue behind a server-storage operation that is waiting for network
+capacity; otherwise the UI can remain at "Searching saved data" without issuing a
+search API request. Scan/delta reads use their explicit server key independently
+of that operation queue. Stopping a search invalidates its generation immediately
+and restores the Search button, even while a prior local or network read is still
+pending. Late replies cannot replace a newer search's results or status.
+Already admitted requests may finish; stopping prevents further work from the old
+search rather than undoing sent requests. Saved galaxy knowledge is retained,
+and identical settings can be searched again after an interruption or 429.
+
+### Scope and priority model
+
+Every add-on game-API request, including retries, passes a central scheduling
+decision. This covers data/action requests, not browser-loaded image assets or
+external GitHub downloads. Native game requests remain unmodified:
+observe their traffic and budget information without delaying execution.
+Treat game and add-on traffic as sharing the available budget;
+observing one browser cannot guarantee knowledge of other devices or all traffic.
+Same-origin routing provides authentication, not automatic scheduling.
+
+Equivalent manual and automatic dispatches use the same action priority.
+Priority follows purpose, rather than automatically demoting automation:
+
+| Work class (rank) | Examples | Scheduling intent |
+|---|---|---|
+| Action (0) | Manual/automatic dispatch, research start, tagged immediate prerequisite reads | Highest normal priority; no budget or cooldown bypass |
+| Interactive (1) | Opening an overlay, changing a fleet input, requesting current data | Prompt service without promoting an entire bulk job |
+| Check (2) | Periodic mission readiness and visible ship-availability polling | May wait; not equivalent to an action already ready to execute |
+| Bulk (3) | Galaxy search detail reads, repeated combat simulations, remaining market pages | Progress while yielding capacity to actions and interactions |
+| Background (4) | Periodic scrape, polite cache fills, observer follow-up refresh | Use remaining capacity |
+
+The scheduler allows at most three in-flight attempts; lower-priority work
+normally occupies at most two slots. Queue age improves effective priority by
+one rank every 30 seconds, and aged work can use the third slot. The conservative
+shared rolling ceiling is 400 starts/minute, with non-action work limited to 380
+to leave 20 starts for actions. General header headroom is zero for actions,
+20 for other work, or 40 for polite work. These are client safeguards, not
+additional server quotas or a guarantee of free capacity when an action arrives.
+Rolling-window slots are reserved before dispatch and their timestamps advance
+to transport completion (including failures), then remain counted for the full
+window plus 100 ms. Completion timestamps are persisted as well. This avoids
+releasing capacity early because of tab messaging, transport latency or exact
+boundary timing; it deliberately trades a small amount of throughput for margin.
+
+Eligible work can pass a scope-blocked queue item. Matching pending GETs retain
+their full path/query and origin when coalesced and can be promoted by a
+higher-priority caller. Writes are never coalesced. The content client accepts an
+optional AbortSignal to remove a caller's queued work without cancelling another
+consumer of the same read; sent actions are not rolled back. Existing callers
+without a signal continue to completion. POST retries remain limited to explicit
+429 responses; network errors or ambiguous server failures do not replay writes.
+When headers explicitly describe a matching endpoint scope rather than the
+general policy, an exhausted scope budget also waits for its reset.
+
+### Remaining verification and safeguards
+
+Optional **Record API wait times** in Developer / Debug records scheduler
+metadata independently of diagnostic body capture. Fixed source labels follow
+Galaxy Search, ownership checks, asteroid/xeno searches, dashboard reads, fleet
+actions, simulator calls, empire/logistics overlays and upgrade planners through
+retries to central admission. Untagged internal work remains explicitly grouped
+as background maintenance; unspecified content callers use content-tool. Coalesced requests retain
+the initiating source and list participating source labels, but count one
+transport, not one request per consumer.
+
+Each scheduler wait produces a start and terminal event, not an event per
+countdown tick. The terminal event includes actual elapsed queue time, all
+observed reasons/windows, extended release times, and dispatched/cancelled
+outcome. Dispatch and response events provide attempt and 429 counts. Budget
+snapshots and per-origin source counts for the preceding minute distinguish
+waiting producers from other traffic contributing to congestion, including
+passively observed native starts. General local budget spans universes, whereas
+these contribution snapshots are per-origin, so they are not a complete
+causality attribution. No paths, game IDs, bodies or credentials are logged.
+
+Events are written asynchronously to local diagnostics (1,000 scheduling events,
+10 MB shared per server) and exposed in API Wait Times with a per-source summary,
+expandable JSON, JSONL export and clear action. Summaries cover retained events
+only; they are not lifetime totals. Wait totals count completed central queue
+episodes, not producer preparation or retry sleeps before admission. On the next
+recorded event after worker recreation, retained unmatched starts are closed as
+interrupted with incomplete duration, not an invented elapsed time. Retention
+or abrupt termination can lose events; source statistics are diagnostic evidence,
+not an exact server ledger. Recording failures are logged without blocking
+game requests. Both recording switches default off.
+
+The dashboard polls `GET_API_STATUS` once per second while visible. This reads
+the central scheduler directly, bypasses long server-storage operations and
+does not dispatch game API requests or persist status snapshots. The same status
+element sits above Options in the navigation at widths above 900 px and moves
+to the header directly right of the hamburger button in hamburger mode.
+Expanded details use compact per-scope budget lines; navigation details have no
+inner scrollbar and use only the navigation's scroll area. Header details open
+left-aligned below the indicator with space
+between the header and content. A breakpoint change preserves the open state
+without duplicating polling or IDs. The indicator
+shows running/queued central attempts and distinguishes normal budget waits
+from server-requested 429 cooldowns. Expand it for the selected origin's general,
+system-detail, fuel-estimate and simulator counts. General local counts are
+shared across origins; server observations remain origin-specific. Server-reported
+remaining values and observation age are separate from conservative local
+reservations and can be stale. Simulator counts show the local 3/10 s limit.
+The display covers central admission, not every producer's preparatory work or
+the simulator's additional response-to-request pacing before central admission.
+
+Galaxy Search requests status for its currently awaited system path and shows
+the reason inline after its existing progress, explicitly labelled as API status: request in progress, queued,
+request spacing, local/header budget pause or server cooldown, with seconds until
+the known release. Inline spacing, budget and server-pause hints are hidden when
+at most one second remains, avoiding unreadable flashes; scheduling and the
+global API status are unchanged. This is a next-release countdown, not a promised start time
+or whole-search ETA. Stops, resets and late replies cannot restore stale hints.
+Failures to read status are shown explicitly rather than as "ready". Background
+dashboard tabs suspend polling; closing the page removes the timer/listeners.
+
+- Browser-session state survives service-worker restarts, not a full browser
+  session reset. Other devices and unobserved requests remain outside local
+  accounting. Delayed optimistic headers cannot increase a live window's known
+  remaining budget; reset observations are treated conservatively.
+  Queued work itself is not persisted: interrupted callers may need to retry
+  after a worker restart, while restored counters and cooldowns still apply.
+- Storage-processing tasks still serialize where they access shared context;
+  network-only action/interaction messages no longer wait behind them. Existing
+  automation task order and timer intervals are unchanged.
+- Automatic cancellation on every view closure, deadline scheduling and atomic
+  reservation of game resources/slots across whole operation chains are not
+  implemented. The server still validates actions against actual game state.
+- Confirm other scope values and header behavior beyond the captured
+  `system-details` 429. Unknown scopes or missing headers must not enable
+  immediate retry storms. No deliberate limit-exhaustion experiment is needed.
+- Verify exact endpoint coverage for `system-details`, simulator bootstrap and the
+  universe catalog. Authentication through the game tab does not establish the
+  server's account/IP/session quota identity or authorize automation by itself.
+
+Deterministic coverage includes exact rolling-window thresholds, retry
+accounting, scope isolation, priority/concurrency behavior, shared read
+cancellation, worker-state restoration, explicit origin/storage isolation and
+transport routing in [scheduler tests](../tests/api-scheduler.test.js) and
+[routing tests](../tests/api-routing.test.js). Related focused tests include
+[API rate limiting](../tests/api-rate-limit.test.js),
+[simulation](../tests/simulator-api.test.js),
+[automation cycles](../tests/automation-scheduler.test.js),
+[server storage](../tests/server-storage.test.js) and
+[galaxy caching](../tests/galaxy-cache.test.js).
+
+For future evidence, collect only method/path, status, server time and relevant
+rate-limit/retry response headers. Redact device identifiers; do not retain
+cookies, authorization values, full HAR exports or copied authenticated commands.
 
 ## Observed WebSocket events
 

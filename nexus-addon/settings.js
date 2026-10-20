@@ -27,6 +27,7 @@ export const DEFAULTS = Object.freeze({
   'general.defaultTab': 'dashboard',
   'developer.logLevel': 'warn',
   'developer.recording': false,
+  'developer.apiWaitRecording': false,
 });
 
 const listeners = new Set();

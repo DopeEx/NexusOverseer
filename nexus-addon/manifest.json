@@ -41,7 +41,7 @@
     },
     {
       "matches": ["https://*.nexuslegacy.space/*"],
-      "js": ["server-storage.js", "diagnostics-relay.js", "galaxy-cache-relay.js"],
+      "js": ["server-storage.js", "game-api-client.js", "diagnostics-relay.js", "galaxy-cache-relay.js"],
       "run_at": "document_start"
     },
     {

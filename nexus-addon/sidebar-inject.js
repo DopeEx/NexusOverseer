@@ -89,7 +89,7 @@ new MutationObserver(() => inject())
 // Run game API requests from the page origin so the browser attaches the same
 // HttpOnly session cookie as the game's own client. The extension never reads or
 // forwards the cookie value itself.
-rt.onMessage.addListener((msg, sender, sendResponse) => {
+const onGameFetch = (msg, sender, sendResponse) => {
   if (msg.type !== 'GAME_FETCH') return;
   const respond = response => {
     globalThis.nexusRecordDiagnosticApi?.(msg, response);
@@ -106,6 +106,9 @@ rt.onMessage.addListener((msg, sender, sendResponse) => {
     const meta = {
       status: r.status,
       retryAfter: r.headers.get('Retry-After'),
+      rateLimitScope: r.headers.get('X-RateLimit-Scope'),
+      rateLimitLimit: r.headers.get('RateLimit-Limit'),
+      rateLimitPolicy: r.headers.get('RateLimit-Policy'),
       rateLimitRemaining: r.headers.get('RateLimit-Remaining'),
       rateLimitReset: r.headers.get('RateLimit-Reset'),
     };
@@ -133,7 +136,11 @@ rt.onMessage.addListener((msg, sender, sendResponse) => {
     networkError: true,
   }));
   return true;   // keep the channel open for the async sendResponse
-});
+};
+const previousGameFetch = globalThis.__nexusGameApiBridgeListener;
+if (previousGameFetch) rt.onMessage.removeListener(previousGameFetch);
+rt.onMessage.addListener(onGameFetch);
+globalThis.__nexusGameApiBridgeListener = onGameFetch;
 
 // ── Live-search matches window ──────────────────────────────────────────────
 // Opened when the user clicks an asteroid live-search notification. Floating,

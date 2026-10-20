@@ -125,6 +125,22 @@ test('selected server remains independent of temporary background storage scopes
   assert.equal((await storage.getActiveServer()).key, 'nf');
 });
 
+test('explicit server storage access does not wait for or inherit a temporary scope', async () => {
+  const store = makeBrowserStub();
+  await uniqueImport('../nexus-addon/server-storage.js');
+  const storage = globalThis.nexusStorage;
+  await storage.setActiveServer('s0');
+  await storage.withServer('beta', async () => {
+    const s0 = storage.forServer('s0');
+    await s0.set({ isolated: 's0' });
+    assert.equal((await s0.get('isolated')).isolated, 's0');
+    assert.equal(store['nexus_server:beta:isolated'], undefined);
+    assert.equal((await storage.getActiveServer()).key, 'beta');
+    await s0.remove('isolated');
+    assert.equal(store['nexus_server:s0:isolated'], undefined);
+  });
+});
+
 test('storage wrapper is active in normal extension pages', async () => {
   const store = makeBrowserStub();
   globalThis.location = { hostname: 'nf.nexuslegacy.space', href: 'https://nf.nexuslegacy.space/' };

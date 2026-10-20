@@ -168,7 +168,7 @@ function applyDepthRange() {
 async function resolveExpeditionShips(planetId) {
   const presetKey = document.getElementById('e-launch-preset').value;
   const preset = EXPEDITION_PRESETS[presetKey];
-  const av = await browser.runtime.sendMessage({ type: 'GET_PLANET_SHIPS', planetId });
+  const av = await browser.runtime.sendMessage({ type: 'GET_PLANET_SHIPS', planetId, priority: 'action' });
   if (av.error) return { error: av.error };
 
   let wanted, name;
@@ -211,7 +211,7 @@ let eFleetSlots = { used: 0, max: null };
 let eTicks = [];   // progress-bar updaters for the current renderExpeditionTransit()
 
 async function refreshExpeditionMissions() {
-  const mi = await browser.runtime.sendMessage({ type: 'GET_MISSIONS' });
+  const mi = await browser.runtime.sendMessage({ type: 'GET_MISSIONS', priority: 'check' });
   if (mi.error) {
     console.error('[NexusOverseer] Expedition mission refresh failed:', mi.error);
     setStatusText(document.getElementById('e-launch-status'), `Mission refresh failed: ${mi.error}`, 'error');

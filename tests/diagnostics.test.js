@@ -137,7 +137,11 @@ async function hookHarness() {
     vm.runInContext('globalThis.replayEvent = {source:window,origin:location.origin,data:{__nxRequestGalaxy:true}}', context);
     for (const listener of messageListeners) listener(context.replayEvent);
   }
-  return { context, messages, requests, configure, settle, replayGalaxy, Xhr, Socket, getPromise: () => promise };
+  function readyTraffic() {
+    vm.runInContext('globalThis.trafficReadyEvent = {source:window,origin:location.origin,data:{__nxApiTrafficReady:true}}', context);
+    for (const listener of messageListeners) listener(context.trafficReadyEvent);
+  }
+  return { context, messages, requests, configure, settle, replayGalaxy, readyTraffic, Xhr, Socket, getPromise: () => promise };
 }
 
 test('verified galaxy deltas are forwarded and replayed with recording off without altering socket identity', async () => {
@@ -162,6 +166,45 @@ test('verified galaxy deltas are forwarded and replayed with recording off witho
   assert.deepEqual(batches.flatMap(message => message.__nxDiagnosticsBatch.map(entry => entry.kind)), ['websocket', 'galaxy']);
 });
 
+test('native budget observation works with recording off, without copying bodies or query strings', async () => {
+  const h = await hookHarness();
+  const response = h.context.fetch('/api/auth/me?private=value');
+  assert.equal(response, h.getPromise());
+  await response;
+  assert.equal(h.messages.filter(message => message.__nxApiTraffic).length, 0);
+  h.readyTraffic();
+  const traffic = h.messages.filter(message => message.__nxApiTraffic).map(message => message.__nxApiTraffic);
+  assert.equal(traffic.length, 2);
+  assert.equal(traffic[0].started, true);
+  assert.equal(traffic[0].path, '/api/auth/me');
+  assert.equal(traffic[1].response.status, 200);
+  assert.doesNotMatch(JSON.stringify(traffic), /private|accessToken|hidden|requestBody|responseBody/);
+  h.readyTraffic();
+  assert.equal(h.messages.filter(message => message.__nxApiTraffic).length, 2);
+  assert.equal(h.requests.length, 1);
+  assert.equal(h.messages.some(message => message.__nxDiagnosticsBatch), false);
+});
+
+test('native XHR observation forwards error status and budget headers without changing the send', async () => {
+  const h = await hookHarness();
+  h.readyTraffic();
+  const xhr = new h.context.XMLHttpRequest();
+  xhr.status = 404;
+  xhr.getResponseHeader = name => ({
+    'RateLimit-Limit': '400', 'RateLimit-Policy': '400;w=60', 'RateLimit-Remaining': '270',
+  })[name] || null;
+  xhr.open('POST', '/api/security/signal?private=value');
+  xhr.send('private body');
+  xhr.listener();
+  assert.equal(xhr.sentBody, 'private body');
+  assert.deepEqual(xhr.openArgs, ['POST', '/api/security/signal?private=value']);
+  const traffic = h.messages.filter(message => message.__nxApiTraffic).map(message => message.__nxApiTraffic);
+  assert.equal(traffic.length, 2);
+  assert.equal(traffic[0].path, '/api/security/signal');
+  assert.equal(traffic[1].response.status, 404);
+  assert.equal(traffic[1].response.rateLimitRemaining, '270');
+  assert.doesNotMatch(JSON.stringify(traffic), /private/);
+});
 test('galaxy functional capture ignores unsupported, malformed, oversized, binary and foreign socket events', async () => {
   const h = await hookHarness();
   const socket = new h.context.WebSocket('wss://s0.nexuslegacy.space/socket.io/');

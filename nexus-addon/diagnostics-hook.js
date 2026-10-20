@@ -10,6 +10,26 @@
   const oversized = () => ({ truncated: true, reason: 'Payload exceeds capture character limit' });
   const requestText = body => typeof body !== 'string' ? '[not captured]' : body.length > MAX_BODY ? oversized() : body;
   const galaxyDeltas = new Map();
+  let trafficReady = false;
+  let trafficPending = [];
+
+  function traffic(path, response) {
+    const message = { path, started: !response, ...(response ? { response } : {}) };
+    if (trafficReady) window.postMessage({ __nxApiTraffic: message }, origin);
+    else if (trafficPending.length < 100) trafficPending.push(message);
+  }
+
+  function budgetHeaders(get, status) {
+    return {
+      status,
+      retryAfter: get('Retry-After'),
+      rateLimitScope: get('X-RateLimit-Scope'),
+      rateLimitLimit: get('RateLimit-Limit'),
+      rateLimitPolicy: get('RateLimit-Policy'),
+      rateLimitRemaining: get('RateLimit-Remaining'),
+      rateLimitReset: get('RateLimit-Reset'),
+    };
+  }
 
   function capture(kind, data) {
     if (!enabled || pending.length >= 20) return;
@@ -21,6 +41,13 @@
       const url = new URL(input, origin);
       if (url.origin !== origin || !url.pathname.startsWith('/api/') || /\/(?:auth|login|logout|session)(?:\/|$)/i.test(url.pathname)) return null;
       return url.pathname; // Never collect query strings or headers.
+    } catch { return null; }
+  }
+
+  function trafficUrl(input) {
+    try {
+      const url = new URL(input, origin);
+      return url.origin === origin && url.pathname.startsWith('/api/') ? url.pathname : null;
     } catch { return null; }
   }
 
@@ -44,6 +71,11 @@
 
   window.addEventListener('message', event => {
     if (event.source !== window || event.origin !== origin) return;
+    if (event.data?.__nxApiTrafficReady) {
+      trafficReady = true;
+      for (const message of trafficPending) window.postMessage({ __nxApiTraffic: message }, origin);
+      trafficPending = [];
+    }
     if (event.data?.__nxRequestGalaxy) {
       for (const delta of galaxyDeltas.values()) window.postMessage({ __nxGalaxyDelta: delta }, origin);
     }
@@ -79,6 +111,12 @@
     const result = originalFetch.apply(this, args);
     const input = args[0];
     const path = apiUrl(typeof input === 'string' || input instanceof URL ? input : input?.url);
+    const trafficPath = trafficUrl(typeof input === 'string' || input instanceof URL ? input : input?.url);
+    if (trafficPath) {
+      traffic(trafficPath);
+      result.then(response => traffic(trafficPath, budgetHeaders(name => response.headers.get(name), response.status)))
+        .catch(error => console.debug('[NexusOverseer] Native API observation failed:', error));
+    }
     if (enabled && path) {
       const method = args[1]?.method || input?.method || 'GET';
       const requestBody = requestText(args[1]?.body);
@@ -95,9 +133,17 @@
   const originalSend = XMLHttpRequest.prototype.send;
   XMLHttpRequest.prototype.open = function (method, url, ...rest) {
     this.__nxDiagnosticRequest = { method, path: apiUrl(url) };
+    this.__nxTrafficPath = trafficUrl(url);
     return originalOpen.call(this, method, url, ...rest);
   };
   XMLHttpRequest.prototype.send = function (body) {
+    const path = this.__nxTrafficPath;
+    if (path) {
+      traffic(path);
+      this.addEventListener('loadend', () => {
+        traffic(path, budgetHeaders(name => this.getResponseHeader(name), this.status));
+      }, { once: true });
+    }
     if (enabled && this.__nxDiagnosticRequest?.path) {
       const request = { ...this.__nxDiagnosticRequest };
       const started = performance.now();
