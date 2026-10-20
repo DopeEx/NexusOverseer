@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { missionsCard } from '../nexus-addon/tabs/dashboard.js';
+import { attentionItems, missionsCard } from '../nexus-addon/tabs/dashboard.js';
 import { missionProgress } from '../nexus-addon/mission-state.js';
 import { loadBackground, makeBrowserStub } from './helpers.js';
 
@@ -127,12 +127,38 @@ test('next return includes expeditions but excludes patrols and work events', t 
   assert.match(text(missionsCard({ missions, maxFleetSlots: 18 }).children[3]), /Next return\s+⏱ 5m 00s/);
 });
 
-test('dashboard overview preserves mining cycle times from the API cargo', async () => {
+test('a research lab currently being upgraded is not reported as idle', () => {
+  const planet = {
+    id: 1, name: 'Vega', hasLab: true, resources: {}, construction: [],
+    queueMax: null, shipYards: [], damaged: [],
+  };
+  const overview = {
+    planets: [planet], moons: [], research: [], missions: [], maxFleetSlots: null,
+  };
+
+  assert.ok(attentionItems(overview).some(item => item.text === '1 research lab idle'));
+  planet.construction.push({
+    key: 'research_lab', name: 'Research Lab', endsAt: '2099-01-01T00:00:00Z', upgrading: true, pending: false,
+  });
+  assert.ok(attentionItems(overview).every(item => item.text !== '1 research lab idle'));
+});
+
+test('dashboard overview preserves mission timing and does not flag an upgrading lab as idle', async () => {
   makeBrowserStub();
   globalThis.browser.alarms.get = async () => null;
   globalThis.browser.tabs.query = async () => [{ id: 1 }];
   const responses = {
-    '/api/planets': { planets: [] },
+    '/api/planets': { planets: [{ id: 1, name: 'Vega' }] },
+    '/api/planets/1': {
+      planet: { id: 1, name: 'Vega' },
+      buildings: [{
+        definition: { key: 'research_lab', name: 'Research Lab' },
+        level: 3, isUpgrading: true, upgradeEndsAt: '2099-01-01T00:00:00Z',
+      }],
+      buildQueueMax: 3,
+    },
+    '/api/planets/1/fleet': { fleet: [] },
+    '/api/planets/1/shipyard': {},
     '/api/fleet/missions': {
       maxFleetSlots: 18,
       missions: [
@@ -165,4 +191,7 @@ test('dashboard overview preserves mining cycle times from the API cargo', async
   assert.deepEqual(missionEvent(overview.missions[0]), { label: 'Next cycle', at: Date.parse(nextCycleAt) });
   assert.equal(overview.missions[1].nextCycleAt, null);
   assert.equal(missionStage(overview.missions[1]), 'Patrolling');
+  assert.equal(overview.planets[0].construction[0].key, 'research_lab');
+  assert.equal(overview.planets[0].construction[0].upgrading, true);
+  assert.ok(attentionItems(overview).every(item => item.text !== '1 research lab idle'));
 });
