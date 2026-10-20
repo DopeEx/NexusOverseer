@@ -1,4 +1,9 @@
 {
   "schemaVersion": 1,
-  "servers": {}
+  "servers": {
+    "s0": {
+      "file": "s0.json",
+      "sha256": "c7094578bf1f7de3e7d928cf7ca830b83f045f47b60f49482b94e06c4ab2ecaf"
+    }
+  }
 }
