@@ -5,6 +5,7 @@
   "package.json",
   "CHANGELOG.md",
   "background-sw.js", "server-storage.js", "server-switch.js", "background.js", "sidebar-inject.js",
+  "api-scheduler.js", "game-api-client.js", "api-status.js", "api-telemetry.js",
   "galaxy-fetch-hook.js", "game-api-bridge.js", "galaxy-fields.js", "empire-view.js", "guide-content.js", "guide-view.js", "logistics-view.js", "upgrade-queue.js", "building-upgrade.js", "tech-upgrade.js", "ship-upgrade.js",
   "galaxy-cache.js", "galaxy-client.js", "galaxy-cache-relay.js", "galaxy-directory.js", "galaxy-images.js",
   "galaxy-public.js", "galaxy-sharing.js",

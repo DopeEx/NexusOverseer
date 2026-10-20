@@ -56,9 +56,7 @@ function keyFromCard(card) {
 }
 
 async function fetchJSON(path) {
-  const r = await fetch(path, { credentials: 'include' });
-  if (!r.ok) throw new Error(`${path} → ${r.status}`);
-  return r.json();
+  return globalThis.nexusGameApi(path, { source: 'technology-planner' });
 }
 
 // Match a research entry to the card key: exact, else the longest key that's a

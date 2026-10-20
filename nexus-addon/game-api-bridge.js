@@ -26,6 +26,9 @@
       const meta = {
         status: response.status,
         retryAfter: response.headers.get('Retry-After'),
+        rateLimitScope: response.headers.get('X-RateLimit-Scope'),
+        rateLimitLimit: response.headers.get('RateLimit-Limit'),
+        rateLimitPolicy: response.headers.get('RateLimit-Policy'),
         rateLimitRemaining: response.headers.get('RateLimit-Remaining'),
         rateLimitReset: response.headers.get('RateLimit-Reset'),
       };

@@ -20,11 +20,48 @@ h3, h4, h5 { color: var(--text-heading); }
   gap: 6px 10px;
 }
 .app-header:has(.status-bar.show) { margin-bottom: 12px; }
+.app-header:has(#api-status) { margin-bottom: 12px; }
+#api-status-header:empty { display: none; }
+#api-status-header { max-width: 100%; }
+#api-status-header .api-status-details { left: 0; right: auto; }
+#api-status-nav { min-width: 0; }
+#api-status-nav .api-status { margin: 6px 4px; }
+#api-status-nav summary { overflow-wrap: anywhere; line-height: 1.5; }
+#api-status-nav .api-status-details {
+  position: static;
+  width: auto;
+  margin-top: 6px;
+  max-height: none;
+  overflow: visible;
+  box-shadow: none;
+}
 .app-header > .status-bar {
   flex: 1 1 280px;
   min-width: 0;
   margin: 0;
 }
+.api-status { position: relative; margin-left: auto; font-size: 0.8rem; }
+.api-status summary { cursor: pointer; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
+.api-status[data-state="budget"] summary { color: var(--warning); }
+.api-status[data-state="server"] summary,
+.api-status[data-state="error"] summary { color: var(--error); }
+.api-status-details {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 100;
+  width: min(440px, calc(100vw - 40px));
+  padding: 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px #0008;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.api-status-details p { margin-bottom: 8px; overflow-wrap: anywhere; }
+.api-status-details p:last-child { margin-bottom: 0; }
+.api-search-wait { color: var(--warning); }
 
 #expert-toggle {
   display: inline-flex;
@@ -132,6 +169,7 @@ body.expert-mode .pc-auto-row.expert-only { display: flex !important; }
 .debug-body { padding: 16px; border-top: 1px solid var(--line); }
 .debug-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; }
 .debug-table-scroll { overflow-x: auto; }
+#debug-traffic-summary { margin-bottom: 20px; }
 .debug-table { width: 100%; border-collapse: collapse; }
 .debug-table th, .debug-table td { padding: 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
 .debug-table th { color: var(--text-muted); font-size: 0.8rem; }
@@ -149,6 +187,7 @@ body.expert-mode .pc-auto-row.expert-only { display: flex !important; }
 .debug-entry-path { min-width: 0; overflow-wrap: anywhere; font: 0.75rem/1.5 Consolas, monospace; color: var(--text-secondary); }
 .debug-entry-time { margin-left: auto; white-space: nowrap; color: var(--text-subtle); font: 0.67rem/1.5 Consolas, monospace; }
 .debug-entry-body { margin: 10px; padding: 12px; background: var(--bg-page); border: 1px solid var(--line); border-radius: var(--radius-control); }
+.debug-entry-body > .debug-json { padding: 0; background: transparent; border: 0; border-radius: 0; }
 .debug-entry-body > .opt-note, .debug-entry-body > .debug-error { margin-bottom: 8px; }
 .debug-payload { margin-top: 10px; border: 1px solid var(--border); border-radius: var(--radius-control); overflow: hidden; }
 .debug-payload:first-child { margin-top: 0; }
@@ -1089,6 +1128,7 @@ th.sortable .arrow { margin-left: 4px; color: var(--accent); }
   font-size: 0.75rem;
   line-height: 1.2;
 }
+.finder-dashboard .finder-progress-line { max-width: none; }
 
 .finder-dashboard .finder-results-panel {
   margin-top: 16px;

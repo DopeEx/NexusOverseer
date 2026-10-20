@@ -487,7 +487,7 @@ async function scan() {
       if (!meta || !meta.planetCount) continue;   // no bodies → no fields
       let data;
       try {
-        data = await getSystemPlanets(sys.id, cache, { purpose: 'dynamic', maxAge: ASTEROID_CACHE_TTL });
+        data = await getSystemPlanets(sys.id, cache, { purpose: 'dynamic', maxAge: ASTEROID_CACHE_TTL, source: 'asteroid-search' });
       } catch { errors++; scanned++; continue; }
       scanned++;
       const fields = data.asteroidFields || [];

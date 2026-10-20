@@ -66,13 +66,13 @@ export function getPirateSeriesForMode() {
 }
 
 export function renderPiratesTab() {
-  initPiratesTab().then(refreshPirateData);
+  initPiratesTab().then(() => refreshPirateData());
 }
 
 let pcReports = [];
 
-async function refreshPirateReports() {
-  const res = await browser.runtime.sendMessage({ type: 'GET_PIRATE_REPORTS' });
+async function refreshPirateReports(priority = 'interactive') {
+  const res = await browser.runtime.sendMessage({ type: 'GET_PIRATE_REPORTS', priority });
   pcReports = res.error ? [] : (res.reports || []);
   renderPirateReports(res.error);
 }
@@ -144,8 +144,8 @@ export function initPiratesTab() {
   return pcInitPromise;
 }
 
-async function refreshPirateData() {
-  await Promise.allSettled([refreshPirateCamps(true), refreshPirateMissions(), refreshPirateReports()]);
+async function refreshPirateData(priority = 'interactive') {
+  await Promise.allSettled([refreshPirateCamps(true), refreshPirateMissions(), refreshPirateReports(priority)]);
   pcLastRefreshAt = Date.now();
 }
 
@@ -153,7 +153,7 @@ export async function runPirateAutomations() {
   if (!pcInitPromise) return;
   await pcInitPromise.catch(() => {});
   if (!pcInited) return;
-  if (Date.now() - pcLastRefreshAt >= 30_000) await refreshPirateData();
+  if (Date.now() - pcLastRefreshAt >= 30_000) await refreshPirateData('check');
   if (document.getElementById('pc-auto')?.checked) await automatePirateScouting();
   if (document.getElementById('pc-auto-attack')?.checked) await automatePirateAttacks();
 }
@@ -198,7 +198,7 @@ async function automatePirateAttacks() {
   pcAttackRunning = true;
   const autoStatus = document.getElementById('pc-attack-status');
   try {
-    await refreshPirateReports();
+    await refreshPirateReports('check');
     const since = (await rememberedSelections())['pc-attack-since'] || new Date().toISOString();
     const limit = Math.max(1, Number(document.getElementById('pc-loss-limit').value) || 1);
     const { lost, defeats } = attackLossGuard(since);
@@ -493,7 +493,7 @@ async function pickSourcePlanet(camp, check, shipsCache = new Map()) {
   for (const planet of candidates) {
     let av = shipsCache.get(planet.id);
     if (!av) {
-      av = await browser.runtime.sendMessage({ type: 'GET_PLANET_SHIPS', planetId: planet.id });
+      av = await browser.runtime.sendMessage({ type: 'GET_PLANET_SHIPS', planetId: planet.id, priority: 'action' });
       shipsCache.set(planet.id, av);
     }
     if (av.error) { firstError ||= av.error; continue; }
@@ -557,7 +557,7 @@ let pcCardTicks = [];
 let pcCampsLoaded = false;
 
 async function refreshPirateMissions() {
-  const mi = await browser.runtime.sendMessage({ type: 'GET_MISSIONS' });
+  const mi = await browser.runtime.sendMessage({ type: 'GET_MISSIONS', priority: 'check' });
   if (mi.error) { console.error('[NexusOverseer] Pirate mission refresh failed:', mi.error); return; }
   pcSlots = { max: mi.maxFleetSlots ?? null, used: usedFleetSlots(mi.missions) };
   pcMissions = (mi.missions || []).filter(m => PIRATE_MISSION_LABELS[m.missionType]);

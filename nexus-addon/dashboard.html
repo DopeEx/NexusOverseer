@@ -9,6 +9,7 @@
 <body>
   <div class="app-header">
     <button id="nav-toggle" class="nav-toggle" type="button" aria-label="Menu" aria-controls="main-nav" aria-expanded="false">☰</button>
+    <div id="api-status-header"></div>
     <div id="dashboard-status" class="status-bar show ov-statusbar"></div>
     <div id="statistics-status" class="status-bar">
       <span id="status-text">Loading…</span>
@@ -48,6 +49,12 @@
     <button class="tab main-tab" data-tab="market"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg><span>Market</span></button>
     <button class="tab main-tab" data-tab="techtree"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/></svg><span>Tech Tree</span></button>
     <div class="nav-sep"></div>
+    <div id="api-status-nav">
+      <details id="api-status" class="api-status">
+        <summary id="api-status-summary">API · loading…</summary>
+        <div id="api-status-details" class="api-status-details"></div>
+      </details>
+    </div>
     <button class="tab main-tab" data-tab="options" title="Options" aria-label="Options"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg><span>Options</span></button>
         <button class="tab main-tab" data-tab="guide"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg><span>User Guide</span></button>
       </nav>
@@ -355,7 +362,10 @@
         <label class="opt-row"><span>Record diagnostic traffic<span class="opt-note debug-description">Off by default. Captures new game API and WebSocket traffic locally while enabled.</span></span>
           <input class="m-switch" type="checkbox" data-setting="developer.recording" />
         </label>
-        <p class="opt-note">Reload open game tabs after updating or reloading the extension to ensure diagnostic capture is active. Toggling recording on or off takes effect immediately without reloading game tabs. Recording keeps at most 150 entries per stream and 10 MB of JSON text per server. Entries allow up to 256,000 characters, with explicit markers when content is truncated. Headers, query strings and authentication endpoints are excluded; recognized secrets are redacted. Payloads can still contain private game data: review exports before sharing.</p>
+        <label class="opt-row"><span>Record API wait times<span class="opt-note debug-description">Independent of traffic capture. Stores local scheduling metadata only: source, budgets, wait phases and outcomes. Up to 1,000 scheduling events per server; no request or response contents.</span></span>
+          <input class="m-switch" type="checkbox" data-setting="developer.apiWaitRecording" />
+        </label>
+        <p class="opt-note">Reload open game tabs after updating or reloading the extension to ensure diagnostic capture is active. Both recording switches take effect without reloading game tabs. Traffic recording keeps at most 150 entries per stream; wait recording keeps up to 1,000 scheduling events. All streams share a 10 MB limit per server. Traffic entries allow up to 256,000 characters, with explicit markers when content is truncated. Headers, query strings and authentication endpoints are excluded from traffic capture; recognized secrets are redacted. Payloads can still contain private game data: review exports before sharing.</p>
         <p class="opt-note">Diagnostic traffic is stored separately from statistics in a local database. Use JSONL export to back up logs; regular data backups do not include them.</p>
         <p id="debug-status" class="opt-note" role="status" aria-live="polite"></p>
       </div>
@@ -1092,7 +1102,9 @@
         <button id="f-search" class="toolbar-button primary-button">Search</button>
         <button id="f-clear-search" class="toolbar-button secondary-button" type="button" disabled title="Clear the saved search, filters and results for this universe. Collected galaxy knowledge is kept.">Clear search</button>
       </div>
-      <span id="f-progress" class="finder-status" role="status" aria-live="polite"></span>
+      <span class="finder-status finder-progress-line">
+        <span id="f-progress" role="status" aria-live="polite"></span><span id="f-api-wait" class="api-search-wait"></span>
+      </span>
       <span id="f-search-storage-status" class="finder-status" role="alert"></span>
       <details id="f-search-issues" class="finder-directory-more" hidden>
         <summary id="f-search-issues-summary">Search issues</summary>

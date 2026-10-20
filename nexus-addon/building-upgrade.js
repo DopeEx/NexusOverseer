@@ -64,9 +64,7 @@ function keyFromCard(card) {
 }
 
 async function fetchPlanet(id) {
-  const r = await fetch(`/api/planets/${id}`, { credentials: 'include' });
-  if (!r.ok) throw new Error(`planet ${id} → ${r.status}`);
-  return r.json();
+  return globalThis.nexusGameApi(`/api/planets/${id}`, { source: 'building-planner' });
 }
 
 // The card image name carries a planet-type suffix the definition key lacks

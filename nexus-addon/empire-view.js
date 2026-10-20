@@ -59,9 +59,7 @@ function timerSpan(endsAt) {
 }
 
 async function jget(path) {
-  const r = await fetch(path, { credentials: 'include' });
-  if (!r.ok) throw new Error(`${path} → ${r.status}`);
-  return r.json();
+  return globalThis.nexusGameApi(path, { source: 'empire-view' });
 }
 
 // Ship-build queue items across both yards (planetary "Shipyard" + "Orbital"

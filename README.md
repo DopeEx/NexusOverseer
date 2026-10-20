@@ -72,6 +72,9 @@ No player account, actual coordinates or real economy data is shown.
 - **Logistics (Quartermaster)**: resource transfers and outpost collections with selectable transport ships.
 - **Combat Simulator**: integrated directly into the dashboard, using the game's official combat calculator. Fleet inputs, intel imports, and battle results stay in the same tab.
 - **Multiple universes**: data is kept separately for each universe.
+- **API traffic status**: shared request scheduling respects endpoint budgets
+  and prioritizes interactions. The API indicator shows activity and budget
+  pauses; Galaxy Search explains longer waits beside its progress.
 - **Backups**: JSON export and import of your data and options (Options > Data).
 - **Developer / Debug**: Options has General, Data and Developer / Debug subtabs in the same style as Statistics. General separates general preferences and dashboard controls into panels; Data separates storage, public galaxy data, private backups and the danger zone. Developer tools provide console log levels, a read-only resource history with UTC time buckets, and expandable API, galaxy-delta and WebSocket logs with search, copy, JSONL export and per-stream clearing.
 
@@ -169,6 +172,13 @@ Logs stay local and server-separated. Use JSONL export to keep them; regular
 backups do not include diagnostic logs. Review exports for private game data
 before sharing.
 
+**Record API wait times** is an independent, default-off switch in the same
+tab. **API Wait Times** shows source summaries, wait reasons and durations,
+expandable details, JSONL export and per-server clearing without recording
+request or response contents. Up to 1,000 scheduling events are retained per
+server, sharing the diagnostic 10 MB cap. Counts cover retained events, not
+lifetime totals; the waiting source is not necessarily the cause of congestion.
+
 <details>
 <summary>Capture behavior, storage limits and privacy details</summary>
 
@@ -190,8 +200,9 @@ system colony hints update Galaxy Scout's local cache even with recording off.
 Diagnostic logs are not public galaxy contributions. Timestamps indicate capture
 time, not a verified time of the underlying game action.
 
-Logs remain local and server-separated, with at most 150 entries per stream
-and 10,000,000 UTF-8 bytes of entry JSON per server (excluding storage-container
+Traffic logs remain local and server-separated, with at most 150 entries per
+traffic stream; scheduling retains up to 1,000 events. All streams share
+10,000,000 UTF-8 bytes of entry JSON per server (excluding storage-container
 overhead). Each sanitized entry allows 256,000 JSON characters. Oversized entries
 retain API metadata and up to 100,000 serialized characters per body preview.
 Capture reads up to 1,000,000 characters per payload; larger payloads are omitted

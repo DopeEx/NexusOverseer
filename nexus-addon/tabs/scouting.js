@@ -315,7 +315,7 @@ async function initializeScoutingTab() {
     if (document.getElementById('scouting-content').style.display === 'none') return;
     tickTimers();
     for (const k in scTicks) for (const upd of scTicks[k]) upd();   // advance all progress bars
-    if (++scTick % 10 === 0) updateAvail();       // catch returning fleets
+    if (++scTick % 10 === 0) updateAvail('check');       // catch returning fleets
     refreshMissionsIfDue(scMissions);
   }, 1000);
 
@@ -396,7 +396,7 @@ async function automateScouting() {
   try {
     const status = document.getElementById('sc-auto-status');
     // Check salvage count - pause if too many pending salvage entries
-    const res = await browser.runtime.sendMessage({ type: 'GET_SURVEY_REPORTS' });
+    const res = await browser.runtime.sendMessage({ type: 'GET_SURVEY_REPORTS', priority: 'check' });
     if (res.error) { setStatusText(status, `Error: ${res.error}`); return; }
 
     const now = Date.now();
@@ -429,7 +429,7 @@ async function automateScouting() {
     const sleep = ms => new Promise(res => setTimeout(res, ms));
     let launched = false;
     for (let attempt = 0; attempt < 3 && !launched; attempt++) {
-      const mi = await browser.runtime.sendMessage({ type: 'GET_MISSIONS' });
+      const mi = await browser.runtime.sendMessage({ type: 'GET_MISSIONS', priority: 'check' });
       if (mi.error) { setStatusText(status, `Error: ${mi.error}`); return; }
       const maxSlots = getEffectiveMaxFleetSlots(mi);
       if (maxSlots != null && maxSlots <= usedFleetSlots(mi.missions)) {
@@ -472,8 +472,8 @@ async function automateInvestigate() {
   try {
     const status = document.getElementById('sc-investigate-status');
     const [mi, res] = await Promise.all([
-      browser.runtime.sendMessage({ type: 'GET_MISSIONS' }),
-      browser.runtime.sendMessage({ type: 'GET_SURVEY_REPORTS' }),
+      browser.runtime.sendMessage({ type: 'GET_MISSIONS', priority: 'check' }),
+      browser.runtime.sendMessage({ type: 'GET_SURVEY_REPORTS', priority: 'check' }),
     ]);
     if (mi.error) { setStatusText(status, `Error: ${mi.error}`); return; }
     if (res.error) { setStatusText(status, `Error: ${res.error}`); return; }
@@ -524,8 +524,8 @@ async function automateSalvage() {
   try {
     const status = document.getElementById('sc-salvage-status');
     const [mi, res] = await Promise.all([
-      browser.runtime.sendMessage({ type: 'GET_MISSIONS' }),
-      browser.runtime.sendMessage({ type: 'GET_SURVEY_REPORTS' }),
+      browser.runtime.sendMessage({ type: 'GET_MISSIONS', priority: 'check' }),
+      browser.runtime.sendMessage({ type: 'GET_SURVEY_REPORTS', priority: 'check' }),
     ]);
     if (mi.error) { setStatusText(status, `Error: ${mi.error}`); return; }
     if (res.error) { setStatusText(status, `Error: ${res.error}`); return; }
@@ -567,7 +567,7 @@ async function automateSalvage() {
     for (const salvage of pending) {
       let targetAvailable = false;
       for (let attempt = 0; attempt < 3; attempt++) {
-        const latest = await browser.runtime.sendMessage({ type: 'GET_MISSIONS' });
+        const latest = await browser.runtime.sendMessage({ type: 'GET_MISSIONS', priority: 'action' });
         if (latest.error) { setStatusText(status, `Error: ${latest.error}`); return; }
         const targetTaken = (latest.missions || []).some(m =>
           m.missionType === 'collect_salvage' && m.targetSystemId === salvage.systemId,
@@ -601,7 +601,7 @@ async function automateDebris() {
   const filterMode = document.getElementById('sc-debris-filter-mode').value;
   try {
     const status = document.getElementById('sc-debris-status');
-    const mi = await browser.runtime.sendMessage({ type: 'GET_MISSIONS' });
+    const mi = await browser.runtime.sendMessage({ type: 'GET_MISSIONS', priority: 'check' });
     if (mi.error) { setStatusText(status, `Error: ${mi.error}`); return; }
 
     const maxSlots = getEffectiveMaxFleetSlots(mi);
@@ -683,7 +683,7 @@ async function templateShips(templateId, planetId) {
     .filter(s => s.quantity > 0);
   if (!wanted.length) return { error: `Template "${tpl.name}" has no ships.` };
 
-  const av = await browser.runtime.sendMessage({ type: 'GET_PLANET_SHIPS', planetId });
+  const av = await browser.runtime.sendMessage({ type: 'GET_PLANET_SHIPS', planetId, priority: 'action' });
   if (av.error) return { error: av.error };
   const { ships, short } = capShipsToAvailable(wanted, av.available);
   if (!ships.length) return { error: `None of template "${tpl.name}"'s ships are on this planet.` };
@@ -754,8 +754,8 @@ async function launchScan() {
 
   setStatusText(status, 'Finding nearest system…');
   const [cd, mi] = await Promise.all([
-    browser.runtime.sendMessage({ type: 'GET_SURVEY_COOLDOWNS' }),
-    browser.runtime.sendMessage({ type: 'GET_MISSIONS' }),
+    browser.runtime.sendMessage({ type: 'GET_SURVEY_COOLDOWNS', priority: 'action' }),
+    browser.runtime.sendMessage({ type: 'GET_MISSIONS', priority: 'action' }),
   ]);
   const maxSlots = getEffectiveMaxFleetSlots(mi);
   if (maxSlots != null && maxSlots <= usedFleetSlots(mi.missions)) {
@@ -804,8 +804,8 @@ async function launchScan() {
 
 async function loadActiveSurveys() {
   const [res, mi] = await Promise.all([
-    browser.runtime.sendMessage({ type: 'GET_SURVEY_REPORTS' }),
-    browser.runtime.sendMessage({ type: 'GET_MISSIONS' }),
+    browser.runtime.sendMessage({ type: 'GET_SURVEY_REPORTS', priority: 'check' }),
+    browser.runtime.sendMessage({ type: 'GET_MISSIONS', priority: 'check' }),
   ]);
   if (res.error) { document.getElementById('sc-count').textContent = `Error: ${res.error}`; return; }
   if (mi.error) { document.getElementById('sc-count').textContent = `Mission refresh failed: ${mi.error}`; return; }
@@ -1345,14 +1345,14 @@ function debrisSourcePlanet(systemId) {
 
 // Ships stationed on the selected planet, shown above both tables (one fetch):
 // cargo-only above the debris table, every type above the investigation table.
-async function updateAvail() {
+async function updateAvail(priority = 'interactive') {
   const planetId = Number(document.getElementById('sc-planet').value);
   if (!planetId || !scAllShips.length) {
     scCargoAvail = {};
     renderCargoToggles();
     return;
   }
-  const av = await browser.runtime.sendMessage({ type: 'GET_PLANET_SHIPS', planetId });
+  const av = await browser.runtime.sendMessage({ type: 'GET_PLANET_SHIPS', planetId, priority });
   if (av.error) {
     scCargoAvail = {};
     renderCargoToggles();

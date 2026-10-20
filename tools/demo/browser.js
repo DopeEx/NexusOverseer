@@ -1,4 +1,5 @@
 import { createDemoData, demoResponse, DEMO_NOW } from './fixtures.js';
+import { createApiScheduler } from '../../nexus-addon/api-scheduler.js';
 
 const NativeDate = Date;
 globalThis.Date = class extends NativeDate {
@@ -10,6 +11,7 @@ globalThis.Date = class extends NativeDate {
 };
 
 const data = createDemoData();
+const apiScheduler = createApiScheduler();
 const listeners = new Set();
 const onChanged = {
   addListener(fn) { listeners.add(fn); },
@@ -55,6 +57,9 @@ globalThis.browser = {
     getManifest: () => ({ version: '2.1.0-demo' }),
     getURL: path => new URL(`/${path}`, location.origin).href,
     async sendMessage(message) {
+      if (message.type === 'GET_API_STATUS') {
+        return apiScheduler.status('https://demo.nexuslegacy.space', message.path);
+      }
       const response = demoResponse(data, message);
       if (response.error) console.warn(response.error);
       return response;

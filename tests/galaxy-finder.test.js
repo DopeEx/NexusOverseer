@@ -568,6 +568,43 @@ test('Terra / Alpha / size 200 / three moons uses old base data without ownershi
   assert.equal(h.el('f-results-tbody').children.length, 2);
 });
 
+for (const blockedType of ['GET_GALAXY_SCANS', 'GET_SYSTEM_PLANETS']) {
+  test(`stopping during ${blockedType} allows an identical search and ignores the old result`, async () => {
+    const h = await harness();
+    if (blockedType === 'GET_SYSTEM_PLANETS') {
+      await restoreGalaxyCache();
+      await saveSystem('s0', 1, h.data[1]);
+    }
+    const send = globalThis.browser.runtime.sendMessage;
+    let release;
+    globalThis.browser.runtime.sendMessage = message => {
+      if (message.type === blockedType && !release) {
+        return new Promise(resolve => { release = resolve; });
+      }
+      return send(message);
+    };
+    const first = h.el('f-search').fire();
+    for (let i = 0; i < 100 && !release; i++) await new Promise(resolve => setImmediate(resolve));
+    assert.ok(release);
+    assert.equal(h.finder.finderRunning, true);
+    await h.el('f-search').fire();
+    assert.equal(h.finder.finderRunning, false);
+    assert.equal(h.el('f-search').disabled, false);
+    assert.equal(h.el('f-search').textContent, 'Search');
+    assert.match(h.el('f-progress').textContent, /Stopped/);
+    assert.equal(h.store.galaxy_last_search.phase, 'stopped');
+    await h.el('f-search').fire();
+    assert.deepEqual(h.finder.finderHits.map(hit => hit.planetId), [11, 12]);
+    const status = h.el('f-progress').textContent;
+    release(blockedType === 'GET_GALAXY_SCANS' ? { scans: {} } : { error: 'Too many requests', status: 429 });
+    await first;
+    assert.deepEqual(h.finder.finderHits.map(hit => hit.planetId), [11, 12]);
+    assert.equal(h.el('f-progress').textContent, status);
+    assert.equal(h.store.galaxy_last_search.phase, 'complete');
+    if (blockedType === 'GET_GALAXY_SCANS') assert.deepEqual(h.requests, []);
+  });
+}
+
 test('zone buttons allow multiple zones and no selection searches all zones', async () => {
   const h = await harness();
   h.el('f-min-moons').value = '0';
@@ -2206,6 +2243,10 @@ test('a terminal search 429 stops before the next system and preserves already c
   assert.equal(h.el('f-search').disabled, false);
   assert.equal(h.el('f-search').textContent, 'Search');
   assert.equal(h.calls.some(call => call.type === 'GET_PLAYER_RANK'), false);
+  globalThis.browser.runtime.sendMessage = send;
+  await h.el('f-search').fire();
+  assert.match(h.el('f-progress').textContent, /Done:/);
+  assert.equal(h.store.galaxy_last_search.phase, 'complete');
 });
 
 test('a terminal ownership 429 stops further systems and ranks without losing cached ownership', async () => {

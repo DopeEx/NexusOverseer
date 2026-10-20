@@ -10,6 +10,12 @@ import { loadSettings, getSetting } from './settings.js';
 import { createGalaxyCache, saveSystem, saveCatalog, saveGalaxyDelta, readGalaxyDeltas, catalogPath, exportGalaxyCache,
   readPublicGalaxy, savePublicGalaxy } from './galaxy-cache.js';
 import { createGalaxySharing } from './galaxy-sharing.js';
+import { createApiScheduler, retryDelay } from './api-scheduler.js';
+import { createTrafficRecorder, trafficSource } from './api-telemetry.js';
+
+const recordTraffic = createTrafficRecorder({ enabled: () => getSetting('developer.apiWaitRecording') === true });
+const apiScheduler = createApiScheduler({ storage: browser.storage.session, record: recordTraffic });
+const activeGameRequests = new Map();
 
 const galaxySharing = createGalaxySharing({
   storage: { get: key => browser.storage.local.get(key), set: values => browser.storage.local.set(values) },
@@ -21,12 +27,15 @@ const galaxySharing = createGalaxySharing({
 });
 
 const galaxyCache = createGalaxyCache({
-  fetcher: async path => {
-    return apiFetch(path, { polite: true });
+  promote: (serverKey, path, priority) => apiScheduler.promote(`https://${serverKey}.nexuslegacy.space`, path, priority),
+  fetcher: async (path, options = {}) => {
+    const serverOrigin = options.serverKey
+      ? `https://${options.serverKey}.nexuslegacy.space` : undefined;
+    return apiFetch(path, { polite: true, ...options, serverOrigin });
   },
   storage: {
-    get: keys => browser.storage.local.get(keys),
-    remove: keys => browser.storage.local.remove(keys),
+    get: (keys, serverKey) => (globalThis.nexusStorage?.forServer?.(serverKey) || browser.storage.local).get(keys),
+    remove: (keys, serverKey) => (globalThis.nexusStorage?.forServer?.(serverKey) || browser.storage.local).remove(keys),
   },
 });
 
@@ -80,9 +89,20 @@ async function getUniverses({ refresh = false } = {}) {
   }
 
   try {
-    const response = await fetch('https://nexuslegacy.space/api/universes');
+    const response = await apiScheduler.schedule({
+      origin: 'https://nexuslegacy.space', path: '/api/universes', priority: 'background', source: 'universe-catalog',
+    }, async () => {
+      const reply = await fetch('https://nexuslegacy.space/api/universes', { signal: AbortSignal.timeout(20000) });
+      return { ok: reply.ok, status: reply.status, data: reply.ok ? await reply.json() : null,
+        retryAfter: reply.headers?.get('Retry-After'),
+        rateLimitScope: reply.headers?.get('X-RateLimit-Scope'),
+        rateLimitLimit: reply.headers?.get('RateLimit-Limit'),
+        rateLimitPolicy: reply.headers?.get('RateLimit-Policy'),
+        rateLimitRemaining: reply.headers?.get('RateLimit-Remaining'),
+        rateLimitReset: reply.headers?.get('RateLimit-Reset') };
+    });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const universes = normalizeUniverses(await response.json());
+    const universes = normalizeUniverses(response.data);
     if (!universes.length) throw new Error('The universe catalog was empty or invalid.');
     if (typeof storage?.setUniverseCatalog === 'function') {
       return await storage.setUniverseCatalog(universes);
@@ -424,24 +444,24 @@ browser.action.onClicked.addListener(async () => {
   browser.tabs.create({ url: browser.runtime.getURL('dashboard.html') });
 });
 
-const handleRuntimeMessage = async (msg, context = null) => {
+const handleRuntimeMessage = async (msg, context = null, options = {}) => {
   if (msg?.type === 'GET_UNIVERSES') return getUniverses();
-  await syncGameServer();
+  if (!options.serverOrigin) await syncGameServer();
   if (msg.type === 'SCRAPE_NOW') return scrape(context);
-  if (msg.type === 'GET_FLEET') return getFleet(msg.planetId);
-  if (msg.type === 'GET_SHIP_DEFS') return getShipDefs();
-  if (msg.type === 'GET_PLANET_SHIPS') return getPlanetShips(msg.planetId);
-  if (msg.type === 'GET_MISSIONS') return apiGet('/api/fleet/missions');
-  if (msg.type === 'GET_PIRATE_CAMPS') return apiGet(PIRATE_CAMPS_PATH);
-  if (msg.type === 'GET_PIRATE_REPORTS') return apiGet(PIRATES_PATH);
+  if (msg.type === 'GET_FLEET') return getFleet(msg.planetId, options);
+  if (msg.type === 'GET_SHIP_DEFS') return getShipDefs(options);
+  if (msg.type === 'GET_PLANET_SHIPS') return getPlanetShips(msg.planetId, options);
+  if (msg.type === 'GET_MISSIONS') return apiGet('/api/fleet/missions', options);
+  if (msg.type === 'GET_PIRATE_CAMPS') return apiGet(PIRATE_CAMPS_PATH, options);
+  if (msg.type === 'GET_PIRATE_REPORTS') return apiGet(PIRATES_PATH, options);
   if (msg.type === 'REFRESH_DEBRIS') return refreshDebris();
   if (msg.type === 'GET_FUEL_ESTIMATE') {
     // POST: routed through the game tab (same-origin) — a Bearer POST from the
     // extension carries an Origin header the server 500s on.
-    return gamePost('/api/fleet/fuel-estimate', msg.body).then(r => (r && r.ok) ? r.data : r);
+    return gamePost('/api/fleet/fuel-estimate', msg.body, options).then(r => (r && r.ok) ? r.data : r);
   }
-  if (msg.type === 'GET_SURVEY_COOLDOWNS') return apiGet('/api/fleet/survey-cooldowns');
-  if (msg.type === 'GET_SURVEY_REPORTS') return apiGet('/api/fleet/survey-reports');
+  if (msg.type === 'GET_SURVEY_COOLDOWNS') return apiGet('/api/fleet/survey-cooldowns', options);
+  if (msg.type === 'GET_SURVEY_REPORTS') return apiGet('/api/fleet/survey-reports', options);
   if (msg.type === 'SEND_MINE') {
     const escortRetreatThreshold = [30, 50, 70].includes(msg.escortRetreatThreshold)
       ? msg.escortRetreatThreshold
@@ -453,53 +473,53 @@ const handleRuntimeMessage = async (msg, context = null) => {
       mineUntilFull: !!msg.mineUntilFull,
       // The game stores/accepts the threshold as a fraction (0.5), not a percent (50).
       ...(escortRetreatThreshold != null ? { escortRetreatThreshold: escortRetreatThreshold / 100 } : {}),
-    });
+    }, options);
   }
   if (msg.type === 'SEND_SURVEY') {
     return gamePost('/api/fleet/survey', {
       sourcePlanetId: msg.sourcePlanetId, targetSystemId: msg.targetSystemId, ships: msg.ships,
-    });
+    }, options);
   }
   if (msg.type === 'SEND_INVESTIGATE') {
     return gamePost('/api/fleet/investigate', {
       sourcePlanetId: msg.sourcePlanetId, reportId: msg.reportId, ships: msg.ships,
       hangarAssignments: {},
-    });
+    }, options);
   }
   if (msg.type === 'COLLECT_DEBRIS') {
     return gamePost('/api/fleet/collect-debris', {
       sourcePlanetId: msg.sourcePlanetId, debrisId: msg.debrisId, ships: msg.ships,
-    });
+    }, options);
   }
   if (msg.type === 'COLLECT_SALVAGE') {
     return gamePost('/api/fleet/collect-salvage', {
       sourcePlanetId: msg.sourcePlanetId, reportId: msg.reportId, ships: msg.ships,
-    });
+    }, options);
   }
   if (msg.type === 'SEND_EXPEDITION') {
     return gamePost('/api/fleet/expedition', {
       sourcePlanetId: msg.sourcePlanetId, ships: msg.ships, zone: msg.zone, depth: msg.depth,
-    });
+    }, options);
   }
   if (msg.type === 'SEND_SCOUT_CAMP') {
     return gamePost('/api/fleet/scout-camp', {
       sourcePlanetId: msg.sourcePlanetId, campId: msg.campId, ships: msg.ships,
-    });
+    }, options);
   }
   if (msg.type === 'SEND_ATTACK_PIRATES') {
     return gamePost('/api/fleet/attack-pirates', {
       sourcePlanetId: msg.sourcePlanetId, campId: msg.campId, ships: msg.ships,
       hangarAssignments: {},
-    });
+    }, options);
   }
   if (msg.type === 'SEND_XENO_SURVEY') {
     return gamePost('/api/fleet/xeno-survey', {
       sourcePlanetId: msg.sourcePlanetId, targetMoonId: msg.targetMoonId, ships: msg.ships,
       hangarAssignments: {},
-    });
+    }, options);
   }
-  if (msg.type === 'GET_PLANETS') return getPlanets();
-  if (msg.type === 'GET_DASHBOARD_OVERVIEW') return getDashboardOverview({ polite: msg.polite !== false });
+  if (msg.type === 'GET_PLANETS') return getPlanets(options);
+  if (msg.type === 'GET_DASHBOARD_OVERVIEW') return getDashboardOverview({ ...options, polite: msg.polite !== false });
   if (msg.type === 'SIM_BOOTSTRAP') return apiGet('/api/combat-simulator/bootstrap');
   if (msg.type === 'SIM_RUN') return simulateCombat(msg.attacker, msg.defender);
   if (msg.type === 'REBUILD_AGGREGATES') return enqueue(rebuildAggregates).then(() => ({ ok: true }));
@@ -507,7 +527,7 @@ const handleRuntimeMessage = async (msg, context = null) => {
   if (msg.type === 'BACKUP_NOW') return backupToDownloads(msg.reason || 'manual').then(() => ({ ok: true })).catch(e => ({ error: e.message }));
   if (['GET_PUBLIC_GALAXY_STATUS', 'UPDATE_PUBLIC_GALAXY', 'EXPORT_PUBLIC_GALAXY'].includes(msg.type)) {
     try {
-      const serverKey = await galaxyServerKey();
+      const serverKey = options.serverKey || await galaxyServerKey();
       if (msg.type === 'EXPORT_PUBLIC_GALAXY') return { data: await galaxyCache.exportPublic(serverKey) };
       if (msg.type === 'GET_PUBLIC_GALAXY_STATUS') return await galaxySharing.status(serverKey);
       return await galaxySharing.update(serverKey, { force: msg.force === true,
@@ -520,7 +540,7 @@ const handleRuntimeMessage = async (msg, context = null) => {
   if (['GET_ARMS', 'GET_GALAXY_MAP', 'GET_STATION_INDEX', 'GET_HUBS', 'GET_SYSTEM_PLANETS', 'GET_ARM_SECTORS', 'GET_SECTOR_SYSTEMS',
     'GET_GALAXY_SCANS', 'CLEAR_GALAXY_CACHE', 'GALAXY_OBSERVED', 'GALAXY_DELTA', 'GET_GALAXY_DELTAS'].includes(msg.type)) {
     try {
-      const serverKey = await galaxyServerKey();
+      const serverKey = options.serverKey || await galaxyServerKey();
       if (msg.type === 'GET_GALAXY_DELTAS') return { deltas: await readGalaxyDeltas(serverKey) };
       if (msg.type === 'GALAXY_DELTA') {
         if (!Number.isFinite(msg.at)) throw new Error('Invalid galaxy delta time.');
@@ -543,7 +563,7 @@ const handleRuntimeMessage = async (msg, context = null) => {
           'asteroid_scan_results', 'system_zones', 'system_zones_at', 'system_zone_by_id',
           'system_coords_by_id', 'system_coords_by_name', 'sector_zones',
         ]);
-        moonIdsCache = { key: '', at: 0, ids: [] };
+        moonIdsCaches.clear();
         return { ok: true };
       }
       if (msg.type === 'GALAXY_OBSERVED') {
@@ -554,7 +574,8 @@ const handleRuntimeMessage = async (msg, context = null) => {
         return { ok: true };
       }
       if (msg.type === 'GET_SYSTEM_PLANETS') return await galaxyCache.system(serverKey, msg.systemId, {
-        purpose: msg.purpose, group: msg.group, maxAge: msg.maxAge, force: msg.force === true,
+        purpose: msg.purpose, group: msg.group, maxAge: msg.maxAge, force: msg.force === true, priority: options.priority,
+        source: msg.source ? options.source : 'galaxy-cache',
       });
       const path = msg.type === 'GET_ARMS' ? '/api/galaxy/arms'
         : msg.type === 'GET_HUBS' ? '/api/market/hubs'
@@ -562,25 +583,37 @@ const handleRuntimeMessage = async (msg, context = null) => {
         : msg.type === 'GET_GALAXY_MAP' ? '/api/galaxy/map'
           : msg.type === 'GET_ARM_SECTORS' ? `/api/galaxy/arms/${msg.armId}/sectors`
             : `/api/galaxy/sectors/${msg.sectorId}/systems`;
-      return await galaxyCache.catalog(serverKey, path, { force: msg.force === true });
+      return await galaxyCache.catalog(serverKey, path, { force: msg.force === true, priority: options.priority });
     } catch (error) {
       console.warn('[NexusOverseer] Galaxy cache request failed:', error);
       return { error: error.message, status: error.status, code: error.code, groups: error.groups };
     }
   }
-  if (msg.type === 'GET_PLAYER_ALLIANCE_TAG') return getPlayerAllianceTag(msg.name);
-  if (msg.type === 'GET_AUTH_ME') return apiGet('/api/auth/me');
+  if (msg.type === 'GET_PLAYER_ALLIANCE_TAG') return getPlayerAllianceTag(msg.name, options);
+  if (msg.type === 'GET_AUTH_ME') return apiGet('/api/auth/me', options);
   if (msg.type === 'GET_SYSTEM_COORDS') return getSystemCoords(msg.names || [], msg.ids || []);
-  if (msg.type === 'GET_ALLIANCE') return getAlliance();
-  if (msg.type === 'GET_PLAYER_RANK') return getPlayerRanks(msg.name);
-  if (msg.type === 'GET_RESOURCES') return getResources();
-  if (msg.type === 'GET_MARKET_ORDERS') return getOrders('/api/market/orders');
-  if (msg.type === 'GET_MARKET_TRADES') return getMarketTrades();
-  if (msg.type === 'GET_ALLIANCE_ORDERS') return getOrders('/api/alliance-trade/orders');
-  if (msg.type === 'START_RESEARCH') return startResearch(msg.researchId, msg.planetId, msg.useFragments, context);
+  if (msg.type === 'GET_ALLIANCE') return getAlliance(options);
+  if (msg.type === 'GET_PLAYER_RANK') return getPlayerRanks(msg.name, options);
+  if (msg.type === 'GET_RESOURCES') return getResources(options);
+  if (msg.type === 'GET_MARKET_ORDERS') return getOrders('/api/market/orders', options);
+  if (msg.type === 'GET_MARKET_TRADES') return getMarketTrades(options);
+  if (msg.type === 'GET_ALLIANCE_ORDERS') return getOrders('/api/alliance-trade/orders', options);
+  if (msg.type === 'START_RESEARCH') return startResearch(msg.researchId, msg.planetId, msg.useFragments, context, options);
   if (msg.type === 'SET_LIVE_SEARCH') return setLiveSearch(msg.config);
   if (msg.type === 'STOP_LIVE_SEARCH') return stopLiveSearch();
 };
+
+const NETWORK_MESSAGES = new Set([
+  'GET_FLEET', 'GET_SHIP_DEFS', 'GET_PLANET_SHIPS', 'GET_MISSIONS', 'GET_PIRATE_CAMPS',
+  'GET_PIRATE_REPORTS', 'GET_FUEL_ESTIMATE', 'GET_SURVEY_COOLDOWNS', 'GET_SURVEY_REPORTS',
+  'SEND_MINE', 'SEND_SURVEY', 'SEND_INVESTIGATE', 'COLLECT_DEBRIS', 'COLLECT_SALVAGE',
+  'SEND_EXPEDITION', 'SEND_SCOUT_CAMP', 'SEND_ATTACK_PIRATES', 'SEND_XENO_SURVEY',
+  'GET_PLANETS', 'GET_DASHBOARD_OVERVIEW', 'GET_PLAYER_ALLIANCE_TAG', 'GET_AUTH_ME',
+  'GET_ALLIANCE', 'GET_PLAYER_RANK', 'GET_RESOURCES', 'GET_MARKET_ORDERS', 'GET_MARKET_TRADES',
+  'GET_ALLIANCE_ORDERS', 'START_RESEARCH', 'GET_SYSTEM_PLANETS', 'GET_ARMS',
+  'GET_GALAXY_MAP', 'GET_STATION_INDEX', 'GET_HUBS', 'GET_ARM_SECTORS', 'GET_SECTOR_SYSTEMS',
+]);
+const cancelledRequests = new Map();
 
 browser.runtime.onMessage.addListener(async (msg, sender) => {
   await settingsReady;
@@ -593,7 +626,7 @@ browser.runtime.onMessage.addListener(async (msg, sender) => {
     try {
       const serverKey = server?.key || msg.serverKey;
       if (msg.type === 'DIAGNOSTICS_APPEND') return await appendDiagnostics(msg.batch, serverKey);
-      if (!['api', 'galaxy', 'websocket'].includes(msg.kind)) throw new Error('Unknown diagnostic stream.');
+      if (!['api', 'galaxy', 'websocket', 'scheduling'].includes(msg.kind)) throw new Error('Unknown diagnostic stream.');
       await migrateDiagnostics(serverKey);
       await clearDiagnosticLogs(serverKey, msg.kind);
       return { ok: true };
@@ -606,6 +639,70 @@ browser.runtime.onMessage.addListener(async (msg, sender) => {
   const sourceServer = sender?.tab?.url
     ? globalThis.nexusStorage?.serverFromUrl?.(sender.tab.url)
     : null;
+  const server = sourceServer || await (globalThis.nexusStorage?.getSelectedServer?.()
+    ?? globalThis.nexusStorage?.getActiveServer?.());
+  const options = {
+    source: trafficSource(msg.source || (msg.type === 'GET_DASHBOARD_OVERVIEW' ? 'dashboard'
+      : msg.type?.startsWith('SEND_') || msg.type?.startsWith('COLLECT_') ? 'fleet-action'
+        : msg.type?.includes('PIRATE') ? 'pirates'
+          : msg.type?.includes('MARKET') || msg.type === 'GET_ALLIANCE_ORDERS' ? 'market'
+            : msg.type === 'START_RESEARCH' ? 'research'
+              : msg.type?.includes('SURVEY') ? 'scouting'
+        : msg.type === 'API_REQUEST' ? 'content-tool' : 'background-maintenance')),
+    serverOrigin: server?.origin || 'https://s0.nexuslegacy.space',
+    serverKey: server?.key || 's0',
+    priority: msg.priority || (msg.type?.startsWith('SEND_') || msg.type?.startsWith('COLLECT_') ||
+      msg.type === 'START_RESEARCH' || msg.type === 'API_REQUEST' && msg.method === 'POST'
+      ? 'action' : msg.polite ? 'background' : 'interactive'),
+  };
+  if (msg.type === 'GET_API_STATUS') {
+    if (msg.path != null && !validApiPath(msg.path)) return { error: 'Invalid API status path.' };
+    try {
+      return await apiScheduler.status(options.serverOrigin, msg.path);
+    } catch (error) {
+      console.error('[NexusOverseer] API status failed:', error);
+      return { error: error.message };
+    }
+  }
+  if (msg.type === 'API_TRAFFIC') {
+    if (!sourceServer || !validApiPath(msg.path)) return { error: 'Invalid API observation.' };
+    try {
+      await apiScheduler.observe(options.serverOrigin, msg.path, msg.response,
+        { started: msg.started === true });
+      return { ok: true };
+    } catch (error) {
+      console.error('[NexusOverseer] API observation failed:', error);
+      return { error: error.message };
+    }
+  }
+  const cancellationKey = `${sender?.tab?.id ?? sender?.url ?? 'extension'}:${msg.requestId}`;
+  if (msg.type === 'API_CANCEL') {
+    cancelledRequests.get(cancellationKey)?.abort(new Error('API request cancelled.'));
+    return { ok: true };
+  }
+  if (msg.type === 'API_REQUEST') {
+    if (!validApiPath(msg.path) || !['GET', 'POST'].includes(msg.method)) {
+      return { error: 'Invalid game API request.' };
+    }
+    const controller = new AbortController();
+    cancelledRequests.set(cancellationKey, controller);
+    try {
+      const requestOptions = { ...options, signal: controller.signal };
+      return msg.method === 'GET'
+        ? { ok: true, data: await apiFetch(msg.path, requestOptions) }
+        : await gamePost(msg.path, msg.body || {}, requestOptions);
+    } catch (error) {
+      console.error('[NexusOverseer] Game API request failed:', error);
+      return { error: error.message, status: error.status };
+    } finally {
+      cancelledRequests.delete(cancellationKey);
+    }
+  }
+  // Local galaxy reads use explicit server keys and must not wait behind a
+  // scoped background operation that is itself waiting for network capacity.
+  if (NETWORK_MESSAGES.has(msg.type) || msg.type === 'GET_GALAXY_SCANS' || msg.type === 'GET_GALAXY_DELTAS') {
+    return handleRuntimeMessage(msg, null, options);
+  }
   if (msg?.type === 'GALAXY_DELTA' && !sourceServer) return { error: 'Galaxy delta requires a game-tab origin.' };
   // Simulations do not access scoped storage. Pin their origin explicitly so
   // a long scrape cannot hold them behind the storage scope for another server.
@@ -615,9 +712,9 @@ browser.runtime.onMessage.addListener(async (msg, sender) => {
     const serverOrigin = server?.origin || 'https://s0.nexuslegacy.space';
     return msg.type === 'SIM_RUN'
       ? simulateCombat(msg.attacker, msg.defender, serverOrigin)
-      : apiGet('/api/combat-simulator/bootstrap', { serverOrigin });
+      : apiGet('/api/combat-simulator/bootstrap', { serverOrigin, source: 'simulator' });
   }
-  const selectedServer = sourceServer || await globalThis.nexusStorage?.getActiveServer?.();
+  const selectedServer = server;
   const serverKey = ['SCRAPE_NOW', 'CLEAR_GALAXY_CACHE', 'GET_PUBLIC_GALAXY_STATUS', 'UPDATE_PUBLIC_GALAXY',
     'EXPORT_PUBLIC_GALAXY'].includes(msg?.type) && msg.serverKey
     ? msg.serverKey
@@ -631,19 +728,32 @@ browser.runtime.onMessage.addListener(async (msg, sender) => {
   return handleRuntimeMessage(msg);
 });
 
+function validApiPath(path) {
+  if (typeof path !== 'string' || !path.startsWith('/api/') || /[\\#\s]/.test(path)) return false;
+  try {
+    const url = new URL(path, 'https://s0.nexuslegacy.space');
+    return url.origin === 'https://s0.nexuslegacy.space' && url.pathname.startsWith('/api/');
+  } catch { return false; }
+}
+
 // Launch a research on a planet: POST /api/research/{id}/start { planetId }.
 // (Endpoint mirrors the game client.) Refreshes stored state on success so the
 // dashboard reflects the new active research.
-async function startResearch(researchId, planetId, useFragments = false, context = null) {
+async function startResearch(researchId, planetId, useFragments = false, context = null, options = {}) {
   if (researchId == null || planetId == null) return { error: 'Missing research or planet id.' };
   try {
     const body = { planetId };
     if (useFragments) body.useFragments = true;
-    const r = await requestFromGameTab(`/api/research/${researchId}/start`, { method: 'POST', body });
+    const r = await gamePost(`/api/research/${researchId}/start`, body, options);
     if (!r?.ok) return { error: `Start failed: ${r?.error || r?.status || 'unknown error'}` };
-    await scrape(context);   // pick up the new active research
+    // A confirmed action must not wait for an entire report scrape to complete.
+    const refresh = options.serverKey && globalThis.nexusStorage?.withServer
+      ? globalThis.nexusStorage.withServer(options.serverKey, (_server, scope) => scrape(scope))
+      : scrape(context);
+    void refresh.catch(error => console.error('[NexusOverseer] Research follow-up refresh failed:', error));
     return { ok: true, data: r.data || {} };
   } catch (e) {
+    console.error('[NexusOverseer] Research start failed:', e);
     return { error: e.message };
   }
 }
@@ -668,9 +778,9 @@ function findResearchLab(resp) {
 // research-planner inputs: highest research-lab level (+ its definition and the
 // host planet's build-speed), the count of planets (= parallel research slots),
 // and any in-progress lab upgrade end time.
-async function getResources() {
+async function getResources(options = {}) {
   try {
-    const data = await apiFetch('/api/planets');
+    const data = await apiFetch('/api/planets', options);
     const planets = data.planets || [];
     const keys = ['ore', 'silicates', 'hydrogen', 'alloys',
       'oreRate', 'silicatesRate', 'hydrogenRate', 'alloysRate'];
@@ -678,7 +788,7 @@ async function getResources() {
     let labLevel = 0, labDef = null, buildSpeedMult = 1, labUpgradeEndsAt = null;
     const researchPlanets = [];   // { id, name, mult } — one research slot each
     for (const p of planets) {
-      const d = await apiFetch(`/api/planets/${p.id}`);
+      const d = await apiFetch(`/api/planets/${p.id}`, options);
       const pl = d.planet || d;
       for (const k of keys) tot[k] += pl[k] || 0;
       const lab = findResearchLab(d);
@@ -690,7 +800,7 @@ async function getResources() {
       }
       // Research speed is per-planet; actual time = nextResearchTime × this mult.
       try {
-        const r = await apiFetch(`/api/research?planetId=${p.id}`);
+        const r = await apiFetch(`/api/research?planetId=${p.id}`, options);
         researchPlanets.push({ id: p.id, name: p.name || `Planet #${p.id}`, mult: r.researchSpeedMult || 1 });
       } catch { /* skip this planet's slot */ }
     }
@@ -709,9 +819,9 @@ async function getResources() {
 
 // Your alliance tag + member ids, so the finder can flag alliance-owned
 // planets it scans.
-async function getAlliance() {
+async function getAlliance(options = {}) {
   try {
-    const data = await apiFetch('/api/alliances/my');
+    const data = await apiFetch('/api/alliances/my', options);
     const a = data.alliance || {};
     const members = a.members || [];
     return {
@@ -727,11 +837,11 @@ async function getAlliance() {
 // Look up a player's per-category leaderboard ranks by exact name (finder
 // rank columns). `category=` re-ranks the board; `rank` then holds that
 // category's rank. One request per category.
-async function getPlayerRanks(name) {
+async function getPlayerRanks(name, options = {}) {
   if (!name) return { military: null, economy: null, research: null };
   const out = { military: null, economy: null, research: null };
   for (const cat of ['military', 'economy', 'research']) {
-    const data = await apiGet(`/api/rankings/players?category=${cat}&search=${encodeURIComponent(name)}`);
+    const data = await apiGet(`/api/rankings/players?category=${cat}&search=${encodeURIComponent(name)}`, options);
     if (data.error) return data;
     const lb = data.leaderboard || [];
     const e = lb.find(x => x.username === name) || lb[0];
@@ -742,9 +852,9 @@ async function getPlayerRanks(name) {
 
 // A player's current alliance tag by exact username (asteroid field outpost
 // owners), via the same leaderboard search endpoint.
-async function getPlayerAllianceTag(name) {
+async function getPlayerAllianceTag(name, options = {}) {
   if (!name) return { tag: null };
-  const data = await apiGet(`/api/rankings/players?category=military&search=${encodeURIComponent(name)}`);
+  const data = await apiGet(`/api/rankings/players?category=military&search=${encodeURIComponent(name)}`, options);
   if (data.error) return data;
   const e = (data.leaderboard || []).find(x => x.username === name);
   return { tag: e ? (e.allianceTag || null) : null };
@@ -752,9 +862,9 @@ async function getPlayerAllianceTag(name) {
 
 // All open orders from a paginated orders endpoint (public market or alliance
 // trade), across every page.
-async function getOrders(path) {
+async function getOrders(path, options = {}) {
   try {
-    const first = await apiFetch(`${path}?page=1&limit=100`);
+    const first = await apiFetch(`${path}?page=1&limit=100`, options);
     const limit = first.pagination?.limit || 100;        // server may cap below 100
     const total = first.pagination?.total ?? (first.orders || []).length;
     const orders = [...(first.orders || [])];
@@ -762,7 +872,7 @@ async function getOrders(path) {
     if (pages > 1) {
       const rest = await Promise.all(
         Array.from({ length: pages - 1 }, (_, i) =>
-          apiFetch(`${path}?page=${i + 2}&limit=${limit}`)
+          apiFetch(`${path}?page=${i + 2}&limit=${limit}`, { ...options, priority: 'bulk' })
             .then(d => d.orders || []).catch(() => [])));
       for (const o of rest) orders.push(...o);
     }
@@ -774,9 +884,9 @@ async function getOrders(path) {
 
 // Full personal market history. Fetch every page so profit/net-flow totals
 // cover the complete account history instead of just the first page.
-async function getMarketTrades() {
+async function getMarketTrades(options = {}) {
   try {
-    const first = await apiFetch('/api/market/my-trades?page=1&limit=100');
+    const first = await apiFetch('/api/market/my-trades?page=1&limit=100', options);
     const trades = [...(Array.isArray(first) ? first : first.trades || [])];
     const pagination = Array.isArray(first) ? null : first.pagination;
     const limit = pagination?.limit || 100;
@@ -785,7 +895,7 @@ async function getMarketTrades() {
     if (pages > 1) {
       const rest = await Promise.all(
         Array.from({ length: pages - 1 }, (_, i) =>
-          apiFetch(`/api/market/my-trades?page=${i + 2}&limit=${limit}`)
+          apiFetch(`/api/market/my-trades?page=${i + 2}&limit=${limit}`, { ...options, priority: 'bulk' })
             .then(data => Array.isArray(data) ? data : data.trades || [])));
       for (const page of rest) trades.push(...page);
     }
@@ -849,74 +959,28 @@ async function requestFromGameTab(path, { method = 'GET', body, serverOrigin } =
   if (!tabs.length) {
     throw new Error('Open the logged-in game tab first.');
   }
+  const requestKey = `${tabs[0].id}:${path.split('?')[0]}`;
+  activeGameRequests.set(requestKey, (activeGameRequests.get(requestKey) || 0) + 1);
   try {
     return await sendGameFetchMessage(tabs[0].id, { type: 'GAME_FETCH', method, path, body });
   } catch (error) {
     throw new Error(`Unable to request API through game tab: ${error.message}`, { cause: error });
+  } finally {
+    const remaining = activeGameRequests.get(requestKey) - 1;
+    if (remaining) activeGameRequests.set(requestKey, remaining);
+    else activeGameRequests.delete(requestKey);
   }
 }
 
-// Proactive rate-limit throttle. The server advertises its budget on every
-// response (`RateLimit-Remaining` / `RateLimit-Reset`, policy 400/60s). Track the
-// last-seen values and pause before sending once the remaining budget dips below
-// RL_MIN_REMAINING, until the window resets — so a big scan self-paces instead of
-// waiting to get 429'd. The reactive Retry-After path below still backstops.
-const RL_MIN_REMAINING = 20;     // headroom to keep under the limit
-const RL_POLITE_REMAINING = 40;  // extra headroom for background scans
-let rlRemaining = Infinity;      // last-seen RateLimit-Remaining
-let rlResetAt = 0;               // epoch ms when the current window resets
-let rlBlockedUntil = 0;          // independent of headers on other in-flight responses
-let rlNextPoliteAt = 0;
-const RL_POLITE_INTERVAL_MS = 200;
-let rlPoliteIntervalMs = RL_POLITE_INTERVAL_MS;
-let rlLastLimitedAt = null;
-
-function isSimulatorPath(path) {
-  return path.startsWith('/api/combat-simulator/');
+async function requestOrigin(serverOrigin) {
+  if (serverOrigin) return serverOrigin;
+  await syncGameServer();
+  return GAME_URL;
 }
 
-function updateRateLimit(response, path) {
-  // Endpoint-specific simulator headers must not overwrite the general API
-  // budget or trigger its fixed 20-request headroom on a smaller quota.
-  if (isSimulatorPath(path)) return;
-  const rem = parseInt(response?.rateLimitRemaining, 10);
-  const reset = parseFloat(response?.rateLimitReset);   // seconds until reset
-  if (Number.isFinite(rem)) rlRemaining = rem;                // authoritative — corrects drift
-  if (Number.isFinite(reset)) rlResetAt = Date.now() + reset * 1000;
-}
-
-// Wait while low on budget and the window hasn't reset, then reserve one slot
-// optimistically (corrected by the next response header) so parallel callers
-// don't all slip through before any response updates the count.
-async function rateLimitGate(polite = false) {
-  const buffer = polite ? RL_POLITE_REMAINING : RL_MIN_REMAINING;
-  for (;;) {
-    const now = Date.now();
-    const waitUntil = Math.max(rlBlockedUntil, polite ? rlNextPoliteAt : 0,
-      rlRemaining <= buffer && now < rlResetAt ? rlResetAt + 100 : 0);
-    if (now >= waitUntil) break;
-    await new Promise(res => setTimeout(res, Math.min(waitUntil - now, 2000)));
-  }
-  if (polite) {
-    if (rlLastLimitedAt != null && Date.now() - rlLastLimitedAt >= 60000) {
-      rlPoliteIntervalMs = RL_POLITE_INTERVAL_MS;
-      rlLastLimitedAt = null;
-    }
-    rlNextPoliteAt = Date.now() + rlPoliteIntervalMs;
-  }
-  rlRemaining--;
-}
-
-function recordRateLimitPause(response, path, fallbackMs) {
-  const waitMs = retryAfterMs(response.retryAfter, fallbackMs);
-  if (!isSimulatorPath(path)) {
-    rlPoliteIntervalMs = Math.min(2000, rlPoliteIntervalMs * 2);
-    rlLastLimitedAt = Date.now();
-    rlNextPoliteAt = Math.max(rlNextPoliteAt, Date.now() + rlPoliteIntervalMs);
-    rlBlockedUntil = Math.max(rlBlockedUntil, Date.now() + waitMs,
-      rlRemaining <= RL_MIN_REMAINING ? rlResetAt : 0);
-  }
-  return waitMs;
+function scheduledGameRequest(path, options) {
+  return apiScheduler.schedule({ origin: options.serverOrigin, path, ...options },
+    () => requestFromGameTab(path, options));
 }
 
 class NexusAPIError extends Error {
@@ -927,19 +991,19 @@ class NexusAPIError extends Error {
   }
 }
 
-async function apiFetch(path, { polite = false, serverOrigin } = {}) {
+async function apiFetch(path, { polite = false, serverOrigin, priority = 'background', signal, source = 'background-maintenance' } = {}) {
+  serverOrigin = await requestOrigin(serverOrigin);
   let delayMs = 1000;
   const maxAttempts = 4;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    await rateLimitGate(polite);
     let r;
     try {
-      r = await requestFromGameTab(path, { serverOrigin });
+      r = await scheduledGameRequest(path, { method: 'GET', serverOrigin, polite, priority, signal, source,
+        fallback: Math.max(5000, delayMs) });
     } catch (e) {
       throw new NexusAPIError(0, `API ${path} → ${e.message}`, { cause: e });
     }
-    updateRateLimit(r, path);
 
     if (r.networkError) {
       const error = new NexusAPIError(0, `API ${path} → network error: ${r.error}`);
@@ -953,7 +1017,7 @@ async function apiFetch(path, { polite = false, serverOrigin } = {}) {
 
     const status = Number(r.status) || 0;
     const message = r.error || `Request failed with status ${status}`;
-    const rateLimitWait = status === 429 ? recordRateLimitPause(r, path, Math.max(5000, delayMs)) : 0;
+    const rateLimitWait = status === 429 ? retryAfterMs(r.retryAfter, Math.max(5000, delayMs)) : 0;
     if (status === 401) {
       throw new NexusAPIError(401, `API ${path} → Unauthorized. Please log in to Nexus Legacy.`);
     }
@@ -1045,9 +1109,9 @@ async function apiMissionFuel(m) {
 }
 
 // Current stationed fleet as { shipKey: usableQuantity } — for the simulator.
-async function getPlanets() {
+async function getPlanets(options = {}) {
   try {
-    const data = await apiFetch('/api/planets');
+    const data = await apiFetch('/api/planets', options);
     const planets = (data.planets || []).map(p => ({
       id: p.id,
       name: p.name || `Planet ${p.id}`,
@@ -1067,11 +1131,12 @@ async function getPlanets() {
 // Own moon ids are only discoverable via the galaxy view of the systems my planets
 // sit in, so cache them (moon ownership rarely changes).
 const MOON_IDS_TTL = 30 * 60 * 1000;
-let moonIdsCache = { key: '', at: 0, ids: [] };
+const moonIdsCaches = new Map();
 async function getOwnMoonIds(planetList, opts) {
   const sysIds = [...new Set(planetList.map(p => p.systemId).filter(x => x != null))].sort();
-  const serverKey = await galaxyServerKey();
+  const serverKey = opts?.serverKey || await galaxyServerKey();
   const key = `${serverKey}:${sysIds.join(',')}`;
+  const moonIdsCache = moonIdsCaches.get(key) || { at: 0, ids: [] };
   if (moonIdsCache.key === key && Date.now() - moonIdsCache.at < MOON_IDS_TTL) return moonIdsCache.ids;
   try {
     const me = await apiFetch('/api/auth/me', opts);
@@ -1080,14 +1145,14 @@ async function getOwnMoonIds(planetList, opts) {
     const ids = [];
     for (const s of sysIds) {
       let sd;
-      try { sd = await galaxyCache.system(serverKey, s, { group: 'moons', maxAge: MOON_IDS_TTL }); }
+      try { sd = await galaxyCache.system(serverKey, s, { group: 'moons', maxAge: MOON_IDS_TTL, priority: opts?.priority }); }
       catch (error) {
         console.warn(`[NexusOverseer] Unable to refresh moons in system ${s}:`, error);
         continue;
       }
       for (const mo of (sd.moons || [])) if (mo.userId != null && mo.userId === myId) ids.push(mo.id);
     }
-    moonIdsCache = { key, at: Date.now(), ids };
+    moonIdsCaches.set(key, { key, at: Date.now(), ids });
     return ids;
   } catch {
     return moonIdsCache.ids;
@@ -1121,8 +1186,8 @@ function damagedShips(fleet, shipYards) {
   return out;
 }
 
-async function getDashboardOverview({ polite = true } = {}) {
-  const opts = { polite };
+async function getDashboardOverview({ polite = true, ...options } = {}) {
+  const opts = { ...options, polite, priority: polite ? 'background' : options.priority || 'interactive' };
   try {
     const [planetsData, missionsData, researchData] = await Promise.all([
       apiFetch('/api/planets', opts),
@@ -1307,18 +1372,18 @@ async function getDashboardOverview({ polite = true } = {}) {
   }
 }
 
-async function getFleet(planetId) {
+async function getFleet(planetId, options = {}) {
   try {
     let targets;
     if (planetId === 'all') {
-      const data = await apiFetch('/api/planets');
+      const data = await apiFetch('/api/planets', options);
       targets = (data.planets || []).map(p => p.id);
     } else {
-      targets = [planetId || await getHomePlanetId()];
+      targets = [planetId || await requestHomePlanetId(options)];
     }
     const fleet = {};
     for (const id of targets) {
-      const data = await apiFetch(`/api/planets/${id}/fleet`);
+      const data = await apiFetch(`/api/planets/${id}/fleet`, options);
       for (const f of (data.fleet || [])) {
         const key = f.definition?.key;
         const qty = (f.quantity || 0) - (f.damagedQuantity || 0);
@@ -1334,13 +1399,23 @@ async function getFleet(planetId) {
 // Full ship catalog (all types, owned or not) from the shipyard, so templates
 // can include combat escorts you don't currently field. Raw shipDefId (= the
 // shipyard ship id) is what the mine endpoint needs.
-async function getShipDefs() {
+async function requestHomePlanetId(options) {
+  if (!options.serverOrigin) return getHomePlanetId();
+  const data = await apiFetch('/api/planets', options);
+  const planets = data.planets || [];
+  const home = planets.find(planet => planet.isHomeworld) || planets[0];
+  if (!home) throw new Error('No planets found for this account');
+  return home.id;
+}
+
+async function getShipDefs(options = {}) {
   try {
-    await syncGameServer();
-    const planetId = await getHomePlanetId();
+    const serverOrigin = await requestOrigin(options.serverOrigin);
+    options = { ...options, serverOrigin };
+    const planetId = await requestHomePlanetId(options);
     const [data, me] = await Promise.all([
-      apiFetch(`/api/planets/${planetId}/shipyard`),
-      apiFetch('/api/auth/me').catch(() => ({})),
+      apiFetch(`/api/planets/${planetId}/shipyard`, options),
+      apiFetch('/api/auth/me', options).catch(() => ({})),
     ]);
     const race = me.user?.race || null;
     const ships = (data.ships || []).map(s => ({
@@ -1348,7 +1423,7 @@ async function getShipDefs() {
       key: s.key || '',
       name: s.name || `#${s.id}`,
       cargoCapacity: s.cargoCapacity || 0,
-      imageUrl: (race && s.key) ? `${GAME_URL}/api/images/ships/${race}/${s.key}.webp` : null,
+      imageUrl: (race && s.key) ? `${serverOrigin}/api/images/ships/${race}/${s.key}.webp` : null,
       shipClass: s.shipClass || '',
       miningCargo: s.miningCargoCapacity || 0,
       sortOrder: s.sortOrder || 0,
@@ -1365,10 +1440,10 @@ async function getShipDefs() {
 }
 
 // Ships actually available on one planet, as { shipDefId: undamagedQuantity }.
-async function getPlanetShips(planetId) {
+async function getPlanetShips(planetId, options = {}) {
   if (planetId == null) return { error: 'No planet selected.' };
   try {
-    const data = await apiFetch(`/api/planets/${planetId}/fleet`);
+    const data = await apiFetch(`/api/planets/${planetId}/fleet`, options);
     const available = {};
     for (const f of (data.fleet || [])) {
       const qty = (f.quantity || 0) - (f.damagedQuantity || 0);
@@ -1380,44 +1455,24 @@ async function getPlanetShips(planetId) {
   }
 }
 
-// fuel-estimate has its own tighter scope (40/10s, 120/min) separate from the
-// global RateLimit-* budget. Keep a client-side window for those known caps
-// in addition to the response-header budget observed by gamePost.
-const FUEL_EST_TIMES = [];
-async function fuelEstimateGate() {
-  for (;;) {
-    const now = Date.now();
-    while (FUEL_EST_TIMES.length && now - FUEL_EST_TIMES[0] > 60000) FUEL_EST_TIMES.shift();
-    const in10s = FUEL_EST_TIMES.filter(t => now - t <= 10000).length;
-    if (FUEL_EST_TIMES.length < 120 && in10s < 40) break;
-    await new Promise(res => setTimeout(res, 250));
-  }
-  FUEL_EST_TIMES.push(Date.now());
-}
-
 // POST through the game tab's content script so requests are same-origin
 // requests include the logged-in session cookie and match the game's origin.
 // identical to the game's own call. A Bearer request straight from the
 // extension is rejected by the server (500).
 function retryAfterMs(value, fallbackMs) {
-  if (value == null || String(value).trim() === '') return fallbackMs;
-  const seconds = Number(value);
-  if (Number.isFinite(seconds)) return Math.max(1000, seconds * 1000);
-  const date = Date.parse(value);
-  return Number.isFinite(date) ? Math.max(1000, date - Date.now()) : fallbackMs;
+  return retryDelay(value, fallbackMs);
 }
 
-async function gamePost(path, body, { retry429 = true, serverOrigin } = {}) {
+async function gamePost(path, body, { retry429 = true, serverOrigin, priority = 'action', signal, source = 'fleet-action' } = {}) {
   if (body.ships && !body.ships.length) return { error: 'No ships selected.' };
-  if (path === '/api/fleet/fuel-estimate') await fuelEstimateGate();
   try {
+    serverOrigin = await requestOrigin(serverOrigin);
     // Retry on 429, honouring Retry-After, then exponential backoff — same policy as apiFetch.
     for (let attempt = 0; ; attempt++) {
-      await rateLimitGate();
-      const r = await requestFromGameTab(path, { method: 'POST', body, serverOrigin });
-      updateRateLimit(r, path);
+      const r = await scheduledGameRequest(path, { method: 'POST', body, serverOrigin, priority, signal, source,
+        fallback: Math.max(5000, 1000 * 2 ** attempt) });
       if (Number(r?.status) === 429) {
-        const waitMs = recordRateLimitPause(r, path, Math.max(5000, 1000 * 2 ** attempt));
+        const waitMs = retryAfterMs(r.retryAfter, Math.max(5000, 1000 * 2 ** attempt));
         if (retry429 && attempt < 4) {
           await new Promise(res => setTimeout(res, waitMs));
           continue;
@@ -1426,6 +1481,7 @@ async function gamePost(path, body, { retry429 = true, serverOrigin } = {}) {
       return r;
     }
   } catch (e) {
+    console.error(`[NexusOverseer] API POST ${path} failed:`, e);
     return { error: e.message };
   }
 }
@@ -1438,18 +1494,14 @@ const SIM_RECOVERY_SUCCESSES = 10;
 const SIM_RETRY_DELAY_MS = 5000;
 const SIM_MAX_RETRIES = 3;
 const SIM_FAILURE_COOLDOWN_MS = 30000;
-let simulationQueue = Promise.resolve();
-let simulationIntervalMs = SIM_MIN_INTERVAL_MS;
-let simulationSuccesses = 0;
-let nextSimulationAt = 0;
-let simulationBlockedUntil = 0;
+const simulationStates = new Map();
 
-function simulationRateLimitError() {
-  const seconds = Math.max(1, Math.ceil((simulationBlockedUntil - Date.now()) / 1000));
+function simulationRateLimitError(state) {
+  const seconds = Math.max(1, Math.ceil((state.blockedUntil - Date.now()) / 1000));
   return {
     status: 429,
     retryAfter: String(seconds),
-    error: `Combat simulator rate limit reached. Try again in ${seconds} seconds.`,
+    error: `Combat simulator API rate limit reached. Try again in ${seconds} seconds.`,
   };
 }
 
@@ -1458,45 +1510,57 @@ async function simulateCombat(attacker, defender, serverOrigin) {
   if (!defender?.fleet?.length && !Object.keys(defender?.planetaryDefense?.levels || {}).length) {
     return { error: 'Defender needs ships, or a planetary defence level.' };
   }
+  serverOrigin = await requestOrigin(serverOrigin);
+  if (!simulationStates.has(serverOrigin)) simulationStates.set(serverOrigin, {
+    queue: Promise.resolve(), interval: SIM_MIN_INTERVAL_MS, successes: 0, nextAt: 0, blockedUntil: 0,
+  });
+  const state = simulationStates.get(serverOrigin);
   const run = async () => {
-    if (Date.now() < simulationBlockedUntil) return simulationRateLimitError();
+    if (Date.now() < state.blockedUntil) return simulationRateLimitError(state);
     for (let attempt = 0; ; attempt++) {
-      const waitMs = Math.max(nextSimulationAt, simulationBlockedUntil) - Date.now();
+      const waitMs = Math.max(state.nextAt, state.blockedUntil) - Date.now();
       if (waitMs > 0) await new Promise(resolve => setTimeout(resolve, waitMs));
-      const response = await gamePost('/api/combat-simulator/simulate', { attacker, defender }, { retry429: false, serverOrigin });
+      const response = await gamePost('/api/combat-simulator/simulate', { attacker, defender },
+        { retry429: false, serverOrigin, priority: 'bulk', source: 'simulator' });
       if (response?.status !== 429) {
         if (response?.ok) {
-          if (++simulationSuccesses >= SIM_RECOVERY_SUCCESSES) {
-            simulationIntervalMs = Math.max(SIM_MIN_INTERVAL_MS, simulationIntervalMs - 50);
-            simulationSuccesses = 0;
+          if (++state.successes >= SIM_RECOVERY_SUCCESSES) {
+            state.interval = Math.max(SIM_MIN_INTERVAL_MS, state.interval - 50);
+            state.successes = 0;
           }
         } else {
-          simulationSuccesses = 0;
+          state.successes = 0;
         }
-        nextSimulationAt = Date.now() + simulationIntervalMs;
+        state.nextAt = Date.now() + state.interval;
         if (response?.rateLimitRemaining != null && Number(response.rateLimitRemaining) <= 0) {
           const resetMs = Number(response.rateLimitReset) * 1000;
-          if (Number.isFinite(resetMs)) nextSimulationAt = Math.max(nextSimulationAt, Date.now() + resetMs);
+          if (Number.isFinite(resetMs)) state.nextAt = Math.max(state.nextAt, Date.now() + resetMs);
         }
         return response;
       }
-      simulationIntervalMs = Math.min(SIM_MAX_INTERVAL_MS, simulationIntervalMs * 2);
-      simulationSuccesses = 0;
+      state.interval = Math.min(SIM_MAX_INTERVAL_MS, state.interval * 2);
+      state.successes = 0;
       const exhausted = attempt >= SIM_MAX_RETRIES;
       // A reset header alone does not mean the simulator's budget is exhausted.
       const resetMs = response.rateLimitRemaining == null || Number(response.rateLimitRemaining) <= 0
         ? Number(response.rateLimitReset) * 1000 : 0;
-      simulationBlockedUntil = Date.now() + Math.max(
+      state.blockedUntil = Date.now() + Math.max(
         exhausted ? SIM_FAILURE_COOLDOWN_MS : 0,
         SIM_RETRY_DELAY_MS,
         retryAfterMs(response.retryAfter, SIM_RETRY_DELAY_MS * 2 ** attempt),
         Number.isFinite(resetMs) ? resetMs : 0,
       );
-      if (exhausted) return simulationRateLimitError();
+      if (exhausted) {
+        await apiScheduler.observe(serverOrigin, '/api/combat-simulator/simulate', {
+          status: 429, rateLimitScope: 'simulator',
+          retryAfter: String(Math.ceil((state.blockedUntil - Date.now()) / 1000)),
+        });
+        return simulationRateLimitError(state);
+      }
     }
   };
-  const result = simulationQueue.then(run);
-  simulationQueue = result.then(() => {}, () => {});
+  const result = state.queue.then(run);
+  state.queue = result.then(() => {}, () => {});
   return result;
 }
 
@@ -3461,6 +3525,7 @@ browser.webRequest.onCompleted.addListener(
     const server = globalThis.nexusStorage?.serverFromUrl?.(url.href);
     if (!server) return;
     const path = url.pathname;
+    if (activeGameRequests.has(`${details.tabId}:${path}`)) return;
     const key = `${url.host}${path}`;
     if (refetchPending.has(key)) return;
     refetchPending.add(key);
@@ -3474,7 +3539,7 @@ async function refetchEndpoint(path, serverKey) {
   try {
     const refresh = async () => {
       await syncGameServer();
-      const json = await apiFetch(path);
+      const json = await apiFetch(path, { priority: 'background' });
       const server = await globalThis.nexusStorage?.getActiveServer?.();
       await routeIntercepted(`${server?.origin || GAME_URL}${path}`, json);
     };

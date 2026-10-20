@@ -24,6 +24,8 @@ The extension reads the following data from the currently selected Nexus Legacy 
 | Trade and logistics | Market orders and trades, logistics outposts, moons, and related fleet/resource state |
 | System activity | System messages and debris data used by exploration and collection features |
 | Optional developer diagnostics | When explicitly enabled: API method/path/status and request/response bodies, incoming text WebSocket messages, and extracted galaxy delta events |
+| API traffic control | Native game fetch/XHR start counts, endpoint scope and allowlisted rate-limit/retry response headers, observed independently of diagnostic recording |
+| Optional API wait recording | Fixed operation labels, priorities, scope/window budget counts, wait start/end times, outcomes, response status and recent source contribution counts; no paths, identifiers, request or response contents |
 
 Diagnostic recording is off by default. It excludes request/response headers,
 URL query strings and authentication endpoints, and redacts recognized secret
@@ -34,6 +36,23 @@ supported system-level fields are retained from the event, without a planet or
 player identity. A new hint for a known, fully visible system can trigger a
 rate-limited game API request to refresh locally saved planet/moon ownership.
 This adds no WebSocket subscription, external upload or community sharing.
+
+Traffic control is separate from diagnostic recording. It observes native game
+fetch/XHR timing and selected budget headers without delaying the game's
+requests or collecting request/response bodies, query strings, cookies or
+authorization headers for this purpose. Rolling request timestamps, budget
+values and cooldowns are kept in extension `storage.session` so worker restarts
+do not reset the scheduler. This session state contains no request bodies or
+device fingerprints and is not part of regular backups.
+
+**Record API wait times**, under Options > Developer / Debug, is a separate
+opt-in switch, off by default and independent of payload recording. Scheduling
+metadata stays in the local diagnostic database per universe, limited to 1,000
+events and sharing the 10 MB per-server diagnostic storage cap. It can be viewed,
+exported as JSONL or cleared in API Wait Times. Regular backups exclude it.
+Worker-interrupted waits are marked incomplete when recording next resumes;
+unknown elapsed time is not invented. Disabling the switch stops new writes,
+but retained events remain until cleared or removed by retention.
 
 The extension does not read or extract the session cookie. It sends API requests through your logged-in game tab, where the browser attaches the game's HttpOnly session cookie. The extension does not write or modify cookies.
 
@@ -48,6 +67,8 @@ All data is used **solely to operate the extension's dashboard** on your own dev
 - Run the offline combat simulator
 - Support the planet finder, asteroid scans, fleet logistics, and market views
 - Diagnose addon behavior using optional, locally recorded developer logs
+- Schedule add-on API requests within observed budgets and endpoint limits,
+  prioritizing actions and interactions over background maintenance
 
 No data is used for advertising, profiling, or any purpose unrelated to displaying your own game statistics back to you.
 
@@ -55,7 +76,7 @@ No data is used for advertising, profiling, or any purpose unrelated to displayi
 
 ## 3. Where the data is stored
 
-All data is stored **locally on your device only**, in the browser's `storage.local` area or in extension-local IndexedDB databases for galaxy knowledge and optional diagnostic traffic. Nothing is uploaded to any server operated by the extension author.
+All data is stored **locally on your device only**, in the browser's `storage.local` area, extension `storage.session` for temporary API scheduling state, or extension-local IndexedDB databases for galaxy knowledge and optional diagnostic traffic. Nothing is uploaded to any server operated by the extension author.
 
 The local galaxy database retains known system, planet and moon properties,
 ownership observations and short-lived asteroid snapshots separately for each

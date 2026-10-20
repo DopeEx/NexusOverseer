@@ -134,9 +134,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 async function jget(path) {
-  const r = await fetch(path, { credentials: 'include' });
-  if (!r.ok) throw new Error(`${path} → ${r.status}`);
-  return r.json();
+  return globalThis.nexusGameApi(path, { source: 'logistics' });
 }
 
 let overlay = null;
@@ -457,13 +455,8 @@ function colonyCard(c) {
 }
 
 async function jpost(path, body) {
-  const r = await fetch(path, {
-    method: 'POST', credentials: 'include',
-    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-  });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.error || data.message || `${path} → ${r.status}`);
-  return data;
+  return globalThis.nexusGameApi(path, { method: 'POST', body, source: 'logistics',
+    priority: path === '/api/fleet/fuel-estimate' ? 'interactive' : 'action' });
 }
 const fuelEstimate = (sourcePlanetId, targetSystemId, ships) =>
   jpost('/api/fleet/fuel-estimate', { sourcePlanetId, targetSystemId, ships });

@@ -289,9 +289,9 @@
     return migrationPromise;
   }
 
-  async function get(keys) {
+  async function get(keys, explicitServerKey) {
     await ensureMigrated();
-    const serverKey = await getActiveServerKey();
+    const serverKey = explicitServerKey || await getActiveServerKey();
     const prefix = scopedKey(serverKey, '');
     const local = rawStorage();
 
@@ -318,17 +318,17 @@
     return result;
   }
 
-  async function set(items) {
+  async function set(items, explicitServerKey) {
     await ensureMigrated();
-    const serverKey = await getActiveServerKey();
+    const serverKey = explicitServerKey || await getActiveServerKey();
     const scoped = {};
     for (const [key, value] of Object.entries(items)) scoped[scopedKey(serverKey, key)] = value;
     await rawStorage().set(scoped);
   }
 
-  async function remove(keys) {
+  async function remove(keys, explicitServerKey) {
     await ensureMigrated();
-    const serverKey = await getActiveServerKey();
+    const serverKey = explicitServerKey || await getActiveServerKey();
     const list = Array.isArray(keys) ? keys : [keys];
     await rawStorage().remove(list.map(key => scopedKey(serverKey, key)));
   }
@@ -439,6 +439,14 @@
     getSelectedServer,
     setActiveServer,
     withServer,
+    forServer(key) {
+      if (!isValidServerKey(key)) throw new Error(`Unknown Nexus Legacy server: ${key}`);
+      return Object.freeze({
+        get: keys => get(keys, key),
+        set: items => set(items, key),
+        remove: keys => remove(keys, key),
+      });
+    },
     serverFromUrl,
     getUniverseCatalog,
     getUniverseCatalogFetchedAt,

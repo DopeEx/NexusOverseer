@@ -354,7 +354,7 @@ async function findNearestAncientMoon(src, srcSystemId, targetedMoonIds, surveye
     if (!xnRunning) break;
     let data;
     try {
-      data = await getSystemPlanets(sys.id, cache, { group: 'moons', maxAge: XENO_CACHE_TTL });
+      data = await getSystemPlanets(sys.id, cache, { group: 'moons', maxAge: XENO_CACHE_TTL, source: 'xeno-search' });
     } catch (error) {
       console.warn(`[NexusOverseer] Xeno search skipped system ${sys.id}:`, error);
       scanned++; continue;
