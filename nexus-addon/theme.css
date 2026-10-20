@@ -35,6 +35,10 @@
   --text-dim: #9aa4b2;
   --text-body: #c9d1d9;
   --orange: #f0883e;
+  --zone-sentinel: #22c55e;
+  --zone-open: #f59e0b;
+  --zone-dead: #ef4444;
+  --zone-rift: #7c3aed;
   --bg-modal: #080a10;
   --res-ore: #f59e0b;
   --res-hydrogen: #06b6d4;

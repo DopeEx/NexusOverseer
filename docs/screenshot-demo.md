@@ -1,7 +1,7 @@
 # Screenshot demo
 
 The local demo serves the **actual dashboard HTML, CSS and rendering modules**
-with hand-authored, fictional data. It is intended for public screenshots and UI
+with deterministic, fictional data. It is intended for public screenshots and UI
 previews, not gameplay or balance testing.
 
 ## Start
@@ -22,7 +22,7 @@ starting it (for example, `$env:PORT = '4174'` in PowerShell).
 
 ## Isolation and limitations
 
-- No account data, backups, credentials or game APIs are read. The fixtures are
+- No account exports, backups, credentials or game APIs are read. The fixtures are
   defined in [fixtures.js](../tools/demo/fixtures.js), not anonymized exports.
 - The extension's browser API and server-storage scripts are replaced **only in
   the locally served page**. The packaged extension and its source files remain
@@ -45,6 +45,23 @@ starting it (for example, `$env:PORT = '4174'` in PowerShell).
 
 The universe picker and footer identify the page as a fictional demo.
 
+### Dense galaxy fixture
+
+The map contains 6,000 deterministic synthetic systems in three curved arms,
+with a small empty core, inner dead-zone systems, an open-zone band and an outer
+sentinel band. The outermost systems have deliberately unknown zones and outline
+visibility. Six fictional market hubs and nine saved system snapshots, including
+allied owners, exercise labels, occupancy markers and local lists immediately.
+
+This layout is visually inspired by a user-supplied game-map screenshot on
+2026-10-20: its dense point cloud, clear central gap, red/amber/green bands, grey
+outer points and several hub markers are useful UI test cases. The system count,
+coordinates, arm assignments, zone boundaries and outer visibility are synthetic
+test choices, not measurements or a verified galaxy-generation model. A screenshot
+alone does not establish why a point is grey or reveal system IDs, body properties
+or owners. No screenshot pixels, real system names or account positions are
+distributed with the fixtures.
+
 ## Updating screenshots
 
 Save public images in [assets/screenshots/](assets/screenshots/) using descriptive,
@@ -65,7 +82,7 @@ All eleven regular main tabs are covered:
 | Dashboard | `dashboard.png` | Default view |
 | Statistics | `statistics.png` | Global subtab, all time, all zones |
 | Asteroids | `asteroids.png` | The fictional cached scan is loaded automatically |
-| Galaxy Scout | `galaxy-scout.png` | Demo Arm 1, sectors `1-2`, unowned only; click Search |
+| Galaxy Scout | `galaxy-scout.png` | Demo Arm 1, sectors `1-2`; click Search, wait for automatic unknown-ownership checks, then optionally refresh known ownership and filter Last known ownership |
 | Pirates | `pirates.png` | Camps and battle reports load automatically |
 | Fleets | `fleet-templates.png` | Select Demo - Balanced Mining |
 | Simulator | `combat-simulator.png` | Load my fleet from Aurora, then select the Demo Frontier spy report |
@@ -73,6 +90,12 @@ All eleven regular main tabs are covered:
 | Tech Tree | `tech-tree.png` | All branches; the example research queue is prefilled |
 | Options | `options.png` | Default demo preferences |
 | User Guide | `user-guide.png` | Top of the guide, cropped to the navigation height |
+
+Galaxy Scout opens in **Map**. Use the sibling **Search** tab for search filters
+and results without scrolling past the map. After a search, its **Systems**, **Planets**
+and **Moons** tabs reuse the collected fictional data. Use **Show > All known data**
+to browse everything collected during the demo session. List filters are retained
+per view; **Show on map** returns to the original map without clearing the search.
 
 Link images from the repository README using relative paths, for example:
 

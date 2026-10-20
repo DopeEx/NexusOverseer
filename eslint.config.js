@@ -21,7 +21,7 @@ export default [
     },
   },
   {
-    files: ['tests/**/*.js', 'tools/demo/server.js', 'eslint.config.js'],
+    files: ['tests/**/*.js', 'tools/demo/server.js', 'tools/galaxy-data.js', 'eslint.config.js'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',

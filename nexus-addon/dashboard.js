@@ -6,6 +6,7 @@
 
 import { activeTab, appendStatusText, confirmDialog, dayKey, fuelForMode, getLabelKey, getMode, infoDialog, periodLabelFor, renderMarkdown, renderNetCards, setActiveTab, setStore, store } from './common.js';
 import { bindServerSelector } from './server-switch.js';
+import { exportGalaxyCache, restoreGalaxyCache, validateGalaxyBackup } from './galaxy-cache.js';
 import { initReleaseStatus } from './release-status.js';
 import { changelogForVersion } from './common.js';
 import { initSimulatorTab } from './tabs/simulator.js';
@@ -17,7 +18,7 @@ import { initAsteroidsTab } from './tabs/asteroids.js';
 import { renderFleetsTab } from './tabs/fleets.js';
 import { initScoutingTab, runScoutingAutomations } from './tabs/scouting.js';
 import { initXenoTab, renderXenoStatsTab, setXnReportPage } from './tabs/xeno.js';
-import { initFinderTab } from './tabs/finder.js';
+import { initFinderTab, selectFinderView } from './tabs/finder.js';
 import { initMarketTab } from './tabs/market.js';
 import { registerAutomationTask, startAutomationScheduler } from './automation-scheduler.js';
 import { initHumanVerificationBanner } from './human-verification.js';
@@ -27,7 +28,7 @@ import { initPiratesTab, renderPirateStatsTab, renderPiratesTab, runPirateAutoma
 import { getEventBreakdownForMode, getResourcesLostForMode, getSeriesForMode, getTotalsForMode, populateEventOptions, renderByEventChart, renderCollected, renderEventsChart, renderLost, renderResourceChart, renderTable, setCurrentPage } from './tabs/surveys.js';
 import { renderTechTreeTab } from './tabs/techtree.js';
 import { initDashboardTab } from './tabs/dashboard.js';
-import { initOptionsTab } from './tabs/options.js';
+import { initOptionsTab, checkPublicGalaxyUpdates } from './tabs/options.js';
 import { initGuideTab } from './tabs/guide.js';
 import { getSetting, loadSettings } from './settings.js';
 
@@ -362,6 +363,7 @@ document.querySelectorAll('.main-tab, #statistics-subtabs .subtab').forEach(btn 
   btn.addEventListener('click', () => {
     const tab = btn.dataset.tab;
     if (!expertModeEnabled && isExpertTab(tab)) return;
+    if (tab === 'finder' && activeTab !== 'finder') void selectFinderView('map');
     if (SUBTAB_TABS.includes(tab)) {
       setActiveTab(tab);
       activeMainTab = 'statistics';
@@ -485,20 +487,26 @@ document.getElementById('window-to').addEventListener('change', onViewChange);
 document.getElementById('event-select').addEventListener('change', () => { setCurrentPage(1); renderAll(); });
 
 document.getElementById('btn-reset').addEventListener('click', async function () {
-  if (!confirm('Delete all recorded stats and reports? Your options are kept. A backup is written to Downloads/NexusOverseer first.')) return;
-  await browser.runtime.sendMessage({ type: 'BACKUP_NOW', reason: 'pre-reset' });
-  const recordsCap = globalThis.nexusStorage?.get ? (await globalThis.nexusStorage.get('records_cap')).records_cap : undefined;
-  const settings = await globalThis.nexusStorage?.getSettings?.();
-  if (globalThis.nexusStorage?.clearAllStorage) {
-    await globalThis.nexusStorage.clearAllStorage();
-  } else {
-    await browser.storage.local.clear();
+  if (!confirm('Delete all recorded stats, reports and saved galaxy data? Your options are kept. A backup is written to Downloads/NexusOverseer first.')) return;
+  try {
+    const backup = await browser.runtime.sendMessage({ type: 'BACKUP_NOW', reason: 'pre-reset' });
+    if (!backup?.ok) throw new Error(backup?.error || 'Backup failed; no data was cleared.');
+    await restoreGalaxyCache();
+    const recordsCap = globalThis.nexusStorage?.get ? (await globalThis.nexusStorage.get('records_cap')).records_cap : undefined;
+    const settings = await globalThis.nexusStorage?.getSettings?.();
+    if (globalThis.nexusStorage?.clearAllStorage) {
+      await globalThis.nexusStorage.clearAllStorage();
+    } else {
+      await browser.storage.local.clear();
+    }
+    if (settings && Object.keys(settings).length) await globalThis.nexusStorage.setSettings(settings);
+    if (recordsCap !== undefined) {
+      await browser.storage.local.set({ records_cap: recordsCap });
+    }
+    await loadAll();
+  } catch (error) {
+    alert(`Reset failed: ${error.message}`);
   }
-  if (settings && Object.keys(settings).length) await globalThis.nexusStorage.setSettings(settings);
-  if (recordsCap !== undefined) {
-    await browser.storage.local.set({ records_cap: recordsCap });
-  }
-  await loadAll();
 });
 
 document.getElementById('records-cap').addEventListener('input', function () {
@@ -591,6 +599,7 @@ document.getElementById('btn-export').addEventListener('click', async function (
   if (data.records_cap === Infinity) data.records_cap = 0;
   const payload = {
     nexus_overseer_backup: 1,
+    galaxyCache: await exportGalaxyCache(),
     exported_at: new Date().toISOString(),
     data,
   };
@@ -655,10 +664,13 @@ document.getElementById('import-file').addEventListener('change', async function
       throw new Error('not a Nexus Overseer backup file');
     }
     validateBackupData(payload.data);
+    if (payload.galaxyCache) validateGalaxyBackup(payload.galaxyCache);
     const exportedAt = payload.exported_at ? new Date(payload.exported_at).toLocaleString() : 'unknown date';
     if (!confirm(`Replace ALL current data with backup from ${exportedAt}?\n\nA snapshot of the current data is written to Downloads/NexusOverseer first.`)) return;
 
-    await browser.runtime.sendMessage({ type: 'BACKUP_NOW', reason: 'pre-import' });
+    const backup = await browser.runtime.sendMessage({ type: 'BACKUP_NOW', reason: 'pre-import' });
+    if (!backup?.ok) throw new Error(backup?.error || 'Backup failed; no data was replaced.');
+    await restoreGalaxyCache(payload.galaxyCache);
     const data = payload.data;
     if (globalThis.nexusStorage?.restoreFullStorage) {
       await globalThis.nexusStorage.restoreFullStorage(data);
@@ -717,6 +729,8 @@ initExpertModeToggle()
     const startTab = getSetting('general.defaultTab');
     if (!location.hash && startTab !== 'dashboard') document.querySelector(`.main-tab[data-tab="${startTab}"]`)?.click();
     startAutomationScheduler();
+    void checkPublicGalaxyUpdates();
+    setInterval(() => { void checkPublicGalaxyUpdates(); }, 60 * 60 * 1000);
     void initExpeditionsTab().catch(error => {
       console.error('[NexusOverseer] Could not initialize expedition automations:', error);
     });

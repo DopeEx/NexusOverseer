@@ -12,12 +12,12 @@
 // in storage since the game gives no way to read this back, so it's lost if
 // storage is cleared/reset).
 
-import { SCAN_CACHE_MAX, getSystemPlanets } from './finder.js';
+import { loadGalaxyScans, getSystemPlanets } from '../galaxy-client.js';
 import { loadFleetTemplates } from './fleets.js';
 import { usedFleetSlots } from '../mission-state.js';
 import { RESOURCE_SERIES, appendExtraResourceCards, applySort, attachSortable, clearAvailStrip, computeRawLossCost, computeSeries, confirmDialog, createMissionRefresh, fillResourceCards, filterZone, fmt, fmtCountdown, fuelForMode, getLabelKey, getMode, inWindowRange, makeMissionBar, makeResourceDoughnut, makeResourceLineChart, makeStatCard, periodLabelFor, renderAvailStrip, renderPagedTable, rememberSelection, rememberedSelections, store, windowActive, zeroCell, setStatusText } from '../common.js';
 
-const XENO_CACHE_TTL = 24 * 3600 * 1000;   // moon ownership rarely changes
+const XENO_CACHE_TTL = 60 * 60 * 1000;
 const XENO_COOLDOWN_MS = 48 * 3600 * 1000; // local cooldown after we survey a moon
 
 // moonId → { at, name, systemName } — when we launched a survey there and
@@ -337,7 +337,7 @@ async function renderCooldownTable() {
 }
 
 // The nearest unowned Ancient moon not already targeted by an in-flight ruins
-// survey, scanning outward system-by-system from `src` (reuses finder.js's
+// survey, scanning outward system-by-system from `src` (reuses the central
 // shared per-system cache). Returns { moon, system, distance } or null.
 async function findNearestAncientMoon(src, srcSystemId, targetedMoonIds, surveyedMoons, onProgress) {
   const map = await loadMap();
@@ -347,33 +347,25 @@ async function findNearestAncientMoon(src, srcSystemId, targetedMoonIds, surveye
     .sort((a, b) => a.d - b.d)
     .slice(0, 500);
 
-  const { planet_scan_cache } = await browser.storage.local.get('planet_scan_cache');
-  const cache = planet_scan_cache || {};
+  const cache = await loadGalaxyScans();
 
   let scanned = 0;
-  try {
-    for (const { s: sys, d } of targets) {
-      if (!xnRunning) break;
-      let data;
-      try {
-        data = await getSystemPlanets(sys.id, cache, XENO_CACHE_TTL);
-      } catch { scanned++; continue; }
-      const moon = (data.moons || []).find(m =>
-        m.moonType === 'ancient' && m.userId == null && !targetedMoonIds.has(m.id) && !(m.id in surveyedMoons));
-      scanned++;
-      if (moon) return { moon, system: sys, distance: Math.round(d) };
-      if (scanned % 10 === 0) onProgress(scanned, targets.length);
-      await new Promise(r => setTimeout(r, 80));   // be polite to the game API
+  for (const { s: sys, d } of targets) {
+    if (!xnRunning) break;
+    let data;
+    try {
+      data = await getSystemPlanets(sys.id, cache, { group: 'moons', maxAge: XENO_CACHE_TTL });
+    } catch (error) {
+      console.warn(`[NexusOverseer] Xeno search skipped system ${sys.id}:`, error);
+      scanned++; continue;
     }
-  } finally {
-    // Persist the shared scan cache, oldest entries dropped first.
-    const ids = Object.keys(cache);
-    if (ids.length > SCAN_CACHE_MAX) {
-      ids.sort((a, b) => cache[a].at - cache[b].at)
-        .slice(0, ids.length - SCAN_CACHE_MAX)
-        .forEach(id => delete cache[id]);
-    }
-    await browser.storage.local.set({ planet_scan_cache: cache });
+    const moon = (data.moons || []).find(m =>
+      m.moonType === 'ancient' && m.ownershipKnown !== false && m.userId == null &&
+      !targetedMoonIds.has(m.id) && !(m.id in surveyedMoons));
+    scanned++;
+    if (moon) return { moon, system: sys, distance: Math.round(d) };
+    if (scanned % 10 === 0) onProgress(scanned, targets.length);
+    if (scanned % 25 === 0) await new Promise(r => setTimeout(r, 0));
   }
   return null;
 }

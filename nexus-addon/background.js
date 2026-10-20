@@ -6,7 +6,37 @@
 import { missionProgress } from './mission-state.js';
 import { appendDiagnostics, migrateDiagnostics } from './diagnostics.js';
 import { clearDiagnosticLogs } from './diagnostics-store.js';
-import { loadSettings } from './settings.js';
+import { loadSettings, getSetting } from './settings.js';
+import { createGalaxyCache, saveSystem, saveCatalog, saveGalaxyDelta, readGalaxyDeltas, catalogPath, exportGalaxyCache,
+  readPublicGalaxy, savePublicGalaxy } from './galaxy-cache.js';
+import { createGalaxySharing } from './galaxy-sharing.js';
+
+const galaxySharing = createGalaxySharing({
+  storage: { get: key => browser.storage.local.get(key), set: values => browser.storage.local.set(values) },
+  read: readPublicGalaxy,
+  write: async (serverKey, data, sha256) => {
+    await savePublicGalaxy(serverKey, data, sha256);
+    await browser.storage.local.set({ galaxy_public_revision: { serverKey, at: Date.now() } });
+  },
+});
+
+const galaxyCache = createGalaxyCache({
+  fetcher: async path => {
+    return apiFetch(path, { polite: true });
+  },
+  storage: {
+    get: keys => browser.storage.local.get(keys),
+    remove: keys => browser.storage.local.remove(keys),
+  },
+});
+
+async function galaxyServerKey() {
+  return (await globalThis.nexusStorage?.getActiveServer?.())?.key || 's0';
+}
+
+async function galaxyCatalog(path, options) {
+  return galaxyCache.catalog(await galaxyServerKey(), path, options);
+}
 
 const settingsReady = loadSettings().catch(error => console.error('[NexusOverseer] Settings initialization failed:', error));
 
@@ -208,10 +238,7 @@ browser.alarms.onAlarm.addListener(async alarm => {
 // matches the saved filter. Mirrors tabs/asteroids.js scan(), API-only.
 const LS_ALARM = 'nexus-livesearch';
 const LS_INTERVAL_MIN = 5;
-const LS_REQ_DELAY_MS = 80;            // polite spacing between API calls
 const LS_ABORT_AFTER_ERRORS = 6;       // bail the scan after this many consecutive API failures
-const lsSectorCache = new Map();       // sectorId → { at, systems }, reused across scans
-const LS_SECTOR_TTL = 15 * 60 * 1000;
 
 async function setLiveSearch(config) {
   await browser.storage.local.set({ live_search: config });
@@ -235,11 +262,7 @@ async function stopLiveSearch() {
 
 // Sector systems with a cross-scan TTL cache (names/zones change rarely).
 async function lsSectorSystems(sectorId) {
-  const hit = lsSectorCache.get(sectorId);
-  if (hit && Date.now() - hit.at < LS_SECTOR_TTL) return hit.systems;
-  const systems = (await apiFetch(`/api/galaxy/sectors/${sectorId}/systems`, { polite: true })).systems || [];
-  lsSectorCache.set(sectorId, { at: Date.now(), systems });
-  return systems;
+  return (await galaxyCatalog(`/api/galaxy/sectors/${sectorId}/systems`)).systems || [];
 }
 
 function fieldMatches(f, cfg) {
@@ -282,7 +305,7 @@ async function runLiveSearchScan() {
     const planets = (await getPlanets()).planets || [];
     const planet = planets.find(p => p.id === cfg.planetId);
     if (!planet || planet.systemId == null) { await setLsStatus({ state: 'error', error: 'Source planet not found.' }); return; }
-    const map = await apiFetch('/api/galaxy/map', { polite: true });
+    const map = await galaxyCatalog('/api/galaxy/map');
     const src = (map.systems || []).find(s => s.id === planet.systemId);
     if (!src) { await setLsStatus({ state: 'error', error: 'Source system not on the map.' }); return; }
 
@@ -314,14 +337,13 @@ async function runLiveSearchScan() {
       inZone++;
       if (!meta.planetCount) { errStreak = 0; continue; }
       let data;
-      try { data = await apiFetch(`/api/galaxy/systems/${sys.id}/planets`, { polite: true }); }
+      try { data = await galaxyCache.system(await galaxyServerKey(), sys.id, { purpose: 'dynamic', force: true }); }
       catch { if (++errStreak >= LS_ABORT_AFTER_ERRORS) break; continue; }
       errStreak = 0;
       scanned++;
       if (scanned % 5 === 0) report('Scanning systems…');
       if (typeSet.size) {
         if (!(data.asteroidFields || []).some(f => typeSet.has(f.fieldType))) {
-          await new Promise(r => setTimeout(r, LS_REQ_DELAY_MS));
           continue;
         }
         matchingSystems++;
@@ -343,7 +365,7 @@ async function runLiveSearchScan() {
           });
         }
       }
-      await new Promise(r => setTimeout(r, LS_REQ_DELAY_MS));   // be polite to the game API
+      if (scanned % 25 === 0) await new Promise(r => setTimeout(r, 0));
     }
 
     const { live_search_seen } = await browser.storage.local.get('live_search_seen');
@@ -483,18 +505,75 @@ const handleRuntimeMessage = async (msg, context = null) => {
   if (msg.type === 'REBUILD_AGGREGATES') return enqueue(rebuildAggregates).then(() => ({ ok: true }));
   if (msg.type === 'PURGE_OLD') return enqueue(() => purgeOldData(msg.days ?? 3)).then(() => ({ ok: true }));
   if (msg.type === 'BACKUP_NOW') return backupToDownloads(msg.reason || 'manual').then(() => ({ ok: true })).catch(e => ({ error: e.message }));
-  if (msg.type === 'GET_ARMS') return apiGet('/api/galaxy/arms');
-  if (msg.type === 'GET_GALAXY_MAP') return apiGet('/api/galaxy/map');
-  if (msg.type === 'GET_SYSTEM_PLANETS') return apiGet(`/api/galaxy/systems/${msg.systemId}/planets`);
-  if (msg.type === 'GET_ARM_SECTORS') return apiGet(`/api/galaxy/arms/${msg.armId}/sectors`);
-  if (msg.type === 'GET_SECTOR_SYSTEMS') return apiGet(`/api/galaxy/sectors/${msg.sectorId}/systems`);
+  if (['GET_PUBLIC_GALAXY_STATUS', 'UPDATE_PUBLIC_GALAXY', 'EXPORT_PUBLIC_GALAXY'].includes(msg.type)) {
+    try {
+      const serverKey = await galaxyServerKey();
+      if (msg.type === 'EXPORT_PUBLIC_GALAXY') return { data: await galaxyCache.exportPublic(serverKey) };
+      if (msg.type === 'GET_PUBLIC_GALAXY_STATUS') return await galaxySharing.status(serverKey);
+      return await galaxySharing.update(serverKey, { force: msg.force === true,
+        enabled: getSetting('data.publicGalaxyAutoUpdate') });
+    } catch (error) {
+      console.warn('[NexusOverseer] Public galaxy request failed:', error);
+      return { error: error.message };
+    }
+  }
+  if (['GET_ARMS', 'GET_GALAXY_MAP', 'GET_STATION_INDEX', 'GET_HUBS', 'GET_SYSTEM_PLANETS', 'GET_ARM_SECTORS', 'GET_SECTOR_SYSTEMS',
+    'GET_GALAXY_SCANS', 'CLEAR_GALAXY_CACHE', 'GALAXY_OBSERVED', 'GALAXY_DELTA', 'GET_GALAXY_DELTAS'].includes(msg.type)) {
+    try {
+      const serverKey = await galaxyServerKey();
+      if (msg.type === 'GET_GALAXY_DELTAS') return { deltas: await readGalaxyDeltas(serverKey) };
+      if (msg.type === 'GALAXY_DELTA') {
+        if (!Number.isFinite(msg.at)) throw new Error('Invalid galaxy delta time.');
+        const result = await saveGalaxyDelta(serverKey, msg.data, msg.at);
+        await browser.storage.local.set({ galaxy_delta_revision: { systemId: msg.data.systemId, at: msg.at } });
+        const refresh = result.changed
+          ? await galaxyCache.refreshFromDelta(serverKey, msg.data.systemId, msg.at)
+          : { refreshed: false };
+        if (refresh.refreshed) {
+          await browser.storage.local.set({ galaxy_system_revision: { systemId: msg.data.systemId, at: Date.now() } });
+        }
+        return { ...result, ...refresh };
+      }
+      if (msg.type === 'GET_GALAXY_SCANS') return { scans: await galaxyCache.scans(serverKey) };
+      if (msg.type === 'CLEAR_GALAXY_CACHE') {
+        galaxySharing.cancel(serverKey);
+        await galaxyCache.clear(serverKey);
+        await browser.storage.local.remove([
+          'galaxy_public_status', 'galaxy_public_revision',
+          'asteroid_scan_results', 'system_zones', 'system_zones_at', 'system_zone_by_id',
+          'system_coords_by_id', 'system_coords_by_name', 'sector_zones',
+        ]);
+        moonIdsCache = { key: '', at: 0, ids: [] };
+        return { ok: true };
+      }
+      if (msg.type === 'GALAXY_OBSERVED') {
+        const system = /^\/api\/galaxy\/systems\/(\d+)\/planets$/.exec(msg.path);
+        if (system) await saveSystem(serverKey, Number(system[1]), msg.data, msg.at);
+        else if (catalogPath(msg.path)) await saveCatalog(serverKey, msg.path, msg.data, msg.at);
+        else throw new Error('Invalid observed galaxy path.');
+        return { ok: true };
+      }
+      if (msg.type === 'GET_SYSTEM_PLANETS') return await galaxyCache.system(serverKey, msg.systemId, {
+        purpose: msg.purpose, group: msg.group, maxAge: msg.maxAge, force: msg.force === true,
+      });
+      const path = msg.type === 'GET_ARMS' ? '/api/galaxy/arms'
+        : msg.type === 'GET_HUBS' ? '/api/market/hubs'
+        : msg.type === 'GET_STATION_INDEX' ? '/api/galaxy/station-index'
+        : msg.type === 'GET_GALAXY_MAP' ? '/api/galaxy/map'
+          : msg.type === 'GET_ARM_SECTORS' ? `/api/galaxy/arms/${msg.armId}/sectors`
+            : `/api/galaxy/sectors/${msg.sectorId}/systems`;
+      return await galaxyCache.catalog(serverKey, path, { force: msg.force === true });
+    } catch (error) {
+      console.warn('[NexusOverseer] Galaxy cache request failed:', error);
+      return { error: error.message, status: error.status, code: error.code, groups: error.groups };
+    }
+  }
   if (msg.type === 'GET_PLAYER_ALLIANCE_TAG') return getPlayerAllianceTag(msg.name);
   if (msg.type === 'GET_AUTH_ME') return apiGet('/api/auth/me');
   if (msg.type === 'GET_SYSTEM_COORDS') return getSystemCoords(msg.names || [], msg.ids || []);
   if (msg.type === 'GET_ALLIANCE') return getAlliance();
   if (msg.type === 'GET_PLAYER_RANK') return getPlayerRanks(msg.name);
   if (msg.type === 'GET_RESOURCES') return getResources();
-  if (msg.type === 'GET_HUBS') return apiGet('/api/market/hubs');
   if (msg.type === 'GET_MARKET_ORDERS') return getOrders('/api/market/orders');
   if (msg.type === 'GET_MARKET_TRADES') return getMarketTrades();
   if (msg.type === 'GET_ALLIANCE_ORDERS') return getOrders('/api/alliance-trade/orders');
@@ -527,6 +606,7 @@ browser.runtime.onMessage.addListener(async (msg, sender) => {
   const sourceServer = sender?.tab?.url
     ? globalThis.nexusStorage?.serverFromUrl?.(sender.tab.url)
     : null;
+  if (msg?.type === 'GALAXY_DELTA' && !sourceServer) return { error: 'Galaxy delta requires a game-tab origin.' };
   // Simulations do not access scoped storage. Pin their origin explicitly so
   // a long scrape cannot hold them behind the storage scope for another server.
   if (msg?.type === 'SIM_RUN' || msg?.type === 'SIM_BOOTSTRAP') {
@@ -538,7 +618,8 @@ browser.runtime.onMessage.addListener(async (msg, sender) => {
       : apiGet('/api/combat-simulator/bootstrap', { serverOrigin });
   }
   const selectedServer = sourceServer || await globalThis.nexusStorage?.getActiveServer?.();
-  const serverKey = msg?.type === 'SCRAPE_NOW' && msg.serverKey
+  const serverKey = ['SCRAPE_NOW', 'CLEAR_GALAXY_CACHE', 'GET_PUBLIC_GALAXY_STATUS', 'UPDATE_PUBLIC_GALAXY',
+    'EXPORT_PUBLIC_GALAXY'].includes(msg?.type) && msg.serverKey
     ? msg.serverKey
     : selectedServer?.key || 's0';
   if (globalThis.nexusStorage?.withServer) {
@@ -989,7 +1070,8 @@ const MOON_IDS_TTL = 30 * 60 * 1000;
 let moonIdsCache = { key: '', at: 0, ids: [] };
 async function getOwnMoonIds(planetList, opts) {
   const sysIds = [...new Set(planetList.map(p => p.systemId).filter(x => x != null))].sort();
-  const key = sysIds.join(',');
+  const serverKey = await galaxyServerKey();
+  const key = `${serverKey}:${sysIds.join(',')}`;
   if (moonIdsCache.key === key && Date.now() - moonIdsCache.at < MOON_IDS_TTL) return moonIdsCache.ids;
   try {
     const me = await apiFetch('/api/auth/me', opts);
@@ -997,7 +1079,12 @@ async function getOwnMoonIds(planetList, opts) {
     if (myId == null) return moonIdsCache.ids;
     const ids = [];
     for (const s of sysIds) {
-      const sd = await apiFetch(`/api/galaxy/systems/${s}/planets`, opts).catch(() => ({}));
+      let sd;
+      try { sd = await galaxyCache.system(serverKey, s, { group: 'moons', maxAge: MOON_IDS_TTL }); }
+      catch (error) {
+        console.warn(`[NexusOverseer] Unable to refresh moons in system ${s}:`, error);
+        continue;
+      }
       for (const mo of (sd.moons || [])) if (mo.userId != null && mo.userId === myId) ids.push(mo.id);
     }
     moonIdsCache = { key, at: Date.now(), ids };
@@ -1585,7 +1672,7 @@ export async function getSystemZones() {
     return system_zones;
   }
   try {
-    const data = await apiFetch('/api/galaxy/map');
+    const data = await galaxyCatalog('/api/galaxy/map');
     const map = {};        // name → zone
     const byId = {};       // systemId → zone
     const coordsById = {}; // systemId → {x, y}  (AU — galaxy map units = AU, verified 2026-06-22)
@@ -3038,6 +3125,7 @@ async function backupToDownloads(reason) {
   if (data.records_cap === Infinity) data.records_cap = 0;
   const payload = {
     nexus_overseer_backup: 1,
+    galaxyCache: await exportGalaxyCache(),
     exported_at: new Date().toISOString(),
     reason,
     data,

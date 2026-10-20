@@ -9,6 +9,7 @@
   const MAX_BODY = core.limits.capture;
   const oversized = () => ({ truncated: true, reason: 'Payload exceeds capture character limit' });
   const requestText = body => typeof body !== 'string' ? '[not captured]' : body.length > MAX_BODY ? oversized() : body;
+  const galaxyDeltas = new Map();
 
   function capture(kind, data) {
     if (!enabled || pending.length >= 20) return;
@@ -43,6 +44,9 @@
 
   window.addEventListener('message', event => {
     if (event.source !== window || event.origin !== origin) return;
+    if (event.data?.__nxRequestGalaxy) {
+      for (const delta of galaxyDeltas.values()) window.postMessage({ __nxGalaxyDelta: delta }, origin);
+    }
     if (event.data?.__nxDiagnosticsConfig) {
       enabled = event.data.__nxDiagnosticsConfig.recording === true;
       if (!enabled) pending = [];
@@ -112,10 +116,13 @@
     construct(target, args, newTarget) {
       const socket = Reflect.construct(target, args, newTarget);
       const url = new URL(socket.url || args[0], origin);
-      if (url.hostname !== new URL(origin).hostname) return socket;
+      const pageUrl = new URL(origin);
+      if (url.hostname !== pageUrl.hostname || url.port !== pageUrl.port ||
+          url.protocol !== (pageUrl.protocol === 'https:' ? 'wss:' : 'ws:')) return socket;
       socket.addEventListener('message', event => {
-        if (!enabled || typeof event.data !== 'string') return;
+        if (typeof event.data !== 'string') return;
         const text = event.data;
+        if (!enabled && (text.length > 4096 || !text.includes('"galaxy:delta"'))) return;
         if (text.length > MAX_BODY) {
           capture('websocket', { payload: oversized() });
           return;
@@ -124,6 +131,15 @@
         // Socket.IO event frames prefix the JSON array with "42" (and optionally a namespace).
         const start = text.startsWith('42') ? text.indexOf('[') : -1;
         try { payload = JSON.parse(start >= 0 ? text.slice(start) : text); } catch { /* plain text frame */ }
+        if (Array.isArray(payload) && payload[0] === 'galaxy:delta') {
+          const data = payload[1];
+          if (data?.type === 'colonized' && Number.isSafeInteger(data.systemId) && data.systemId > 0 && data.hasColonies === true) {
+            const delta = { data: { type: 'colonized', systemId: data.systemId, hasColonies: true }, at: Date.now() };
+            galaxyDeltas.set(data.systemId, delta);
+            if (galaxyDeltas.size > 100) galaxyDeltas.delete(galaxyDeltas.keys().next().value);
+            window.postMessage({ __nxGalaxyDelta: delta }, origin);
+          }
+        }
         capture('websocket', { payload });
         if (Array.isArray(payload) && /galaxy[:.]delta/i.test(String(payload[0]))) {
           capture('galaxy', { event: payload[0], payload: payload[1] });

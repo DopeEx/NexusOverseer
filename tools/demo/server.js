@@ -35,6 +35,15 @@ export function createDemoServer() {
         res.writeHead(200, { 'Content-Type': 'image/svg+xml' }).end(req.method === 'HEAD' ? undefined : svg);
         return;
       }
+      const bodyIcon = /^\/(?:api\/images\/planets|images\/moons)\/([a-z0-9_]+)\.webp$/.exec(pathname);
+      if (bodyIcon) {
+        const colors = ['#6ab8da', '#91bd68', '#bf986b', '#b193d4'];
+        const index = [...bodyIcon[1]].reduce((sum, char) => sum + char.charCodeAt(0), 0) % colors.length;
+        const color = colors[index];
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="15" fill="${color}"/><ellipse cx="11" cy="12" rx="5" ry="3" fill="#fff" opacity=".25"/><circle cx="21" cy="23" r="4" fill="#102036" opacity=".3"/><path d="M16 1a15 15 0 0 1 0 30c12-8 12-22 0-30Z" fill="#102036" opacity=".4"/></svg>`;
+        res.writeHead(200, { 'Content-Type': 'image/svg+xml' }).end(req.method === 'HEAD' ? undefined : svg);
+        return;
+      }
       const demoFile = pathname === '/demo/browser.js' || pathname === '/demo/fixtures.js';
       const root = demoFile ? here : addon;
       const relative = demoFile ? pathname.slice('/demo/'.length) : pathname === '/' ? 'dashboard.html' : pathname.slice(1);
@@ -55,6 +64,7 @@ export function createDemoServer() {
           .replace('<span>Nexus Overseer</span>', '<span>Nexus Overseer &middot; Fictional demo data</span>');
       } else if (extname(file) === '.js') {
         body = body.toString().replaceAll('https://s0.nexuslegacy.space/images/resources/', '/images/resources/');
+        if (demoFile) body = body.replaceAll('../../nexus-addon/', '/');
       }
       res.writeHead(200, { 'Content-Type': `${types[extname(file)]}; charset=utf-8` });
       res.end(req.method === 'HEAD' ? undefined : body);

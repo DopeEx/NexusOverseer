@@ -671,3 +671,4 @@ test('live search fieldMatches: type/zone/mult/qty/left filters + null handling'
     types: ['ore'], zones: ['sentinel'], multMin: 2, qtyMin: 501, leftMin: 50,
   }), false);
 });
+import 'fake-indexeddb/auto';

@@ -199,11 +199,31 @@
   <div id="options-content" class="global-dashboard" style="display:none;">
     <div class="subtabs show options-subtabs" role="tablist" aria-label="Options">
       <button class="tab subtab active" id="options-tab-general" type="button" role="tab" aria-selected="true" aria-controls="opt-general" data-option-section="general">General</button>
-      <button class="tab subtab" id="options-tab-dashboard" type="button" role="tab" aria-selected="false" aria-controls="opt-dashboard" data-option-section="dashboard" tabindex="-1">Dashboard</button>
       <button class="tab subtab" id="options-tab-data" type="button" role="tab" aria-selected="false" aria-controls="opt-data" data-option-section="data" tabindex="-1">Data</button>
       <button class="tab subtab" id="options-tab-developer" type="button" role="tab" aria-selected="false" aria-controls="opt-developer" data-option-section="developer" tabindex="-1">Developer / Debug</button>
     </div>
-    <section class="dashboard-panel opt-panel" id="opt-dashboard">
+    <section class="dashboard-panel opt-panel opt-layout" id="opt-general">
+      <div class="opt-panel opt-card">
+      <div class="opt-head">
+        <div class="section-label dashboard-section-label">General</div>
+        <button class="opt-link" type="button" data-reset-prefix="general.">Restore defaults</button>
+      </div>
+      <label class="opt-row"><span>Number format</span>
+        <select class="opt-input" data-setting="general.numberFormat">
+          <option value="de">German (1.234.567)</option><option value="en">English (1,234,567)</option><option value="compact">Compact (1,2 Mio.)</option>
+        </select>
+      </label>
+      <label class="opt-row"><span>Open this tab on start</span>
+        <select class="opt-input" data-setting="general.defaultTab">
+          <option value="dashboard">Dashboard</option><option value="statistics">Statistics</option>
+          <option value="asteroids">Asteroids</option><option value="pirates">Pirates</option>
+          <option value="fleets">Fleets</option><option value="finder">Galaxy Scout</option>
+          <option value="market">Market</option><option value="techtree">Tech Tree</option>
+          <option value="simulator">Simulator</option>
+        </select>
+      </label>
+      </div>
+      <div class="opt-panel opt-card">
       <div class="opt-head">
         <div class="section-label dashboard-section-label">Dashboard</div>
         <button class="opt-link" type="button" data-reset-prefix="dashboard.">Restore defaults</button>
@@ -234,32 +254,15 @@
       <label class="opt-row"><span>Active missions</span><input class="m-switch" type="checkbox" data-setting="dashboard.show.missions" /></label>
       <label class="opt-row"><span>Moon cards</span><input class="m-switch" type="checkbox" data-setting="dashboard.show.moons" /></label>
       <label class="opt-row"><span>Show each moon right after its planet</span><input class="m-switch" type="checkbox" data-setting="dashboard.moonsAfterPlanet" /></label>
-    </section>
-
-    <section class="dashboard-panel opt-panel" id="opt-general">
-      <div class="opt-head">
-        <div class="section-label dashboard-section-label">General</div>
-        <button class="opt-link" type="button" data-reset-prefix="general.">Restore defaults</button>
       </div>
-      <label class="opt-row"><span>Number format</span>
-        <select class="opt-input" data-setting="general.numberFormat">
-          <option value="de">German (1.234.567)</option><option value="en">English (1,234,567)</option><option value="compact">Compact (1,2 Mio.)</option>
-        </select>
-      </label>
-      <label class="opt-row"><span>Open this tab on start</span>
-        <select class="opt-input" data-setting="general.defaultTab">
-          <option value="dashboard">Dashboard</option><option value="statistics">Statistics</option>
-          <option value="asteroids">Asteroids</option><option value="pirates">Pirates</option>
-          <option value="fleets">Fleets</option><option value="finder">Galaxy Scout</option>
-          <option value="market">Market</option><option value="techtree">Tech Tree</option>
-          <option value="simulator">Simulator</option>
-        </select>
-      </label>
     </section>
 
-    <section class="dashboard-panel opt-panel" id="opt-data">
+    <section class="dashboard-panel opt-panel opt-layout" id="opt-data">
+      <div class="opt-data-group">
       <div class="section-label dashboard-section-label">Data</div>
       <p id="storage-info" class="opt-note"></p>
+      </div>
+      <div class="opt-data-group opt-card">
       <div class="opt-group-label">Storage</div>
       <div class="opt-row">
         <span>Records cap
@@ -272,24 +275,65 @@
           <button id="btn-save-cap" class="toolbar-button secondary-button">Save</button>
         </span>
       </div>
+      </div>
+      <div class="opt-data-group opt-card">
+      <div class="opt-group-label">Public galaxy data</div>
+      <p class="opt-note">Shared galaxy structure from GitHub. Your own observations take priority. Nothing is uploaded automatically.</p>
+      <label class="opt-row"><span>Automatically update public galaxy data<span class="opt-note debug-description">Once every 24 hours per universe, while the dashboard is open.</span></span>
+        <input class="m-switch" type="checkbox" data-setting="data.publicGalaxyAutoUpdate" />
+      </label>
+      <div class="opt-actions">
+        <button id="btn-update-public-galaxy" type="button">Update public data now</button>
+      </div>
+      <p id="public-galaxy-status" class="opt-note" role="status" aria-live="polite"></p>
+      <div class="opt-data-subsection">
+      <div class="opt-data-caption">Contribute galaxy data</div>
+      <p class="opt-note">Export public structure only, review the file and attach it to an issue yourself. Never share a full backup.</p>
+      <div class="opt-actions">
+        <button id="btn-export-public-galaxy" type="button">Export public data</button>
+        <a id="public-galaxy-issue" href="https://github.com/DopeEx/NexusOverseer/issues/new?template=galaxy_data.md" target="_blank" rel="noopener noreferrer" hidden>Open contribution issue</a>
+      </div>
+      </div>
+      <details class="opt-data-details">
+        <summary>What is shared and downloaded?</summary>
+        <div class="opt-data-group">
+          <p class="opt-note">Downloads contain maintainer-approved galaxy structure. They never mark ownership or explored visibility as known. GitHub receives normal connection information, not your game data.</p>
+          <p class="opt-note">Exports use saved data only: systems, zones, physical planet/moon properties and station/hub locations. Owners, player data, colony names, resources and upgrade-dependent building-slot values are excluded. Only the maintainer publishes approved additions.</p>
+        </div>
+      </details>
+      </div>
+      <div class="opt-data-group opt-card">
+      <div class="opt-group-label">Backup</div>
+      <p class="opt-note">Private game data and options from all servers. Keep these files private.</p>
       <label class="opt-row"><span>Automatic backup</span>
         <select class="opt-input" data-setting="data.autoBackup">
           <option value="weekly">Weekly</option><option value="daily">Daily</option><option value="off">Off</option>
         </select>
       </label>
-      <div class="opt-group-label">Backup</div>
-      <p class="opt-note">Backups contain game data of every server, including these options. Developer diagnostic logs are exported separately as JSONL.</p>
+      <div class="opt-data-caption">All data</div>
       <div class="opt-actions">
         <button id="btn-backup-now" type="button">Back up now</button>
         <button id="btn-export">Export JSON</button>
         <button id="btn-import">Import JSON</button>
         <input id="import-file" type="file" accept=".json,application/json" style="display:none;" />
+      </div>
+      <div class="opt-data-caption">Options only</div>
+      <div class="opt-actions">
         <button id="btn-export-settings" type="button">Export options only</button>
         <button id="btn-import-settings" type="button">Import options only</button>
         <input id="import-settings-file" type="file" accept=".json,application/json" style="display:none;" />
       </div>
+      <details class="opt-data-details">
+        <summary>What does a backup include?</summary>
+        <p class="opt-note">Full backups contain saved game data from every server and addon options. Options-only files contain settings, not game data. Developer diagnostic logs are separate JSONL exports and are not included in backups.</p>
+      </details>
+      </div>
       <div class="opt-danger">
         <div class="opt-group-label">Danger zone</div>
+        <div class="opt-actions">
+          <button id="btn-clear-galaxy-cache" class="status-danger-button">Clear galaxy cache</button>
+        </div>
+        <p id="galaxy-cache-status" class="opt-note" role="status" aria-live="polite"></p>
         <div class="opt-actions">
           <button id="btn-purge" title="Deletes archived reports older than 3 days. Totals are kept.">Purge old reports</button>
           <button id="btn-rebuild" title="Recompute all aggregated stats from the stored report records — repairs drift after partial failures.">Rebuild stats</button>
@@ -922,6 +966,87 @@
   </div>
 
   <div id="finder-content" class="finder-dashboard" style="display:none;">
+    <div class="subtabs show options-subtabs" role="tablist" aria-label="Galaxy Scout">
+      <button class="tab subtab active" id="f-tab-map" type="button" role="tab" aria-selected="true" aria-controls="f-map-panel" data-finder-view="map">Map</button>
+      <button class="tab subtab" id="f-tab-search" type="button" role="tab" aria-selected="false" aria-controls="f-search-panel" data-finder-view="search" tabindex="-1">Search</button>
+      <button class="tab subtab" id="f-tab-systems" type="button" role="tab" aria-selected="false" aria-controls="f-directory" data-finder-view="systems" tabindex="-1">Systems</button>
+      <button class="tab subtab" id="f-tab-planets" type="button" role="tab" aria-selected="false" aria-controls="f-directory" data-finder-view="planets" tabindex="-1">Planets</button>
+      <button class="tab subtab" id="f-tab-moons" type="button" role="tab" aria-selected="false" aria-controls="f-directory" data-finder-view="moons" tabindex="-1">Moons</button>
+    </div>
+    <section id="f-map-panel" role="tabpanel" aria-labelledby="f-tab-map">
+      <div class="finder-view-header">
+        <h2>Map</h2>
+        <span class="finder-badge" title="Shows the known galaxy independently of unstarted search filters. Search markers and region highlighting refer to the last started search; Clear search restores the unfiltered galaxy. Opening Galaxy Scout may refresh map and account data; viewing the map does not scan system contents.">Known galaxy</span>
+        <span id="f-map-status" class="finder-status" role="status" aria-live="polite"></span>
+      </div>
+      <div class="dashboard-panel finder-map-toolbar">
+        <div id="f-map-lookup" class="finder-map-lookup">
+          <label for="f-map-search">Find system</label>
+          <div class="finder-map-search-field">
+            <input id="f-map-search" class="toolbar-input" type="search" role="combobox" placeholder="System name or #ID" autocomplete="off" aria-autocomplete="list" aria-expanded="false" aria-controls="f-map-systems" aria-describedby="f-map-match-status">
+            <button id="f-map-search-clear" type="button" aria-label="Clear system search" title="Clear system search" hidden>&times;</button>
+          </div>
+          <div id="f-map-systems" class="finder-map-suggestions" role="listbox" aria-label="Matching systems" hidden></div>
+          <span id="f-map-match-status" class="finder-map-match-status" role="status" aria-live="polite"></span>
+        </div>
+        <button id="f-map-home" type="button" class="toolbar-button secondary-button finder-map-home" aria-label="Home planet" title="Home planet" disabled>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z"/><path d="M9 21v-9h6v9"/></svg>
+        </button>
+        <button id="f-map-zones" type="button" class="zone-toggle zone-sentinel is-selected" aria-pressed="true" title="Show or hide all security-zone rings. Stars and navigation markers remain visible.">Zone rings</button>
+        <button id="f-map-hubs" type="button" class="zone-toggle zone-open finder-map-layer-toggle is-selected" aria-label="Market hubs" aria-pressed="true" title="Show or hide market hub markers and names.">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m12 3 9 9-9 9-9-9Z"/></svg>
+        </button>
+        <button id="f-map-alliance" type="button" class="zone-toggle zone-sentinel finder-map-layer-toggle is-selected" aria-label="Alliance markers" aria-pressed="true" title="Show or hide saved alliance brackets and names. Your own colony chevrons remain visible.">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 4H4v16h4M16 4h4v16h-4"/></svg>
+        </button>
+        <button id="f-map-stations" type="button" class="zone-toggle zone-rift finder-map-layer-toggle" aria-label="Stations" aria-pressed="false" title="Show or hide station locations and last-known alliance ownership.">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m12 3 8 4v10l-8 4-8-4V7Z"/></svg>
+        </button>
+      </div>
+      <span id="f-map-navigation-status" class="finder-status" role="status" aria-live="polite"></span>
+      <div class="dashboard-panel finder-map-panel">
+        <div class="finder-map-surface">
+          <canvas id="f-map" width="1100" height="640" role="img" aria-label="Known galaxy map; use Find system and navigation buttons to select systems."></canvas>
+          <div id="f-map-labels" class="finder-map-labels" aria-hidden="true"></div>
+          <div id="f-tooltip" class="finder-tooltip"></div>
+          <div id="f-map-info" class="finder-map-info" role="dialog" aria-modal="false" aria-labelledby="f-map-info-title" hidden>
+            <div class="finder-map-info-heading">
+              <strong id="f-map-info-title"></strong>
+              <button id="f-map-info-close" type="button" class="toolbar-button secondary-button" aria-label="Close system information">&times;</button>
+            </div>
+            <div id="f-map-info-details"></div>
+            <button id="f-map-info-overview" type="button" class="toolbar-button secondary-button">System overview</button>
+          </div>
+          <div class="finder-map-controls" role="group" aria-label="Map zoom controls">
+            <button id="f-map-zoom-in" type="button" class="toolbar-button secondary-button" aria-label="Zoom in">+</button>
+            <button id="f-map-zoom-out" type="button" class="toolbar-button secondary-button" aria-label="Zoom out">-</button>
+            <button id="f-map-reset" type="button" class="toolbar-button secondary-button" aria-label="Whole galaxy" title="Whole galaxy">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M8 21H3v-5"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="dashboard-panel finder-map-legend" aria-label="Map legend">
+          <span><svg class="finder-map-star" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="3" fill="currentColor" stroke="none"/></svg>Star type</span>
+          <span><svg class="finder-zone-sentinel" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="6"/></svg>Sentinel</span>
+          <span><svg class="finder-zone-open" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="6"/></svg>Open</span>
+          <span><svg class="finder-zone-dead" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="6"/></svg>Dead</span>
+          <span><svg class="finder-zone-rift" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="6"/></svg>Rift</span>
+          <span><svg class="finder-map-unknown" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="6"/></svg>Unknown zone</span>
+          <span><svg class="finder-map-own" viewBox="0 0 20 20" aria-hidden="true"><path d="m4 12 6-6 6 6"/></svg>Your systems</span>
+          <span title="Your systems and last-known allied planet/moon owners in saved data; alliance coverage is incomplete and possibly outdated."><svg class="finder-map-ally" viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4H4v12h3M13 4h3v12h-3"/></svg>You / alliance (saved)</span>
+          <span><svg class="finder-map-hit" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8"/></svg>Search match</span>
+          <span><svg class="finder-map-hub" viewBox="0 0 20 20" aria-hidden="true"><path d="m10 3 7 7-7 7-7-7Z" fill="currentColor"/></svg>Market hub</span>
+          <span><svg class="finder-map-station" viewBox="0 0 20 20" aria-hidden="true"><path d="m10 3 6 3v8l-6 3-6-3V6Z"/></svg>Station</span>
+          <span><svg class="finder-map-faint" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="3" fill="currentColor" stroke="none"/></svg>Limited visibility</span>
+          <span>Hover for details</span>
+      </div>
+    </section>
+    <section id="f-search-panel" role="tabpanel" aria-labelledby="f-tab-search" hidden>
+    <div class="finder-view-header">
+      <h2>Search</h2>
+      <span class="finder-badge" title="Searches saved knowledge and loads missing system contents. Unknown ownership of matching bodies is checked automatically; known ownership is refreshed by normal game observations, targeted background checks after galaxy notifications, or Check result ownership.">Completes missing data</span>
+    </div>
     <div class="toolbar-panel finder-toolbar">
       <label class="toolbar-field">Origin
         <select id="f-origin" class="toolbar-select"></select>
@@ -932,91 +1057,155 @@
       <label class="toolbar-field">Sector
         <input id="f-sector" class="toolbar-input finder-sector-input" type="text" placeholder="35 or 33-35" />
       </label>
-      <label class="toolbar-field">Type
-        <select id="f-type" class="toolbar-select">
-          <option value="">any</option>
-          <option value="ancient">ancient</option>
-          <option value="crystalline">crystalline</option>
-          <option value="gas_giant">gas giant</option>
-          <option value="ice">icy</option>
-          <option value="metallic">metallic</option>
-          <option value="rocky">rocky</option>
-          <option value="terra">terra</option>
-          <option value="volcanic">volcanic</option>
-        </select>
-      </label>
       <label class="toolbar-field">Min size
         <input id="f-min-size" class="toolbar-input" type="number" min="0" value="0" />
-      </label>
-      <label class="toolbar-field">Max size
-        <input id="f-max-size" class="toolbar-input" type="number" min="0" placeholder="∞" />
       </label>
       <label class="toolbar-field">Min moons
         <input id="f-min-moons" class="toolbar-input" type="number" min="0" value="0" />
       </label>
-      <label class="toolbar-field">Temp ≥
-        <input id="f-temp-min" class="toolbar-input" type="number" placeholder="−∞" />
+      <label class="toolbar-field" title="Slots on one free moon, not the total. When moon types are selected, that same moon must have a selected type.">Min moon slots
+        <input id="f-min-moon-slots" class="toolbar-input" type="number" min="0" value="0" title="Slots on one free moon of a selected type, if any; not the total." />
       </label>
-      <label class="toolbar-field">Temp ≤
-        <input id="f-temp-max" class="toolbar-input" type="number" placeholder="∞" />
-      </label>
-      <label class="toolbar-field">Zone
-        <select id="f-zone" class="toolbar-select">
-          <option value="">any</option>
-        </select>
-      </label>
-      <label class="toolbar-field">Ownership
-        <select id="f-ownership" class="toolbar-select">
-          <option value="">any</option>
-          <option value="unowned" selected>unowned only</option>
-          <option value="owned">owned only</option>
-        </select>
-      </label>
-      <label class="finder-checkbox-field">
-        <input id="f-exclude-mine" type="checkbox" />Exclude mine
-      </label>
+      <div class="toolbar-field">Zone
+        <span id="f-zone" class="asteroids-zone-toggles" role="group" aria-label="Security zones" title="Select multiple zones. No selection includes all zones."></span>
+      </div>
+      <div class="toolbar-field finder-filter-type-field">
+        <span id="f-types-label">Planet type</span>
+        <span id="f-types" class="finder-filter-toggles" role="group" aria-labelledby="f-types-label" title="Any selected type matches. No selection includes all planet types."></span>
+      </div>
+      <details id="f-search-more" class="finder-directory-more">
+        <summary>More filters <span id="f-search-active" class="finder-status"></span></summary>
+        <div class="finder-directory-extra-fields">
+          <label class="toolbar-field" title="Distance from Origin. Excludes distant systems before loading their contents; empty means unlimited.">Max distance
+            <input id="f-max-distance" class="toolbar-input" type="number" min="0" step="1" />
+          </label>
+          <label class="toolbar-field" title="Building-slot capacity, not unused slots. Uses calculated base capacity when no explicit capacity is saved.">Min planet slots
+            <input id="f-min-planet-slots" class="toolbar-input" type="number" min="0" step="1" />
+          </label>
+          <div class="toolbar-field finder-filter-type-field">
+            <span id="f-moon-types-label">Moon type present (any selected)</span>
+            <span id="f-moon-types" class="finder-filter-toggles" role="group" aria-labelledby="f-moon-types-label" title="Any selected type matches; no selection includes all types. With Min moon slots, one free moon must meet both type and slot requirements. Without a slot minimum, ownership does not restrict this filter."></span>
+          </div>
+        </div>
+      </details>
       <div class="finder-actions">
         <button id="f-search" class="toolbar-button primary-button">Search</button>
-        <button id="f-export" class="toolbar-button secondary-button" title="Save your scanned planet data to a file to share" style="display:none;">Export galaxy</button>
-        <button id="f-import" class="toolbar-button secondary-button" title="Merge scanned planet data from a shared file" style="display:none;">Import galaxy</button>
+        <button id="f-clear-search" class="toolbar-button secondary-button" type="button" disabled title="Clear the saved search, filters and results for this universe. Collected galaxy knowledge is kept.">Clear search</button>
       </div>
-      <input id="f-import-file" type="file" accept="application/json,.json" style="display:none" />
-      <span id="f-progress" class="finder-status"></span>
+      <span id="f-progress" class="finder-status" role="status" aria-live="polite"></span>
+      <span id="f-search-storage-status" class="finder-status" role="alert"></span>
+      <details id="f-search-issues" class="finder-directory-more" hidden>
+        <summary id="f-search-issues-summary">Search issues</summary>
+        <ul id="f-search-issues-list"></ul>
+      </details>
     </div>
 
-    <div class="dashboard-panel finder-map-panel">
-      <canvas id="f-map" width="1100" height="640"></canvas>
-      <div id="f-tooltip" class="finder-tooltip"></div>
-    </div>
-
-    <div class="reports-section statistics-list-panel finder-results-panel">
+    <div class="dashboard-panel finder-results-panel">
       <div class="reports-header">
         <h2>Matches</h2>
         <span id="f-match-count" class="finder-match-count"></span>
+        <div class="finder-ownership-check">
+          <span id="f-ownership-progress" class="finder-status" role="status" aria-live="polite"></span>
+          <button id="f-check-ownership" class="toolbar-button secondary-button" disabled title="Request current ownership once per system in the base search results, including results hidden by ownership filters">Check result ownership</button>
+        </div>
       </div>
+      <div class="finder-actions finder-results-filters">
+        <label class="toolbar-field">Last known ownership
+          <select id="f-ownership" class="toolbar-select">
+            <option value="" selected>any</option>
+            <option value="unowned">unowned only</option>
+            <option value="owned">owned only</option>
+          </select>
+        </label>
+        <label class="finder-checkbox-field">
+          <input id="f-exclude-mine" type="checkbox" />Exclude mine
+        </label>
+      </div>
+      <div class="finder-directory-scroll">
       <table>
         <thead id="f-results-head">
           <tr>
-            <th class="sortable" data-key="planet">Planet</th>
-            <th class="sortable" data-key="system">System</th>
-            <th class="sortable" data-key="sector">Sector</th>
-            <th class="sortable" data-key="type">Type</th>
-            <th class="sortable" data-key="size">Size</th>
-            <th class="sortable" data-key="temp">Temp</th>
-            <th class="sortable" data-key="moons">Moons</th>
-            <th class="sortable" data-key="zone">Zone</th>
-            <th class="sortable" data-key="distance">Distance</th>
-            <th class="sortable" data-key="owner">Owner</th>
-            <th class="sortable" data-key="alliance">Alliance</th>
-            <th class="sortable" data-key="rankMil">Mil rank</th>
-            <th class="sortable" data-key="rankEco">Eco rank</th>
-            <th class="sortable" data-key="rankRes">Res rank</th>
+            <th class="sortable" data-key="planet"><button type="button">Planet</button></th>
+            <th class="sortable" data-key="system"><button type="button">System</button></th>
+            <th class="sortable" data-key="sector"><button type="button">Sector</button></th>
+            <th class="sortable" data-key="type"><button type="button">Type</button></th>
+            <th class="sortable" data-key="size"><button type="button">Size</button></th>
+            <th class="sortable" data-key="slots" title="Building-slot capacity; calculated base slots when no explicit capacity is saved. Not unused slots."><button type="button">Slots</button></th>
+            <th class="sortable" data-key="moons"><button type="button">Moons</button></th>
+            <th class="sortable" data-key="zone"><button type="button">Zone</button></th>
+            <th class="sortable" data-key="distance"><button type="button">Distance</button></th>
+            <th class="sortable" data-key="owner"><button type="button">Owner</button></th>
+            <th class="sortable" data-key="alliance"><button type="button">Alliance</button></th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody id="f-results-tbody"></tbody>
       </table>
+      </div>
     </div>
-
+    </section>
+    <section id="f-directory" role="tabpanel" aria-labelledby="f-tab-systems" hidden>
+      <div class="finder-view-header">
+        <h2 id="f-directory-title">Systems</h2>
+        <span class="finder-badge" title="Filters saved knowledge only; opening or filtering this list sends no system or ownership requests. Knowledge also grows through normal game observations, Search and targeted background checks after galaxy notifications. Unknown values do not satisfy numeric limits.">Saved data</span>
+      </div>
+      <div class="toolbar-panel finder-directory-toolbar">
+        <label class="toolbar-field">Show
+          <select id="f-directory-scope" class="toolbar-select">
+            <option value="matches">Search results</option>
+            <option value="all" selected>All known data</option>
+          </select>
+        </label>
+        <label class="toolbar-field">Filter list
+          <input id="f-directory-filter" class="toolbar-input" type="search" placeholder="Name, type, owner, alliance, zone..." />
+        </label>
+        <div class="toolbar-field">Zone
+          <span id="f-directory-zones" class="asteroids-zone-toggles" role="group" aria-label="List security zones" title="Select multiple zones. No selection includes all zones."></span>
+        </div>
+        <div class="toolbar-field finder-directory-types-field"><span id="f-directory-type-label">Type</span>
+          <span id="f-directory-types" class="finder-filter-toggles" role="group" aria-labelledby="f-directory-type-label" title="Select multiple types. No selection includes all types."></span>
+        </div>
+        <label id="f-directory-ownership-field" class="toolbar-field">Ownership
+          <select id="f-directory-ownership" class="toolbar-select">
+            <option value="">All</option>
+            <option value="free">Free</option>
+            <option value="colonized">Colonized</option>
+            <option value="unknown">Unknown</option>
+          </select>
+        </label>
+        <button id="f-directory-reset" class="toolbar-button secondary-button" type="button">Reset list filters</button>
+        <span id="f-directory-summary" class="finder-status" role="status" aria-live="polite"></span>
+        <details id="f-directory-more" class="finder-directory-more">
+          <summary>More filters <span id="f-directory-active" class="finder-status"></span></summary>
+          <div id="f-directory-extra-fields" class="finder-directory-extra-fields"></div>
+        </details>
+      </div>
+      <div class="dashboard-panel">
+        <div class="finder-directory-scroll">
+          <table>
+            <thead id="f-directory-head"></thead>
+            <tbody id="f-directory-body"></tbody>
+          </table>
+        </div>
+        <div class="finder-directory-toolbar">
+          <button id="f-directory-prev" class="toolbar-button secondary-button" type="button">Previous</button>
+          <span id="f-directory-page" class="finder-status"></span>
+          <button id="f-directory-next" class="toolbar-button secondary-button" type="button">Next</button>
+        </div>
+      </div>
+    </section>
+    <dialog id="f-system-overview" class="finder-system-overview" aria-labelledby="f-system-title" aria-describedby="f-system-meta">
+      <div class="finder-system-header">
+        <div class="finder-view-header">
+          <h2 id="f-system-title">System overview</h2>
+          <span class="finder-badge" title="Saved knowledge only. Missing sections are unknown, not empty; ownership and asteroid resources may be outdated. Opening this overview does not request game data.">Saved data</span>
+        </div>
+        <button id="f-system-close" class="toolbar-button secondary-button" type="button" autofocus>Close</button>
+      </div>
+      <p id="f-system-meta" class="finder-system-meta"></p>
+      <div id="f-system-body"></div>
+      <button id="f-system-map" class="toolbar-button secondary-button" type="button">Show on map</button>
+    </dialog>
   </div>
 
   <div id="asteroids-content" class="asteroids-dashboard" style="display:none;">

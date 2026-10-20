@@ -1347,7 +1347,7 @@ export function makeResourceDoughnut(canvasId, totals) {
 
 // Colored zone badge cell for report tables.
 export const ZONE_COLORS = {
-  sentinel: '#7ed957', open: '#f0883e', dead: '#ff6b7a', rift: '#d2a8ff', unknown: '#c0cce0',
+  sentinel: '#22c55e', open: '#f59e0b', dead: '#ef4444', rift: '#7c3aed', unknown: '#c0cce0',
 };
 export const ZONE_DEFS = Object.freeze([
   Object.freeze({ key: 'sentinel', label: 'Sentinel' }),

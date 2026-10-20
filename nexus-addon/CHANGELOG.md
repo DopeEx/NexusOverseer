@@ -7,23 +7,70 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
-- Options subnavigation for General, Dashboard, Data and Developer / Debug,
-  matching the Statistics navigation.
-- Optional local API and WebSocket diagnostic logs with color-coded request
-  methods and statuses, path search, copy controls, JSONL export and clearing.
-  Galaxy updates have their own filtered view. Recording is off by default;
-  logs are bounded and separated by game server.
-- Adjustable addon console log levels and a read-only resource history derived
-  from retained reports, with pagination and UTC time buckets.
+- Persistent galaxy knowledge per universe, shared with asteroid searches.
+  Physical properties do not expire; ownership and changing field data stay
+  separate. Existing scans migrate, normal gameplay grows saved knowledge, and
+  regular backups include the galaxy database.
+- Five Galaxy Scout views: Map, Search, Systems, Planets and Moons. Lists browse
+  search matches or all known data with independent filters, sorting and paging.
+  System overview groups saved planets/moons with thumbnails, slot capacities,
+  last-known owners and observation times, without scanning.
+- Map navigation with local name/ID suggestions, Home planet, zoom, Whole galaxy
+  and a clicked-system information box. Star colors, optional zone rings, own
+  colonies, saved alliance markers, hubs and optional stations have a visual
+  legend and independent layer controls.
+- Search supports multiple planet/moon types, zones, sector ranges, distance and
+  minimum size, slot and moon counts. A moon-slot threshold applies to one free
+  moon, not a sum. Searches are saved per universe and restored locally.
+- Public galaxy exchange through previewed structure-only exports and manually
+  attached contribution issues. Maintainer-reviewed downloads fill missing
+  structure without exposing owners, colony names, resources, visibility or
+  upgrade-dependent slots. Daily checks are optional; manual updates remain
+  available. Direct observations take priority.
+- Windows maintainer import starter with a file picker, conflict preview,
+  explicit MERGE confirmation and checksum validation; no upload, commit or push.
+- Optional local diagnostic logs, per-stream search/JSONL export and clearing,
+  console log levels and read-only resource history. Recording defaults off;
+  logs stay separate per universe and are not part of regular data backups.
+
+### Changed
+- Galaxy Scout shows saved ownership first and checks unknown owners only in
+  matching, fully visible systems. Manual checks include locally hidden matches.
+  Player-rank columns and rank requests have been removed.
+- Planet/moon types, security-zone colors and moon badges match the game.
+  Slot capacities prefer saved explicit values over size-derived planet base
+  slots; unknown values never satisfy numeric filters.
+- Search and directory filters share compact toolbars and badges. More filters
+  keeps an active count; local list resets preserve other views and the search.
+  Clear search preserves galaxy knowledge; cache clearing is a separate recovery
+  action under Options > Data > Danger zone.
+- Options subnavigation for General, Data and Developer / Debug, matching the
+  Statistics navigation. General preferences and dashboard controls share a tab
+  with separate panels and reset actions. Data separates storage, public galaxy
+  data, private backups and the danger zone; detailed explanations are collapsible.
 
 ### Fixed
-- Diagnostic capture uses batched database writes and lazy detail rendering to
-  limit overhead. Large entries retain request metadata and show explicit
-  truncation markers; empty request-body panels are hidden.
-- Reloaded or updated extensions stop stale diagnostic connections without
-  repeatedly reporting expected disconnections as warnings.
-- Diagnostic clearing targets the selected server without waiting for pending
-  game requests. Chromium initializes capture helpers in the correct script world.
+- Shared API requests respect rate-limit cooldowns across concurrent reads and
+  writes, honor Retry-After dates and slow repeated background requests after
+  throttling. Exhausted galaxy requests stop visibly while preserving results.
+- Combat simulation requests are paced across callers with bounded retries,
+  recovery cooldowns and progress feedback during fleet calculations. Requests
+  retain their selected universe while another universe's data is loading.
+- Galaxy searches no longer delay every cached system or discard knowledge
+  beyond 800 systems. Unavailable details are distinguished from empty data,
+  and abandoned colonies do not retain their former owners.
+- Map hover details, click selection, drag/zoom coordinates and labels remain
+  aligned at browser/Windows scaling. Map view fits the viewport without page
+  scrolling; other views retain normal scrolling and shared panel spacing.
+- Switching views or receiving saved-data updates preserves the active search.
+  Pending filters do not alter the map until a search starts.
+- Moon processing is shared across search, lists and overviews. Public exports
+  read only the selected universe instead of loading an all-server backup.
+- Mission countdowns in tabs show the ETA without repeated event labels;
+  Dashboard countdowns retain their event labels.
+- Diagnostic capture uses batched writes and lazy details, preserves explicit
+  truncation markers, and stops stale connections cleanly after extension reloads.
+  Clearing targets the selected server, and Chromium uses the correct script world.
 
 ### Documentation
 - Clarified game mechanics and API payloads in separate, cross-linked references,
@@ -31,16 +78,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   building previews and storage limits.
 - Updated the User Guide and privacy policy for local diagnostics. Diagnostic
   logs use separate JSONL exports and are not included in regular data backups.
+- Documented galaxy-cache behavior, public contributions and Windows imports.
+  The isolated screenshot demo uses 6,000 fictional systems and station markers.
 
 ## [2.2.2] - 2026-10-19
-
-### Changed
-- What's new groups all published changes in the installed minor-version series
-  under separate version headings, newest first.
 
 ### Added
 - A Check for updates button beside the footer version in manual installations,
   with immediate checks, progress, results and a short repeat-click cooldown.
+
+### Changed
+- What's new groups all published changes in the installed minor-version series
+  under separate version headings, newest first.
 
 ## [2.2.1] - 2026-10-19
 
@@ -214,9 +263,6 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The simulator POST runs through the logged-in game tab; a response without
   a combat report is treated as an error instead of rendering a false result.
 
-### Removed
-- The locally estimated combat engine and its engine-only validation panel.
-
 ### Fixed
 - Newer tiered spy reports are normalized alongside legacy reports, and fleet
   dispatch requests preserve hangar assignments.
@@ -225,6 +271,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Debris and report processing now preserves expiration and zone data when the
   game response omits or relocates those fields.
 - Asteroid live search handles the game's API response variations.
+
+### Removed
+- The locally estimated combat engine and its engine-only validation panel.
 
 ### Chore
 - Added API and game reference documentation and updated the privacy policy.
@@ -363,14 +412,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Quartermaster can now be sent as a transfer (haulers stay) instead of a
   delivery (haulers return).
 
+### Changed
+- CI: bumped `actions/checkout` and `actions/setup-node` to v5 (Node 20
+  deprecation).
+
 ### Fixed
 - Date-flaky `purgeOldData` test (records fell in the same month early in the
   month, colliding archive keys and double-counting).
 - Removed an unused variable flagged by lint.
-
-### Changed
-- CI: bumped `actions/checkout` and `actions/setup-node` to v5 (Node 20
-  deprecation).
 
 ## [1.7.1] - 2026-07-09
 
@@ -548,18 +597,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.6.2] - 2026-06-25
 
+### Added
+- **Fuel Cost** column on the Asteroids tab: per-field hydrogen estimate for the
+  selected fleet template from the Mining-From planet (out-of-range in red).
+- **What's-new modal**: after an update, the latest changelog entry is shown
+  once in the dashboard, formatted (headings, bullets, bold/italic/code).
+
 ### Changed
 - **Asteroids tab** now scans the *N nearest explored systems* to the chosen
   planet (set the count) instead of an arm + sector region.
 - Asteroid scans refetch system data after 15 minutes (was 24h) so drained
   fields and miner presence stay current; Planet Finder keeps the 24h cache.
 - Dashboard now opens on the **Global** tab.
-
-### Added
-- **Fuel Cost** column on the Asteroids tab: per-field hydrogen estimate for the
-  selected fleet template from the Mining-From planet (out-of-range in red).
-- **What's-new modal**: after an update, the latest changelog entry is shown
-  once in the dashboard, formatted (headings, bullets, bold/italic/code).
 
 ### Fixed
 - Rate-limited (429) API calls now retry with backoff instead of erroring out.
@@ -568,14 +617,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.6.1] - 2026-06-25
 
+### Added
+- Launch confirmations show each ship's image + name instead of `#<id>`.
+- Used/max fleet slots shown on the Asteroids tab.
+
 ### Fixed
 - Fleet/research launches no longer silently cancel: native `confirm()` is
   replaced by an in-page modal, so Firefox's "prevent additional dialogs"
   checkbox can't suppress launch confirmations anymore.
-
-### Added
-- Launch confirmations show each ship's image + name instead of `#<id>`.
-- Used/max fleet slots shown on the Asteroids tab.
 
 ## [1.6.0] - 2026-06-25
 
@@ -610,17 +659,6 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     game (with a confirm dialog) on a planet of your choice — a "Launch on"
     picker lists every planet, with busy ones disabled.
 
-### Fixed
-- Fuel formula recalibrated against real data: `rate × (0.0496 × distance + 3.48)`
-  (~6% mean error; the previous formula was ~2× too high due to a mislabeled
-  distance scale).
-- Fuel is now counted once per **launched** mission (stored in `fuel_log` by
-  type/date/zone). A survey's heavy investigation/collection fleet is counted
-  rather than the lighter scout probe; `investigate` and `anomaly` mission
-  types are both mapped to the survey zone.
-- Schema v7 clears `fuel_log` and stale coordinate/home/owned-system caches
-  so fuel rebuilds cleanly from launch records.
-
 ### Changed
 - Fuel cards appear on every tab (Surveys, Pirates, Mining, Debris,
   Expeditions, Global) and the net-gain totals now label themselves
@@ -633,6 +671,17 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   per-level time scaled by each planet's research-speed multiplier, and the
   schedule models one research slot per planet (parallel) plus a
   time-aware affordability check that accrues income over the queue.
+
+### Fixed
+- Fuel formula recalibrated against real data: `rate × (0.0496 × distance + 3.48)`
+  (~6% mean error; the previous formula was ~2× too high due to a mislabeled
+  distance scale).
+- Fuel is now counted once per **launched** mission (stored in `fuel_log` by
+  type/date/zone). A survey's heavy investigation/collection fleet is counted
+  rather than the lighter scout probe; `investigate` and `anomaly` mission
+  types are both mapped to the survey zone.
+- Schema v7 clears `fuel_log` and stale coordinate/home/owned-system caches
+  so fuel rebuilds cleanly from launch records.
 
 ## [1.5.6] - 2026-06-18
 
@@ -706,16 +755,6 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.5.2] - 2026-06-15
 
-### Fixed
-- Widened host permissions to `*://*.nexuslegacy.space/*` so a single grant
-  covers the `s0` (and any future universe) subdomain. Previously only the
-  apex was granted on Firefox, leaving the API host unauthorized — every
-  request was CORS-blocked and the addon reported "not logged in" with no
-  data.
-- `getToken` now searches every cookie store (Firefox containers, private
-  windows) and domain-wide, not just the default store with two exact URLs.
-- API errors now name the failing endpoint (network/CORS failures included).
-
 ### Added
 - Planet Finder: Max size, temperature range, security-zone, and
   "exclude mine" filters; Zone and Distance-from-home columns (sortable).
@@ -730,6 +769,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Owner-only galaxy export/import: share scanned-planet knowledge as a
   JSON file, merged by freshest scan per system. Imported systems become
   searchable even if you haven't explored them.
+
+### Fixed
+- Widened host permissions to `*://*.nexuslegacy.space/*` so a single grant
+  covers the `s0` (and any future universe) subdomain. Previously only the
+  apex was granted on Firefox, leaving the API host unauthorized — every
+  request was CORS-blocked and the addon reported "not logged in" with no
+  data.
+- `getToken` now searches every cookie store (Firefox containers, private
+  windows) and domain-wide, not just the default store with two exact URLs.
+- API errors now name the failing endpoint (network/CORS failures included).
 
 ## [1.5.1] - 2026-06-15
 
