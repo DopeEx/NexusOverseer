@@ -3,6 +3,8 @@
 // Every option is declared once in DEFAULTS; values are read synchronously from
 // a cache that loadSettings() fills and storage changes keep fresh.
 
+import './diagnostics-core.js';
+
 export const DEFAULTS = Object.freeze({
   'dashboard.attention.labs': true,
   'dashboard.attention.construction': true,
@@ -22,6 +24,8 @@ export const DEFAULTS = Object.freeze({
   'data.autoBackup': 'weekly',
   'general.numberFormat': 'de',
   'general.defaultTab': 'dashboard',
+  'developer.logLevel': 'warn',
+  'developer.recording': false,
 });
 
 const listeners = new Set();
@@ -34,11 +38,13 @@ function sanitize(stored) {
   for (const key of Object.keys(DEFAULTS)) {
     if (typeof stored[key] === typeof DEFAULTS[key]) out[key] = stored[key];
   }
+  if (!['debug', 'info', 'warn', 'error'].includes(out['developer.logLevel'])) out['developer.logLevel'] = DEFAULTS['developer.logLevel'];
   return out;
 }
 
 function apply(stored) {
   cache = sanitize(stored);
+  globalThis.nexusDiagnostics.setLogLevel(cache['developer.logLevel']);
   for (const fn of listeners) fn(cache);
 }
 
@@ -49,7 +55,7 @@ export async function loadSettings() {
       if (changes.nexus_settings) apply(changes.nexus_settings.newValue);
     });
   }
-  cache = sanitize(await globalThis.nexusStorage?.getSettings?.());
+  apply(await globalThis.nexusStorage?.getSettings?.());
   return cache;
 }
 

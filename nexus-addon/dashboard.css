@@ -120,6 +120,61 @@ body.expert-mode .pc-auto-row.expert-only { display: flex !important; }
   background: rgba(74, 83, 122, 0.28);
 }
 
+.options-subtabs { grid-column: 1 / -1; }
+#options-content > [hidden], #opt-developer [hidden] { display: none !important; }
+.developer-panel { grid-column: 1 / -1; min-width: 0; }
+.developer-panel > *, #debug-streams > * { margin-bottom: 16px; }
+.developer-panel .debug-panel { padding: 0; overflow: hidden; }
+.debug-heading { padding: 16px; cursor: pointer; }
+.debug-heading strong { font-family: var(--font-ui); }
+.debug-description { display: block; margin-top: 6px; font-weight: normal; }
+.debug-body { padding: 16px; border-top: 1px solid var(--line); }
+.debug-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; }
+.debug-table-scroll { overflow-x: auto; }
+.debug-table { width: 100%; border-collapse: collapse; }
+.debug-table th, .debug-table td { padding: 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+.debug-table th { color: var(--text-muted); font-size: 0.8rem; }
+.debug-table td:last-child { width: 50%; min-width: 240px; }
+.debug-json { position: relative; padding: 12px; background: var(--bg-input); border: 1px solid var(--line); border-radius: var(--radius-control); }
+.debug-json > .debug-copy { position: absolute; top: 6px; right: 6px; }
+.debug-json:has(> .debug-copy) { padding-top: 36px; }
+.debug-json pre { max-height: 380px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 0.75rem/1.6 Consolas, monospace; color: var(--text-soft); margin: 0; scrollbar-color: var(--border-strong) var(--bg-input); }
+.debug-entry { border: 1px solid var(--line); border-radius: var(--radius-control); margin-bottom: 10px; overflow: hidden; background: var(--bg-panel); }
+.debug-entry > summary, .debug-payload > summary { display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 10px 12px; background: var(--bg-raised); list-style: none; }
+.debug-entry > summary::-webkit-details-marker, .debug-payload > summary::-webkit-details-marker { display: none; }
+.debug-entry > summary::before, .debug-payload > summary::before { content: ""; width: 5px; height: 5px; flex: 0 0 5px; border-right: 1px solid var(--text-subtle); border-bottom: 1px solid var(--text-subtle); transform: rotate(-45deg); transition: transform 0.15s; }
+.debug-entry[open] > summary::before, .debug-payload[open] > summary::before { transform: rotate(45deg); }
+.debug-entry > summary:hover, .debug-payload > summary:hover { background: var(--bg-hover); }
+.debug-entry-path { min-width: 0; overflow-wrap: anywhere; font: 0.75rem/1.5 Consolas, monospace; color: var(--text-secondary); }
+.debug-entry-time { margin-left: auto; white-space: nowrap; color: var(--text-subtle); font: 0.67rem/1.5 Consolas, monospace; }
+.debug-entry-body { margin: 10px; padding: 12px; background: var(--bg-page); border: 1px solid var(--line); border-radius: var(--radius-control); }
+.debug-entry-body > .opt-note, .debug-entry-body > .debug-error { margin-bottom: 8px; }
+.debug-payload { margin-top: 10px; border: 1px solid var(--border); border-radius: var(--radius-control); overflow: hidden; }
+.debug-payload:first-child { margin-top: 0; }
+.debug-payload > summary { padding: 8px 10px; color: var(--text-soft); }
+.debug-payload-title { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+.debug-payload > summary > .debug-copy { margin-left: auto; }
+.debug-payload > .debug-json { border: 0; border-top: 1px solid var(--line); border-radius: 0; }
+.debug-badge { display: inline-flex; align-items: center; flex-shrink: 0; padding: 2px 6px; border: 1px solid var(--border-strong); border-radius: 4px; font: 600 0.65rem/1.3 Consolas, monospace; color: var(--text-soft); background: var(--bg-input); }
+.debug-method-get, .debug-status-success { color: var(--success); background: var(--ok-bg); border-color: var(--ok-border); }
+.debug-method-post { color: var(--info); background: var(--info-bg); border-color: var(--info-border); }
+.debug-method-put, .debug-status-redirect { color: var(--warning); background: var(--warn-bg); border-color: var(--warn-border); }
+.debug-method-delete, .debug-status-failure { color: var(--error); background: var(--err-bg); border-color: var(--err-border); }
+.developer-panel .debug-copy { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 28px; width: 28px; height: 28px; padding: 0; border: 1px solid var(--border); border-radius: 4px; color: var(--text-subtle); background: var(--bg-input); cursor: pointer; }
+.developer-panel .debug-copy:hover { color: var(--accent); border-color: var(--border-strong); background: var(--bg-hover); }
+.developer-panel .debug-copy-done { color: var(--success); border-color: var(--ok-border); background: var(--ok-bg); }
+.debug-copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 600px) {
+  .debug-entry > summary { flex-wrap: wrap; gap: 8px; }
+  .debug-entry-path { flex: 1 1 45%; }
+  .debug-entry-time { margin-left: auto; }
+  .debug-entry-body { margin: 6px; padding: 8px; }
+}
+.debug-credit { color: var(--success); }
+.debug-debit, .debug-error { color: var(--error); }
+.developer-panel > .opt-panel { grid-template-columns: minmax(0, 1fr); }
+.developer-panel button { font-family: var(--font-ui); }
+
 /* Sidebar navigation (values taken from the game's sidebar) */
 :root { --sidebar-width: 232px; }
 html { padding-left: var(--sidebar-width); }

@@ -10,6 +10,10 @@
   function onGameFetch(msg, sender, sendResponse) {
     void sender;
     if (!msg || msg.type !== 'GAME_FETCH') return;
+    const respond = response => {
+      globalThis.nexusRecordDiagnosticApi?.(msg, response);
+      sendResponse(response);
+    };
 
     fetch(msg.path, {
       method: msg.method || 'POST',
@@ -34,7 +38,7 @@
         } catch {
           if (text) message = `${response.status}: ${text.slice(0, 200)}`;
         }
-        sendResponse({ error: message, ...meta });
+        respond({ error: message, ...meta });
         return;
       }
 
@@ -43,12 +47,12 @@
         try {
           data = JSON.parse(text);
         } catch (error) {
-          sendResponse({ error: `Failed to parse API response: ${error.message}`, parseError: true, ...meta });
+          respond({ error: `Failed to parse API response: ${error.message}`, parseError: true, ...meta });
           return;
         }
       }
-      sendResponse({ ok: true, data, ...meta });
-    }).catch(error => sendResponse({
+      respond({ ok: true, data, ...meta });
+    }).catch(error => respond({
       error: error.name === 'TimeoutError'
         ? `API ${msg.path} timed out after 20 seconds.`
         : error.message,

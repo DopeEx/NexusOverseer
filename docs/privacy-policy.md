@@ -1,6 +1,6 @@
 # Privacy Policy — Nexus Overseer
 
-**Last updated: 2026-10-19**
+**Last updated: 2026-10-20**
 
 Nexus Overseer is a browser extension that reads your Nexus Legacy game data and displays it locally as a personal accounting dashboard. This policy describes exactly what data the extension accesses, how it is used, and where it goes.
 
@@ -22,6 +22,12 @@ The extension reads the following data from the currently selected Nexus Legacy 
 | Player and alliance data | Player identity, alliance details, and ranking data used by the finder |
 | Trade and logistics | Market orders and trades, logistics outposts, moons, and related fleet/resource state |
 | System activity | System messages and debris data used by exploration and collection features |
+| Optional developer diagnostics | When explicitly enabled: API method/path/status and request/response bodies, incoming text WebSocket messages, and extracted galaxy delta events |
+
+Diagnostic recording is off by default. It excludes request/response headers,
+URL query strings and authentication endpoints, and redacts recognized secret
+fields and token patterns before relaying and storing data. Other private game
+data may remain in payloads. Recording is local only and does not upload logs.
 
 The extension does not read or extract the session cookie. It sends API requests through your logged-in game tab, where the browser attaches the game's HttpOnly session cookie. The extension does not write or modify cookies.
 
@@ -35,6 +41,7 @@ All data is used **solely to operate the extension's dashboard** on your own dev
 - Render charts, history tables, and the tech-tree planner
 - Run the offline combat simulator
 - Support the planet finder, asteroid scans, fleet logistics, and market views
+- Diagnose addon behavior using optional, locally recorded developer logs
 
 No data is used for advertising, profiling, or any purpose unrelated to displaying your own game statistics back to you.
 
@@ -42,7 +49,7 @@ No data is used for advertising, profiling, or any purpose unrelated to displayi
 
 ## 3. Where the data is stored
 
-All data is stored **locally on your device only**, in the browser's `storage.local` area (isolated to this extension). Nothing is uploaded to any server operated by the extension author.
+All data is stored **locally on your device only**, in the browser's `storage.local` area or, for optional diagnostic traffic, in an extension-local IndexedDB database. Nothing is uploaded to any server operated by the extension author.
 
 The extension also writes automatic backup files to your `Downloads/NexusOverseer/` folder before destructive operations (reset, import, schema migrations) and as a weekly auto-backup. These files are plain JSON and remain on your device under your control.
 
@@ -80,6 +87,17 @@ Data accumulates in local storage as long as the extension is installed. You can
 - **Export** a full JSON backup at any time under Options > Data in the dashboard.
 - **Reset** your recorded stats and reports under Options > Data (a backup is created first; your options are kept).
 - **Uninstall** the extension — the browser removes all `storage.local` data on uninstall.
+
+Developer logs are separated by game server and limited to 150 entries per
+stream and 10,000,000 UTF-8 bytes of entry JSON per server, excluding container
+overhead. Payload and capture-rate limits can discard or truncate entries.
+Disable recording to stop new capture; existing logs remain until cleared,
+overwritten by newer entries or removed with extension data. Use **Clear logs**
+on each stream under **Options > Developer / Debug** without deleting statistics.
+Diagnostic logs use a separate local database and are not included in regular
+full backups; older storage-based diagnostic logs migrate when recording or
+clearing next runs. Optional JSONL exports remain under your
+control; review private game data before sharing and delete exported files manually.
 
 Backup files in your Downloads folder are not deleted automatically; you can delete them manually at any time.
 

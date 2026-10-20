@@ -91,6 +91,10 @@ new MutationObserver(() => inject())
 // forwards the cookie value itself.
 rt.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type !== 'GAME_FETCH') return;
+  const respond = response => {
+    globalThis.nexusRecordDiagnosticApi?.(msg, response);
+    sendResponse(response);
+  };
   fetch(msg.path, {
     method: msg.method || 'POST',
     credentials: 'include',
@@ -109,20 +113,20 @@ rt.onMessage.addListener((msg, sender, sendResponse) => {
       let m = `${r.status}`;
       try { const j = JSON.parse(text); m = j.message || j.error || m; }
       catch { if (text) m = `${r.status}: ${text.slice(0, 200)}`; }
-      sendResponse({ error: m, ...meta });
+      respond({ error: m, ...meta });
     } else {
       let data = {};
       if (text) {
         try {
           data = JSON.parse(text);
         } catch (e) {
-          sendResponse({ error: `Failed to parse API response: ${e.message}`, parseError: true, ...meta });
+          respond({ error: `Failed to parse API response: ${e.message}`, parseError: true, ...meta });
           return;
         }
       }
-      sendResponse({ ok: true, data, ...meta });
+      respond({ ok: true, data, ...meta });
     }
-  }).catch(e => sendResponse({
+  }).catch(e => respond({
     error: e.name === 'TimeoutError'
       ? `API ${msg.path} timed out after 20 seconds.`
       : e.message,

@@ -71,6 +71,53 @@ No player account, actual coordinates or real economy data is shown.
 - **Combat Simulator**: integrated directly into the dashboard, using the game's official combat calculator. Fleet inputs, intel imports, and battle results stay in the same tab.
 - **Multiple universes**: data is kept separately for each universe.
 - **Backups**: JSON export and import of your data and options (Options > Data).
+- **Developer / Debug**: Options has General, Dashboard, Data and Developer / Debug subtabs in the same style as Statistics. Developer tools provide console log levels, a read-only resource history with UTC time buckets, and expandable API, galaxy-delta and WebSocket logs with search, copy, JSONL export and per-stream clearing.
+
+### Diagnostic recording
+
+Recording is **off by default** and separate from the console log level. Enable
+it in **Options > Developer / Debug**, then use the game to capture new traffic.
+Reload existing game tabs after updating or reloading the extension to ensure
+diagnostic capture is active. Toggling recording on or off takes effect
+immediately without reloading game tabs. Reloading also attaches capture to
+new WebSocket connections. Only incoming text WebSocket frames are
+recorded. Galaxy deltas are extracted from decoded `galaxy:delta` events.
+
+**Galaxy Delta Updates** is a filtered diagnostic view of the WebSocket stream:
+one incoming delta can appear in both lists without being received twice.
+Capture is passive and only records events received while recording is enabled;
+opening the map or selecting a system does not guarantee a delta event.
+Observed `colonized` payloads contain `systemId` and `hasColonies: true`, but
+do not identify a planet, owner or the number of colonies. Repeated identical
+payloads can occur and must not be counted as distinct new colonies.
+These logs do not currently update Galaxy Scout data or implement community
+data sharing. Their timestamps indicate capture time, not a verified time of
+the underlying game action.
+
+Logs remain local and server-separated, with at most 150 entries per stream
+and 10,000,000 UTF-8 bytes of entry JSON per server (excluding storage-container
+overhead). Each sanitized entry allows 256,000 JSON characters. Oversized entries
+retain API metadata and up to 100,000 serialized characters per body preview.
+Capture reads up to 1,000,000 characters per payload; larger payloads are omitted
+with a marker. Sanitization allows 100,000 characters per text value, 1,000 array
+items or object fields per level, and nesting through depth 20. All these cuts
+produce explicit truncation markers and mark the entry as truncated.
+The page bridge batches at most 20
+entries every 500 ms and discards excess entries. Disabling recording stops
+new capture but keeps existing logs. Clear each stream independently of stats
+and reports. Diagnostic traffic is stored separately in IndexedDB, using
+incremental batched writes without storage-change broadcasts to game tabs.
+Existing storage-based logs migrate on the next recorded batch or clear action.
+Diagnostic logs are not included in regular data backups; use their JSONL export.
+JSON detail views are generated only when expanded.
+
+Headers, URL query strings and authentication endpoints are excluded.
+Recognized secret fields and token patterns are redacted before data leaves
+the page and again before storage. This is not a guarantee that arbitrary
+payloads contain no personal information: review JSONL exports before sharing.
+The Analytics panel derives its data from retained reports, fuel logs and mining
+costs, independent of traffic recording. It is not a complete resource ledger
+and cannot reconstruct deleted history or unrecorded expenses.
 
 ## How it works
 

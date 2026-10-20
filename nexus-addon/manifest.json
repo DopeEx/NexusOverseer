@@ -33,6 +33,17 @@
   },
   "content_scripts": [
     {
+      "matches": ["https://*.nexuslegacy.space/*"],
+      "js": ["diagnostics-core.js", "diagnostics-hook.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://*.nexuslegacy.space/*"],
+      "js": ["server-storage.js", "diagnostics-relay.js"],
+      "run_at": "document_start"
+    },
+    {
       "matches": ["https://s0.nexuslegacy.space/*", "https://*.nexuslegacy.space/*"],
       "js": ["server-storage.js", "sidebar-inject.js"],
       "css": ["theme.css"],
@@ -91,7 +102,8 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "dashboard.html"
+        "dashboard.html",
+        "diagnostics-core.js"
       ],
       "matches": [
         "https://s0.nexuslegacy.space/*",
