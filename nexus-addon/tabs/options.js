@@ -2,8 +2,34 @@
 // Every control with data-setting reads and writes one option immediately.
 
 import { DEFAULTS, getSetting, onSettingsChange, resetSettings, setSettings } from '../settings.js';
+import { initDeveloperTab } from './developer.js';
 
 let bound = false;
+let activeSection = 'general';
+let selected = false;
+
+function selectSection(section) {
+  if (!['general', 'dashboard', 'data', 'developer'].includes(section)) return;
+  const changed = !selected || activeSection !== section;
+  selected = true;
+  activeSection = section;
+  for (const button of document.querySelectorAll('[data-option-section]')) {
+    const active = button.dataset.optionSection === section;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', String(active));
+    button.tabIndex = active ? 0 : -1;
+    const panel = document.getElementById(`opt-${button.dataset.optionSection}`);
+    panel.hidden = !active;
+    panel.setAttribute('role', 'tabpanel');
+    panel.setAttribute('aria-labelledby', button.id);
+  }
+  if (section === 'developer' && changed) initDeveloperTab();
+}
+
+async function save(action) {
+  try { await action(); }
+  catch (error) { alert(`Options could not be saved: ${error.message}`); syncControls(); }
+}
 
 function readControl(ctl) {
   const key = ctl.dataset.setting;
@@ -30,11 +56,26 @@ function download(name, payload) {
 }
 
 function bind() {
+  const sectionButtons = [...document.querySelectorAll('[data-option-section]')];
+  for (const [index, button] of sectionButtons.entries()) {
+    button.addEventListener('click', () => selectSection(button.dataset.optionSection));
+    button.addEventListener('keydown', event => {
+      let next;
+      if (event.key === 'ArrowRight') next = (index + 1) % sectionButtons.length;
+      if (event.key === 'ArrowLeft') next = (index + sectionButtons.length - 1) % sectionButtons.length;
+      if (event.key === 'Home') next = 0;
+      if (event.key === 'End') next = sectionButtons.length - 1;
+      if (next === undefined) return;
+      event.preventDefault();
+      sectionButtons[next].focus();
+      selectSection(sectionButtons[next].dataset.optionSection);
+    });
+  }
   for (const ctl of document.querySelectorAll('#options-content [data-setting]')) {
-    ctl.addEventListener('change', () => { void setSettings({ [ctl.dataset.setting]: readControl(ctl) }); });
+    ctl.addEventListener('change', () => { void save(() => setSettings({ [ctl.dataset.setting]: readControl(ctl) })); });
   }
   for (const btn of document.querySelectorAll('#options-content [data-reset-prefix]')) {
-    btn.addEventListener('click', () => { void resetSettings(btn.dataset.resetPrefix); });
+    btn.addEventListener('click', () => { void save(() => resetSettings(btn.dataset.resetPrefix)); });
   }
   onSettingsChange(syncControls);
 
@@ -78,5 +119,6 @@ export function initOptionsTab() {
   syncControls();
   const section = globalThis.nexusOptionsSection;
   globalThis.nexusOptionsSection = null;
+  selectSection(section || activeSection);
   if (section) document.getElementById(`opt-${section}`)?.scrollIntoView({ block: 'start' });
 }

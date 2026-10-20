@@ -217,6 +217,26 @@
     return `${PREFIX}${serverKey}:${key}`;
   }
 
+  const diagnosticMigrations = new Map();
+  async function migrateDiagnosticLogs(serverKey, save) {
+    if (!isValidServerKey(serverKey)) throw new Error(`Unknown Nexus Legacy server: ${serverKey}`);
+    if (!diagnosticMigrations.has(serverKey)) {
+      const migration = (async () => {
+        await ensureMigrated();
+        const local = rawStorage();
+        const key = scopedKey(serverKey, 'diagnostics_log');
+        const stored = await local.get(key);
+        if (Array.isArray(stored[key]) && stored[key].length) await save(stored[key]);
+        if (Object.hasOwn(stored, key)) await local.remove(key);
+      })();
+      diagnosticMigrations.set(serverKey, migration);
+    }
+    const migration = diagnosticMigrations.get(serverKey);
+    try { await migration; }
+    finally {
+      if (diagnosticMigrations.get(serverKey) === migration) diagnosticMigrations.delete(serverKey);
+    }
+  }
   function isInternalKey(key) {
     return key === ACTIVE_SERVER_KEY || key === MIGRATION_KEY ||
       key === UNIVERSE_CATALOG_KEY || key === SETTINGS_KEY || key.startsWith(PREFIX);
@@ -408,6 +428,7 @@
     clearAllStorage,
     getSettings,
     setSettings,
+    migrateDiagnosticLogs,
     onChanged,
     servers: SERVERS,
     getActiveServer,

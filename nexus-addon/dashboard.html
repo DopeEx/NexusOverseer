@@ -54,7 +54,7 @@
 
   <div id="hv-banner" class="hv-banner" role="alert"></div>
 
-  <div class="subtabs">
+  <div class="subtabs" id="statistics-subtabs">
     <button class="tab subtab active" data-tab="global">Global</button>
     <button class="tab subtab" data-tab="surveys">Surveys</button>
     <button class="tab subtab" data-tab="pirates-stats">Pirates</button>
@@ -197,6 +197,12 @@
   <div id="guide-content" class="global-dashboard" style="display:none;"></div>
 
   <div id="options-content" class="global-dashboard" style="display:none;">
+    <div class="subtabs show options-subtabs" role="tablist" aria-label="Options">
+      <button class="tab subtab active" id="options-tab-general" type="button" role="tab" aria-selected="true" aria-controls="opt-general" data-option-section="general">General</button>
+      <button class="tab subtab" id="options-tab-dashboard" type="button" role="tab" aria-selected="false" aria-controls="opt-dashboard" data-option-section="dashboard" tabindex="-1">Dashboard</button>
+      <button class="tab subtab" id="options-tab-data" type="button" role="tab" aria-selected="false" aria-controls="opt-data" data-option-section="data" tabindex="-1">Data</button>
+      <button class="tab subtab" id="options-tab-developer" type="button" role="tab" aria-selected="false" aria-controls="opt-developer" data-option-section="developer" tabindex="-1">Developer / Debug</button>
+    </div>
     <section class="dashboard-panel opt-panel" id="opt-dashboard">
       <div class="opt-head">
         <div class="section-label dashboard-section-label">Dashboard</div>
@@ -272,7 +278,7 @@
         </select>
       </label>
       <div class="opt-group-label">Backup</div>
-      <p class="opt-note">Backups contain all addon data of every server, including these options.</p>
+      <p class="opt-note">Backups contain game data of every server, including these options. Developer diagnostic logs are exported separately as JSONL.</p>
       <div class="opt-actions">
         <button id="btn-backup-now" type="button">Back up now</button>
         <button id="btn-export">Export JSON</button>
@@ -290,6 +296,50 @@
           <button id="btn-reset" class="status-danger-button" title="Deletes recorded stats and reports. Your options are kept.">Reset stats data</button>
         </div>
       </div>
+    </section>
+    <section class="developer-panel" id="opt-developer" role="tabpanel" aria-labelledby="options-tab-developer" hidden>
+      <div class="dashboard-panel opt-panel">
+        <div class="opt-head">
+          <div class="section-label dashboard-section-label">Developer / Debug</div>
+          <button class="opt-link" type="button" data-reset-prefix="developer.">Restore defaults</button>
+        </div>
+        <label class="opt-row"><span>Log level<span class="opt-note debug-description">Controls addon console output, independently of recording.</span></span>
+          <select class="opt-input" data-setting="developer.logLevel">
+            <option value="debug">Debug</option><option value="info">Info</option><option value="warn">Warning</option><option value="error">Error</option>
+          </select>
+        </label>
+        <label class="opt-row"><span>Record diagnostic traffic<span class="opt-note debug-description">Off by default. Captures new game API and WebSocket traffic locally while enabled.</span></span>
+          <input class="m-switch" type="checkbox" data-setting="developer.recording" />
+        </label>
+        <p class="opt-note">Reload open game tabs after updating or reloading the extension to ensure diagnostic capture is active. Toggling recording on or off takes effect immediately without reloading game tabs. Recording keeps at most 150 entries per stream and 10 MB of JSON text per server. Entries allow up to 256,000 characters, with explicit markers when content is truncated. Headers, query strings and authentication endpoints are excluded; recognized secrets are redacted. Payloads can still contain private game data: review exports before sharing.</p>
+        <p class="opt-note">Diagnostic traffic is stored separately from statistics in a local database. Use JSONL export to back up logs; regular data backups do not include them.</p>
+        <p id="debug-status" class="opt-note" role="status" aria-live="polite"></p>
+      </div>
+      <details class="dashboard-panel debug-panel">
+        <summary class="debug-heading"><strong>Analytics Resources</strong></summary>
+        <div class="debug-body">
+          <p class="opt-note">Read-only view of retained reports and recorded fuel / mining costs. Not a full account ledger; deleted reports and unrecorded costs are not included.</p>
+          <div class="subtabs show" role="tablist" aria-label="Analytics resources">
+            <button class="tab subtab active" type="button" role="tab" id="debug-view-entries" aria-selected="true" aria-controls="debug-analytics" data-analytics-view="entries">Raw Entries</button>
+            <button class="tab subtab" type="button" role="tab" id="debug-view-buckets" aria-selected="false" aria-controls="debug-analytics" data-analytics-view="buckets" tabindex="-1">Aggregated Buckets</button>
+          </div>
+          <div class="debug-toolbar">
+            <label class="toolbar-field" id="debug-interval-field" hidden>Interval (UTC)
+              <select id="debug-interval" class="toolbar-select"><option value="15m">15 minutes</option><option value="1h" selected>1 hour</option><option value="1d">1 day</option></select>
+            </label>
+            <label class="toolbar-field" id="debug-days-field" hidden>Past
+              <select id="debug-days" class="toolbar-select"><option value="1">1 day</option><option value="7" selected>7 days</option><option value="30">30 days</option></select>
+            </label>
+            <button class="toolbar-button secondary-button" type="button" id="debug-analytics-refresh">Refresh</button>
+          </div>
+          <div id="debug-analytics" role="tabpanel" aria-labelledby="debug-view-entries"></div>
+          <div class="debug-toolbar">
+            <span id="debug-page-info" class="opt-note"></span>
+            <button class="toolbar-button secondary-button" type="button" id="debug-prev">Prev</button><button class="toolbar-button secondary-button" type="button" id="debug-next">Next</button>
+          </div>
+        </div>
+      </details>
+      <div id="debug-streams"></div>
     </section>
   </div>
 

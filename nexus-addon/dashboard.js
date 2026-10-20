@@ -350,15 +350,15 @@ function updateTabNavigation() {
   document.querySelectorAll('.main-tab').forEach(b => {
     b.classList.toggle('active', b.dataset.tab === activeMainTab);
   });
-  document.querySelectorAll('.subtab').forEach(b => {
+  document.querySelectorAll('#statistics-subtabs .subtab').forEach(b => {
     b.classList.toggle('active', b.dataset.tab === activeTab);
   });
-  document.querySelector('.subtabs')?.classList.toggle('show', isStatisticsContext);
+  document.getElementById('statistics-subtabs')?.classList.toggle('show', isStatisticsContext);
   document.getElementById('statistics-status').classList.toggle('show', isStatisticsContext);
   document.getElementById('dashboard-status').classList.toggle('show', activeMainTab === 'dashboard');
 }
 
-document.querySelectorAll('.tab').forEach(btn => {
+document.querySelectorAll('.main-tab, #statistics-subtabs .subtab').forEach(btn => {
   btn.addEventListener('click', () => {
     const tab = btn.dataset.tab;
     if (!expertModeEnabled && isExpertTab(tab)) return;

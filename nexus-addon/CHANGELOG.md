@@ -6,6 +6,32 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- Options subnavigation for General, Dashboard, Data and Developer / Debug,
+  matching the Statistics navigation.
+- Optional local API and WebSocket diagnostic logs with color-coded request
+  methods and statuses, path search, copy controls, JSONL export and clearing.
+  Galaxy updates have their own filtered view. Recording is off by default;
+  logs are bounded and separated by game server.
+- Adjustable addon console log levels and a read-only resource history derived
+  from retained reports, with pagination and UTC time buckets.
+
+### Fixed
+- Diagnostic capture uses batched database writes and lazy detail rendering to
+  limit overhead. Large entries retain request metadata and show explicit
+  truncation markers; empty request-body panels are hidden.
+- Reloaded or updated extensions stop stale diagnostic connections without
+  repeatedly reporting expected disconnections as warnings.
+- Diagnostic clearing targets the selected server without waiting for pending
+  game requests. Chromium initializes capture helpers in the correct script world.
+
+### Documentation
+- Clarified game mechanics and API payloads in separate, cross-linked references,
+  including observed universe configuration, galaxy updates, scout reports,
+  building previews and storage limits.
+- Updated the User Guide and privacy policy for local diagnostics. Diagnostic
+  logs use separate JSONL exports and are not included in regular data backups.
+
 ## [2.2.2] - 2026-10-19
 
 ### Changed

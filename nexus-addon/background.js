@@ -4,6 +4,11 @@
 // this file directly with a stubbed `browser`, skipping the polyfill entirely.
 
 import { missionProgress } from './mission-state.js';
+import { appendDiagnostics, migrateDiagnostics } from './diagnostics.js';
+import { clearDiagnosticLogs } from './diagnostics-store.js';
+import { loadSettings } from './settings.js';
+
+const settingsReady = loadSettings().catch(error => console.error('[NexusOverseer] Settings initialization failed:', error));
 
 let GAME_URL = 'https://s0.nexuslegacy.space';
 let GAME_ORIGIN = 'https://s0.nexuslegacy.space/';
@@ -499,6 +504,25 @@ const handleRuntimeMessage = async (msg, context = null) => {
 };
 
 browser.runtime.onMessage.addListener(async (msg, sender) => {
+  await settingsReady;
+  if (msg?.type === 'DIAGNOSTICS_APPEND' || msg?.type === 'DIAGNOSTICS_CLEAR') {
+    const server = sender?.tab?.url ? globalThis.nexusStorage?.serverFromUrl(sender.tab.url) : null;
+    const extensionPage = sender?.url?.split(/[?#]/)[0] === browser.runtime.getURL('dashboard.html');
+    if ((msg.type === 'DIAGNOSTICS_APPEND' && !server) || (msg.type === 'DIAGNOSTICS_CLEAR' && !extensionPage)) {
+      return { error: 'Diagnostic request is not allowed from this context.' };
+    }
+    try {
+      const serverKey = server?.key || msg.serverKey;
+      if (msg.type === 'DIAGNOSTICS_APPEND') return await appendDiagnostics(msg.batch, serverKey);
+      if (!['api', 'galaxy', 'websocket'].includes(msg.kind)) throw new Error('Unknown diagnostic stream.');
+      await migrateDiagnostics(serverKey);
+      await clearDiagnosticLogs(serverKey, msg.kind);
+      return { ok: true };
+    } catch (error) {
+      console.error('[NexusOverseer] Diagnostic storage failed:', error);
+      return { error: error.message };
+    }
+  }
   if (msg?.type === 'GET_UNIVERSES') return handleRuntimeMessage(msg);
   const sourceServer = sender?.tab?.url
     ? globalThis.nexusStorage?.serverFromUrl?.(sender.tab.url)
