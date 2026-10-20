@@ -6,6 +6,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-10-21
+
 ### Added
 - Optional local API wait recording with an independent switch in Developer /
   Debug, source summaries, wait reasons/durations, budget snapshots and recent
@@ -36,16 +38,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   structure without exposing owners, colony names, resources, visibility or
   upgrade-dependent slots. Daily checks are optional; manual updates remain
   available. Direct observations take priority.
-- Windows maintainer import starter with a file picker, conflict preview,
-  explicit MERGE confirmation and checksum validation; no upload, commit or push.
 - Optional local diagnostic logs, per-stream search/JSONL export and clearing,
   console log levels and read-only resource history. Recording defaults off;
   logs stay separate per universe and are not part of regular data backups.
 
 ### Changed
-- All add-on game API reads and actions now share central priority scheduling,
-  including overlays, upgrade planners and retries. Background work leaves
-  capacity for interactions. Native game fetch/XHR traffic is observed, not delayed.
+- Game requests use shared priorities so interactive actions retain capacity
+  while background requests wait. Native game traffic is observed, not delayed.
 - Galaxy Scout shows saved ownership first and checks unknown owners only in
   matching, fully visible systems. Manual checks include locally hidden matches.
   Player-rank columns and rank requests have been removed.
@@ -62,6 +61,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   data, private backups and the danger zone; detailed explanations are collapsible.
 
 ### Fixed
+- Research labs currently being upgraded are no longer reported as idle.
 - Simulator requests now obey the captured three-per-ten-second budget before
   dispatch, including retries and observed native traffic. The server's
   `combat-simulator` scope maps to the local simulator budget, so its exhausted

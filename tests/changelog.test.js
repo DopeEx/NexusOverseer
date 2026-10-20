@@ -43,5 +43,5 @@ test('the bundled release notes include all sections for the manifest version', 
   for (const heading of ['Added', 'Changed', 'Fixed', 'Documentation']) {
     assert.ok(previous.includes(`### ${heading}`), heading);
   }
-  assert.deepEqual(notes.map(entry => entry.version), ['2.2.2', '2.2.1', '2.2.0']);
+  assert.deepEqual(notes.map(entry => entry.version), ['2.3.0']);
 });
