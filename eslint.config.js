@@ -56,6 +56,6 @@ export default [
     },
   },
   {
-    ignores: ['nexus-addon/chart.umd.js', 'nexus-addon/browser-polyfill.js']
+    ignores: ['reference/**', 'nexus-addon/chart.umd.js', 'nexus-addon/browser-polyfill.js']
   },
 ];
