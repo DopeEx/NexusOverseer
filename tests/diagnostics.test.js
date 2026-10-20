@@ -133,8 +133,55 @@ async function hookHarness() {
     flush();
     await new Promise(resolve => setTimeout(resolve, 80));
   }
-  return { context, messages, requests, configure, settle, Xhr, Socket, getPromise: () => promise };
+  function replayGalaxy() {
+    vm.runInContext('globalThis.replayEvent = {source:window,origin:location.origin,data:{__nxRequestGalaxy:true}}', context);
+    for (const listener of messageListeners) listener(context.replayEvent);
+  }
+  return { context, messages, requests, configure, settle, replayGalaxy, Xhr, Socket, getPromise: () => promise };
 }
+
+test('verified galaxy deltas are forwarded and replayed with recording off without altering socket identity', async () => {
+  const h = await hookHarness();
+  const socket = new h.context.WebSocket('wss://s0.nexuslegacy.space/socket.io/');
+  assert.ok(socket instanceof h.Socket);
+  const payload = { type: 'colonized', systemId: 5047, hasColonies: true, ownerName: 'not verified' };
+  for (const prefix of ['', '42', '42/galaxy,']) socket.emit(prefix + JSON.stringify(['galaxy:delta', payload]));
+  const deltas = h.messages.filter(message => message.__nxGalaxyDelta);
+  assert.equal(deltas.length, 3);
+  assert.deepEqual(deltas[0].__nxGalaxyDelta.data, { type: 'colonized', systemId: 5047, hasColonies: true });
+  assert.ok(deltas[0].__nxGalaxyDelta.at > 0);
+  h.replayGalaxy();
+  assert.deepEqual(h.messages.at(-1).__nxGalaxyDelta, deltas.at(-1).__nxGalaxyDelta);
+  await h.settle();
+  assert.equal(h.requests.length, 0);
+  assert.equal(h.messages.some(message => message.__nxDiagnosticsBatch), false);
+  h.configure(true);
+  socket.emit('42' + JSON.stringify(['galaxy:delta', payload]));
+  await h.settle();
+  const batches = h.messages.filter(message => message.__nxDiagnosticsBatch);
+  assert.deepEqual(batches.flatMap(message => message.__nxDiagnosticsBatch.map(entry => entry.kind)), ['websocket', 'galaxy']);
+});
+
+test('galaxy functional capture ignores unsupported, malformed, oversized, binary and foreign socket events', async () => {
+  const h = await hookHarness();
+  const socket = new h.context.WebSocket('wss://s0.nexuslegacy.space/socket.io/');
+  for (const data of [
+    ['galaxy:delta', { type: 'abandoned', systemId: 1, hasColonies: false }],
+    ['galaxy:delta', { type: 'colonized', systemId: 1, hasColonies: false }],
+    ['galaxy:delta', { type: 'colonized', systemId: '1', hasColonies: true }],
+    ['galaxy:delta', { type: 'colonized', systemId: 0, hasColonies: true }],
+    ['other', { type: 'colonized', systemId: 1, hasColonies: true }],
+    ['galaxy:delta', { type: 'colonized', systemId: 1, hasColonies: true, extra: 'x'.repeat(5000) }],
+  ]) socket.emit('42' + JSON.stringify(data));
+  socket.emit('42["galaxy:delta",invalid]');
+  socket.emit(new Uint8Array([1]));
+  for (const url of ['wss://beta.nexuslegacy.space/', 'wss://s0.nexuslegacy.space:8443/', 'ws://s0.nexuslegacy.space/']) {
+    const foreign = new h.context.WebSocket(url);
+    assert.equal(foreign.listener, undefined);
+  }
+  h.replayGalaxy();
+  assert.equal(h.messages.some(message => message.__nxGalaxyDelta), false);
+});
 
 test('diagnostic sanitization redacts nested, stringified and oversized secrets before truncation', () => {
   const core = globalThis.nexusDiagnostics;
@@ -333,6 +380,36 @@ test('bounded storage enforces per-stream counts and the UTF-8 byte threshold', 
   assert.ok(bytes <= STORAGE_LIMIT);
   assert.ok(retained.length > 0 && retained.length < STREAM_LIMIT);
   await clearDiagnosticLogs('limits');
+});
+
+test('full diagnostic streams keep accepting new entries and evict the oldest across repeated writes', async () => {
+  const server = 'rolling-limits';
+  await clearDiagnosticLogs(server);
+  const entry = index => ({ kind: 'api', timestamp: index, data: { path: `/api/example/${index}` } });
+  try {
+    await writeDiagnosticLogs(server, Array.from({ length: STREAM_LIMIT }, (_, i) => entry(i)), STREAM_LIMIT, STORAGE_LIMIT);
+    for (let i = STREAM_LIMIT; i < STREAM_LIMIT + 25; i++) {
+      await writeDiagnosticLogs(server, [entry(i)], STREAM_LIMIT, STORAGE_LIMIT);
+    }
+    const retained = await readDiagnosticLogs(server);
+    assert.equal(retained.length, STREAM_LIMIT);
+    assert.deepEqual(retained.map(item => item.timestamp),
+      Array.from({ length: STREAM_LIMIT }, (_, i) => STREAM_LIMIT + 24 - i));
+
+    await clearDiagnosticLogs(server);
+    const large = index => ({ ...entry(index), data: { ...entry(index).data, body: 'x'.repeat(1000) } });
+    const byteLimit = Buffer.byteLength(JSON.stringify(large(0))) * 3;
+    for (let i = 0; i < 20; i++) {
+      await writeDiagnosticLogs(server, [large(i)], STREAM_LIMIT, byteLimit);
+    }
+    const bounded = await readDiagnosticLogs(server);
+    assert.equal(bounded[0].timestamp, 19);
+    assert.ok(bounded.length > 0 && bounded.length <= 3);
+    assert.ok(bounded.every(item => item.timestamp >= 17));
+    assert.ok(bounded.reduce((sum, item) => sum + Buffer.byteLength(JSON.stringify(item)), 0) <= byteLimit);
+  } finally {
+    await clearDiagnosticLogs(server);
+  }
 });
 
 test('resource analytics derives retained credits and costs without counting mining raid cargo as income', () => {

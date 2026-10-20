@@ -22,6 +22,7 @@ export const DEFAULTS = Object.freeze({
   'dashboard.show.moons': true,
   'dashboard.moonsAfterPlanet': false,
   'data.autoBackup': 'weekly',
+  'data.publicGalaxyAutoUpdate': true,
   'general.numberFormat': 'de',
   'general.defaultTab': 'dashboard',
   'developer.logLevel': 'warn',

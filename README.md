@@ -62,7 +62,9 @@ No player account, actual coordinates or real economy data is shown.
 
 - **Dashboard**: default tab with total resources and hourly production across planets and moons, active missions, research, and per-colony queues and fleets.
 - **Statistics**: survey, pirate, mining, battle, debris, expedition, xeno and wormhole reports with all-time, daily, hourly and yesterday views, charts and loss/rebuild costs.
-- **Galaxy Scout**: scan systems and arms to find targets.
+- **Galaxy Scout**: search systems and arms using a persistent local planet/moon
+  database. Physical properties do not expire; unknown result ownership is checked
+  automatically after the base search, while known ownership stays cached.
 - **Asteroid Fields**: search by zone and resource type, start mining fleets, and use escort templates.
 - **Fleet Templates**: reusable fleet compositions, including escort templates for mining.
 - **Market**: browse and track trades.
@@ -71,7 +73,93 @@ No player account, actual coordinates or real economy data is shown.
 - **Combat Simulator**: integrated directly into the dashboard, using the game's official combat calculator. Fleet inputs, intel imports, and battle results stay in the same tab.
 - **Multiple universes**: data is kept separately for each universe.
 - **Backups**: JSON export and import of your data and options (Options > Data).
-- **Developer / Debug**: Options has General, Dashboard, Data and Developer / Debug subtabs in the same style as Statistics. Developer tools provide console log levels, a read-only resource history with UTC time buckets, and expandable API, galaxy-delta and WebSocket logs with search, copy, JSONL export and per-stream clearing.
+- **Developer / Debug**: Options has General, Data and Developer / Debug subtabs in the same style as Statistics. General separates general preferences and dashboard controls into panels; Data separates storage, public galaxy data, private backups and the danger zone. Developer tools provide console log levels, a read-only resource history with UTC time buckets, and expandable API, galaxy-delta and WebSocket logs with search, copy, JSONL export and per-stream clearing.
+
+### Local galaxy knowledge
+
+Galaxy Scout separates **Map**, **Search**, **Systems**, **Planets** and **Moons**.
+It reuses permanent planet/moon properties per universe and fetches only missing
+details allowed by game visibility. Ownership stays separate and can change
+through colonization or abandonment; unknown never means free.
+
+<details>
+<summary>Views, ownership checks and backups</summary>
+
+Switching views preserves search results, filters and the map position.
+
+- **Map:** find known systems by name or `#ID`, return to your homeworld, pan
+  and zoom. Click a star for saved information and **System overview**. Separate
+  icon buttons toggle zone rings, hubs, saved alliance markers and stations.
+  Hubs/alliance markers start on; stations start off. Own colony markers remain
+  visible when alliance markers are hidden. The map fits desktop/laptop windows
+  and stays sharp with browser or Windows scaling.
+- **Search:** filter by arm/sector, planet types, size, moon count and zones.
+  **More filters** adds distance, planet-slot capacity and moon types. A moon-slot
+  minimum requires one free moon meeting the threshold, not a sum across moons;
+  when combined with moon types, the same moon must satisfy both filters.
+  Saved searches reopen locally; **Clear search** resets the search, not your
+  collected galaxy knowledge.
+- **Lists and overview:** browse **Search results** or **All known data** with
+  local filters, sorting and pages of 50 rows. **Show on map** focuses a system;
+  **System overview** groups saved planets and moons with types, slot capacities,
+  last-known owners and observation times. Unknown data is distinct from empty
+  data. Browsing these views does not scan system contents.
+
+Physical planet/moon properties are saved per universe without an age limit.
+Existing scans migrate without the former 800-system eviction limit. Normal game
+responses also grow this knowledge; reload open game tabs after updating.
+Galaxy Scout and asteroid searches reuse the same cache, with short-lived
+freshness for catalogs and changing asteroid fields. Search loads only missing
+details that the game's current visibility permits.
+
+Results appear first with saved ownership; unknown ownership is checked only in
+matching, fully visible systems. **Check result ownership** refreshes each matching
+system once, including results hidden by ownership filters. Colonization and
+abandonment both replace prior owner state. Known ownership does not expire just
+because it is old; unknown ownership is never treated as free. No player-rank
+requests are made. Saved alliance/station ownership can be incomplete or outdated.
+
+Regular JSON backups include galaxy knowledge for every universe. **Options >
+Data > Danger zone > Clear galaxy cache** forgets only the selected universe's
+galaxy data, not reports or options; it is a recovery action, not routine
+maintenance. Restoring an older backup without galaxy data clears that database
+and migrates any legacy scans. See the in-addon **User Guide** and
+[API integration reference](./docs/api-reference.md) for detailed behavior.
+
+</details>
+
+### Public galaxy data
+
+**Options > Data > Public galaxy data** offers maintainer-approved structure
+from this repository to fill missing base properties. Your own observations take
+priority; ownership and explored visibility stay separate. Contributions are
+always manual: the addon never uploads game data.
+
+<details>
+<summary>Updates, contributions and included data</summary>
+
+Public updates default on, check at most once per 24 hours
+per universe while the dashboard is open, and can be disabled. **Update public
+data now** checks immediately with a 30-second repeat limit. Status shows the
+installed checksum, check times and errors. No GitHub account or token is needed.
+
+Public structure fills missing base properties; your own game observations win.
+It never reveals explored visibility or verifies ownership. Public exports include
+systems, zones, physical planet/moon properties and station/hub locations, but no
+players, owners, colony names, resources, buildings or slot values.
+
+**Export public data** previews counts and saves a local file after confirmation,
+without game requests or uploads. Use **Open contribution issue** and attach the
+reviewed file yourself; only the maintainer publishes approved additions.
+**Never share a full backup or diagnostic log.**
+
+Datasets, format details and the double-click Windows import workflow are
+documented in [data/galaxy](./data/galaxy/README.md). Installed public data is part
+of galaxy backups and per-universe clearing. Disable public updates if cleared
+shared data should stay absent. A full server reset requires deliberate
+replacement of that server's published and local galaxy knowledge.
+
+</details>
 
 ### Diagnostic recording
 
@@ -97,9 +185,10 @@ opening the map or selecting a system does not guarantee a delta event.
 Observed `colonized` payloads contain `systemId` and `hasColonies: true`, but
 do not identify a planet, owner or the number of colonies. Repeated identical
 payloads can occur and must not be counted as distinct new colonies.
-These logs do not currently update Galaxy Scout data or implement community
-data sharing. Their timestamps indicate capture time, not a verified time of
-the underlying game action.
+The diagnostic lists remain recording-only views; independently, verified
+system colony hints update Galaxy Scout's local cache even with recording off.
+Diagnostic logs are not public galaxy contributions. Timestamps indicate capture
+time, not a verified time of the underlying game action.
 
 Logs remain local and server-separated, with at most 150 entries per stream
 and 10,000,000 UTF-8 bytes of entry JSON per server (excluding storage-container
@@ -132,7 +221,7 @@ and cannot reconstruct deleted history or unrecorded expenses.
 
 The add-on sends requests through your logged-in game tab, and the browser attaches the game's HttpOnly session cookie. No credentials need to be entered.
 
-Game data is stored locally in `browser.storage.local`. The add-on communicates
+Game data is stored locally in browser storage and IndexedDB. The add-on communicates
 directly with the game API; it does not upload data to a server operated by the
 add-on author.
 

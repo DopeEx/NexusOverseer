@@ -384,7 +384,7 @@ export async function editFleetDialog({
         planBtn.style.opacity = '0.5';
         planMsg.textContent = 'Calculating…';
         try {
-          const r = await planner.run();
+          const r = await planner.run(text => { planMsg.textContent = text; });
           if (r.error) {
             planMsg.textContent = r.error;
           } else {
@@ -763,8 +763,8 @@ export function fmtCountdown(ms) {
 
 export function missionCountdown(progress) {
   if (!progress.event) return '—';
-  if (progress.needsRefresh) return `${progress.event.label}: updating…`;
-  return `${progress.event.label}: ${fmtCountdown(progress.eta)}`;
+  if (progress.needsRefresh) return 'updating…';
+  return fmtCountdown(progress.eta);
 }
 
 // Refresh once per elapsed event, with periodic retries for server-side changes.
@@ -1347,7 +1347,7 @@ export function makeResourceDoughnut(canvasId, totals) {
 
 // Colored zone badge cell for report tables.
 export const ZONE_COLORS = {
-  sentinel: '#7ed957', open: '#f0883e', dead: '#ff6b7a', rift: '#d2a8ff', unknown: '#c0cce0',
+  sentinel: '#22c55e', open: '#f59e0b', dead: '#ef4444', rift: '#7c3aed', unknown: '#c0cce0',
 };
 export const ZONE_DEFS = Object.freeze([
   Object.freeze({ key: 'sentinel', label: 'Sentinel' }),

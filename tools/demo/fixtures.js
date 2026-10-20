@@ -1,8 +1,11 @@
+import { publicGalaxyFromRows } from '../../nexus-addon/galaxy-public.js';
+
 export const DEMO_NOW = Date.parse('2030-04-12T12:00:00Z');
 const at = minutes => new Date(DEMO_NOW + minutes * 60000).toISOString();
 const zones = ['sentinel', 'open', 'dead'];
 
-// Hand-authored examples, never derived from an account, export or game API.
+// Synthetic examples; the dense galaxy's appearance is inspired by a supplied
+// screenshot, not extracted account data or reconstructed game coordinates.
 export function createDemoData() {
   const ships = [
     ['scout', 'Scout', 'recon', 100, 25, 15, 'kinetic'],
@@ -30,14 +33,20 @@ export function createDemoData() {
     costHydrogen: i * 25, costAlloys: i * 30,
     imageUrl: '/icons/icon128.png',
   }));
-  const systems = Array.from({ length: 180 }, (_, i) => {
-    const angle = i * 2.399963;
-    const radius = 80 + Math.sqrt(i) * 45;
+  const systems = Array.from({ length: 6000 }, (_, i) => {
+    const arm = i % 3;
+    const fraction = (0.62 + i * 0.61803398875) % 1;
+    const radius = 1000 * Math.sqrt(0.08 ** 2 + (1 - 0.08 ** 2) * fraction);
+    const spread = Math.sin(i * 127.1 + 3.7) * Math.sin(i * 311.7 + 1.3);
+    const angle = arm * Math.PI * 2 / 3 + radius / 280 + spread * (2.6 - radius / 1500);
+    const outer = radius > 810;
     return {
       id: i + 1, name: `DEMO-A${1 + i % 3}-${String(i + 1).padStart(3, '0')}`,
       x: Math.round(Math.cos(angle) * radius), y: Math.round(Math.sin(angle) * radius),
-      armId: 1 + i % 3, sectorId: (i % 3) * 50 + 1 + Math.floor(i / 3) % 12,
-      securityZone: zones[i % 3], visibility: 'full', planetCount: 4,
+      armId: arm + 1, sectorId: arm * 50 + 1 + Math.floor(fraction * 12),
+      securityZone: outer ? null : radius < 265 ? 'dead' : radius < 515 ? 'open' : 'sentinel',
+      visibility: outer ? 'outline' : 'full', planetCount: outer ? null : 4,
+      starType: ['yellow', 'orange', 'red_dwarf', 'blue_giant', 'white_dwarf', 'neutron'][i % 6],
     };
   });
   const planets = ['Aurora', 'Meridian', 'Horizon'].map((name, i) => {
@@ -45,7 +54,7 @@ export function createDemoData() {
     return {
       id: i + 1, name, systemId: s.id, systemName: s.name,
       systemX: s.x, systemY: s.y, isHomeworld: i === 0,
-      planetType: ['Terran', 'Desert', 'Oceanic'][i], hasLab: true,
+      planetType: ['terra', 'rocky', 'crystalline'][i], hasLab: true,
       buildSlots: { used: 16 + i * 3, max: 40 }, queueMax: 3,
       population: 18000 + i * 6500, maxPopulation: 60000, populationRate: 480,
       resources: {
@@ -103,10 +112,13 @@ export function createDemoData() {
     returnArrivesAt: at(eta * 2 + 25), status: 'outbound',
     fleet: [{ shipDefId: 1, quantity: count }],
   }));
-  const hubs = [
-    { id: 1, name: 'Demo Central Exchange', systemX: 0, systemY: 0 },
-    { id: 2, name: 'Demo Frontier Exchange', systemX: 350, systemY: -200 },
-  ];
+  const hubs = Array.from({ length: 6 }, (_, i) => {
+    const angle = i * Math.PI / 3 + 0.3;
+    return {
+      id: i + 1, name: i === 0 ? 'Demo Central Exchange' : i === 1 ? 'Demo Frontier Exchange' : `Demo Hub ${i + 1}`,
+      systemX: Math.round(Math.cos(angle) * 730), systemY: Math.round(Math.sin(angle) * 730),
+    };
+  });
   const orders = Array.from({ length: 10 }, (_, i) => ({
     id: i + 1, hubId: 1 + i % 2, userId: 9100 + i,
     username: ['Demo Nova', 'Demo Vega', 'Demo Orion', 'Demo Lyra'][i % 4],
@@ -200,6 +212,14 @@ export function createDemoData() {
     GET_ARMS: { arms: [1, 2, 3].map(id => ({ id, name: `Demo Arm ${id}`, sectorCount: 12 })) },
     GET_ALLIANCE: { name: 'Demo Explorers', tag: 'DEMO', memberIds: [9000, 9100] },
     GET_HUBS: { hubs },
+    GET_STATION_INDEX: { stations: [17, 34, 51, 68, 85, 102].map((id, index) => {
+      const system = systems.find(system => system.id === id);
+      return { stationId: index + 1, stationName: `Demo Station ${index + 1}`,
+        systemId: id, systemName: system.name, systemX: system.x, systemY: system.y,
+        ownedByViewerAlliance: index === 0, ownerAllianceId: index === 0 ? 1 : null,
+        ownerAllianceName: index === 0 ? 'Demo Explorers' : null, ownerAllianceTag: index === 0 ? 'DEMO' : null,
+        capturingAllianceTag: index === 1 ? 'DEMO' : null };
+    }) },
     GET_MARKET_ORDERS: { orders },
     GET_ALLIANCE_ORDERS: { orders: orders.slice(0, 4) },
     GET_MARKET_TRADES: { trades },
@@ -236,10 +256,32 @@ export function createDemoData() {
       ownProfile: { bonusesAvailable: true, leadership: { available: false } },
     },
   };
-  return { storage, responses, systems, planets, fields };
+  const data = { storage, responses, systems, planets, fields };
+  for (const systemId of [17, 34, 51, 68, 85, 102, 19, 38, 57]) {
+    demoResponse(data, { type: 'GET_SYSTEM_PLANETS', systemId });
+  }
+  return data;
 }
 
 export function demoResponse(data, message) {
+  if (['GET_PUBLIC_GALAXY_STATUS', 'UPDATE_PUBLIC_GALAXY'].includes(message.type)) {
+    return { message: 'Fictional demo: no external downloads or uploads.', installed: null };
+  }
+  if (message.type === 'EXPORT_PUBLIC_GALAXY') {
+    const rows = [{ serverKey: 'demo', key: '/api/galaxy/map', data: { systems: data.systems } },
+      { serverKey: 'demo', key: '/api/galaxy/station-index', data: data.responses.GET_STATION_INDEX },
+      { serverKey: 'demo', key: '/api/market/hubs', data: data.responses.GET_HUBS },
+      { serverKey: 'demo', key: '/api/galaxy/arms', data: data.responses.GET_ARMS },
+      ...Object.entries(data.storage.planet_scan_cache || {}).map(([id, entry]) =>
+        ({ serverKey: 'demo', key: `system:${id}`, data: entry.data }))];
+    return { data: publicGalaxyFromRows('demo', rows) };
+  }
+  if (message.type === 'GET_GALAXY_DELTAS') return { deltas: [] };
+  if (message.type === 'GET_GALAXY_SCANS') return { scans: structuredClone(data.storage.planet_scan_cache || {}) };
+  if (message.type === 'CLEAR_GALAXY_CACHE') {
+    delete data.storage.planet_scan_cache;
+    return { ok: true };
+  }
   if (Object.hasOwn(data.responses, message.type)) return structuredClone(data.responses[message.type]);
   if (message.type === 'GET_FUEL_ESTIMATE') {
     const source = data.planets.find(p => p.id === message.body?.sourcePlanetId);
@@ -255,12 +297,20 @@ export function demoResponse(data, message) {
   if (message.type === 'GET_SYSTEM_PLANETS') {
     const s = data.systems.find(s => s.id === message.systemId);
     if (!s) return { error: 'Unknown demo system.' };
-    return {
+    const response = {
+      moons: Array.from({ length: 1 + (s.id + 2) % 3 }, (_, index) => ({
+        id: 10000 + s.id * 10 + index, systemId: s.id, planetId: 1000 + s.id,
+        name: `Demo Moon ${s.id}-${index + 1}`, moonType: ['metallic', 'icy', 'barren'][index],
+        size: 30 + index * 10, buildingSlots: 4 + (s.id + index) % 6,
+        userId: index === 2 ? 9100 + s.id : null,
+        ownerName: index === 2 ? `Demo Pilot ${s.id}` : null,
+      })),
       planets: [{
         id: 1000 + s.id, name: `Demo Colony ${s.id}`, systemId: s.id,
-        userId: s.id % 3 ? null : 9100 + s.id,
-        ownerName: s.id % 3 ? null : `Demo Pilot ${s.id}`,
-        planetType: ['terra', 'ice', 'metallic', 'volcanic'][s.id % 4],
+        userId: s.id % 17 === 0 ? 9100 : s.id % 3 ? null : 9100 + s.id,
+        ownerName: s.id % 17 === 0 ? 'Demo Ally' : s.id % 3 ? null : `Demo Pilot ${s.id}`,
+        ownerAllianceTag: s.id % 17 === 0 ? 'DEMO' : null,
+        planetType: ['terra', 'ice', 'crystalline', 'volcanic'][s.id % 4],
         size: 180 + s.id % 120, temperature: -30 + s.id % 90,
         isColonizable: s.id % 3 !== 0, position: 2,
       }],
@@ -268,7 +318,14 @@ export function demoResponse(data, message) {
         id: f.fieldId, name: f.name, fieldType: f.type, richness: f.mult,
         remainingResources: f.remaining, totalResources: f.total,
       })),
+      _galaxyCache: {
+        times: { planets: DEMO_NOW, moons: DEMO_NOW, asteroidFields: DEMO_NOW },
+        ownership: { planets: DEMO_NOW, moons: DEMO_NOW },
+      },
     };
+    data.storage.planet_scan_cache ||= {};
+    data.storage.planet_scan_cache[s.id] = { data: structuredClone(response), at: DEMO_NOW };
+    return response;
   }
   if (message.type === 'GET_SYSTEM_COORDS') {
     return Object.fromEntries(data.systems

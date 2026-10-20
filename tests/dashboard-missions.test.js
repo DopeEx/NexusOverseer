@@ -87,6 +87,10 @@ test('Active Missions groups real stages and summarizes the next fleet-slot retu
   assert.match(content, /1 patrolling\s+Patrol ends:/);
   assert.match(content, /1 surveying\s+Departure:/);
   assert.doesNotMatch(content, /outbound/);
+  assert.match(text(missionsCard({
+    maxFleetSlots: 18,
+    missions: [{ type: 'survey', status: 'outbound', arrivesAt, ships: 1 }],
+  })), /Arrival:.*3m 00s/);
   const empty = text(missionsCard({ maxFleetSlots: 18, missions: [] }));
   assert.match(empty, /Fleet slots used\s+0 \/ 18/);
   assert.match(empty, /Next return\s+-/);

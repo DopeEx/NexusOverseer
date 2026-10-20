@@ -41,7 +41,53 @@ feature is used; a periodic report scrape does not launch missions or research.
 The background API client observes the server's rate-limit headers, throttles
 requests before the remaining budget gets low, and retries transient network,
 HTTP 429, and server errors. A 401 means the user needs to log in to the game.
+Polite background reads share a minimum 200 ms start interval, including galaxy
+cache misses; cached reads do not wait. Each non-simulator 429 doubles this
+shared polite interval, capped at 2000 ms, including if an internal retry later
+succeeds. After 60 seconds without another observed 429 it returns to 200 ms.
+This adaptive spacing supplements, rather than replaces, Retry-After and budget
+gates. Non-simulator 429 responses establish a
+shared GET/POST cooldown independent of budget headers on other in-flight replies,
+including the final failed retry. Retry-After accepts seconds or an HTTP date;
+absent/invalid values use at least five seconds with the existing retry backoff.
+An exhausted 429 stops Galaxy Scout search/ownership loops with a visible
+message instead of continuing to the next system or owner. Collected matches and
+cached data are retained; rerunning reuses saved knowledge.
 Some API reads are also made directly by the add-on UI in the game tab.
+Those direct reads and the game's own traffic are not paced by the background
+gate; these changes do not guarantee that the shared server limit cannot be hit.
+
+Combat simulations from the planner and simulator tab share a background queue:
+only one simulation is in flight, initially with a 500 ms pause after each
+response. Each HTTP 429 doubles this interval up to two seconds; every ten
+consecutive successful responses reduce it by 50 ms back toward 500 ms.
+Errors reset this success counter, so a single success after a 429 does not
+immediately speed the queue up again. These are adaptive client
+settings, not a verified server quota. POST requests also observe the general API
+budget. Simulator response headers are tracked separately: a small endpoint
+budget must not activate the general API client's fixed 20-request headroom.
+Successful simulator replies wait for a reset only when their remaining budget
+is zero, not merely below 20. A simulator HTTP 429 pauses the queue and retries
+the same simulation up to three times, preserving the current fleet search and
+automatic attack pass.
+`Retry-After` (seconds or HTTP date) is respected, with a minimum retry pause of
+five seconds; without it, retries wait five, ten, then twenty seconds.
+An exhausted API budget also waits for
+`RateLimit-Reset`. Only four consecutive 429 responses for the same simulation
+abort the search and impose a cooldown of at least 30 seconds (longer if server
+headers require it). Queued callers then receive an explicit cooldown error
+without another simulator request. Automatic pirate attacks stop trying other
+planets/camps in that pass and can try again on a later automation pass. Learned
+search bounds are retained, so a subsequent search can resume from cached work.
+
+Simulator bootstrap and simulation requests do not enter the serialized
+server-storage scope used by report scrapes and other background operations.
+They capture the selected game's origin before starting and retain it for all
+retries, even if the selected universe changes meanwhile. They still use the
+simulator queue and shared API-budget gate. The manual fleet dialog and automatic
+pirate attack status show the current ship type, probe quantity and completed
+simulation count. Search time includes actual server response times and any
+budget/backoff waits, not just the 500 ms client pacing.
 
 ## Observed WebSocket events
 
@@ -81,10 +127,62 @@ selecting a system does not guarantee an event. The exact server-side trigger
 and delivery scope remain unverified. No connection to the reference addon's
 separate community-sharing HTTP flow was found.
 
-These diagnostics do not currently modify Galaxy Scout data. A future consumer
-could apply the system-level flag idempotently or mark the system for a targeted
-refresh through `GET /api/galaxy/systems/{systemId}/planets`, rather than infer
-planet ownership or increment a colony counter.
+Galaxy Scout now consumes this verified payload independently of diagnostic
+recording. The existing WebSocket observer forwards only the supported fields
+through the isolated galaxy relay as `GALAXY_DELTA`; the background validates
+the timestamp, positive integer system ID and game-tab origin and pins storage
+to the sender's universe. Direct JSON arrays and Socket.IO `42` event frames,
+including namespaces, are accepted on same-host/protocol/port game sockets.
+Binary, malformed and unsupported payloads are ignored. With recording disabled,
+only candidate galaxy frames up to 4096 characters are parsed.
+
+The cache stores one latest observation per universe/system as `delta:<id>`,
+separate from full body snapshots. Duplicate or older capture times do not
+overwrite it. Cached and newly fetched map/sector catalog reads overlay the
+system-level flag, without inventing unknown systems. A newer explicit catalog
+flag wins (including `false`); an omitted flag does not contradict an older
+observation. `_galaxyCatalogAt` reports catalog capture time and
+`colonyStateObservedAt` identifies an overlaid WebSocket hint. Neither catalog
+age nor planet/moon ownership freshness is extended by the hint itself. It
+never supplies planet/moon arrays or infers owners or completeness.
+
+A newly stored hint also triggers a targeted background refresh through the
+existing polite `GET /api/galaxy/systems/{id}/planets` path if the system is
+already known and its latest recorded visibility is `full`. Eligibility is
+checked locally against saved system details and map/sector catalogs, without
+fetching the map. Unknown, outline and fogged systems retain only the hint.
+An existing ownership TTL does not prevent this refresh, but a hint already
+covered by both saved ownership-group timestamps does. Concurrent refreshes
+share the existing per-system request; identical/older replayed hints do not
+start another request. New observations may trigger another refresh. The
+runtime message keeps the operation alive and inside the sender's serialized
+universe scope until the request completes. Shared budget gates, adaptive
+polite spacing, Retry-After and bounded retries remain active.
+
+Only the HTTP response updates body data and ownership clocks, using the
+normal complete-group merge including explicit `userId: null` abandonment.
+Failures are logged and returned through the relay with their HTTP status;
+transport failures do not erase saved contents and there is no additional
+unbounded retry loop. A later new hint may retry.
+
+`GET_GALAXY_DELTAS` reads observations locally. A universe-scoped storage
+notification lets open dashboards update an existing system overview's
+"Colonies reported" hint without changing views, result lists or highlighted
+rows. After a successful HTTP refresh, `galaxy_system_revision` separately
+notifies open dashboards to reread local scans, update existing search hits,
+lists and map result overlays and redraw an open overview while retaining
+its originating body highlight. This local reread does not request game data.
+There is no dedicated subscription or extra socket.
+The MAIN observer buffers the latest hints for up to 100 systems for early
+relay startup/replay. Observations are included in galaxy backups and removed
+by the selected universe's galaxy-cache clear operation.
+
+Verified on 20 October 2026 against the previously captured payloads above and
+the reference addon's `GalaxyDeltaJob`: that job stores the payload and forwards
+it unchanged, providing no additional body or owner details. The supported
+scope is deliberately system-level only. No abandonment payload or per-planet
+WebSocket ownership update is currently verified; HTTP ownership responses
+remain authoritative for colonization, abandonment and recolonization.
 
 ## Data endpoints
 
@@ -115,6 +213,7 @@ This index includes observed endpoints not yet requested by the addon.
 | Galaxy | `GET /api/galaxy/arms/{armId}/sectors` | Sectors in an arm |
 | Galaxy | `GET /api/galaxy/sectors/{sectorId}/systems` | Systems in a sector |
 | Galaxy | `GET /api/galaxy/map` | Known systems and coordinates |
+| Galaxy stations | `GET /api/galaxy/station-index` | `stations[]`: station identity, system identity/coordinates, viewer-alliance ownership and owner/capturing alliance tags; observed response documented below |
 | Galaxy | `GET /api/galaxy/systems/{systemId}/planets` | `planets[]` (with `userId`, `ownerName`, `isHomeworld`, `planetType`, `size`, `temperature`; no `sortOrder`), `asteroidFields[]`, and `moons[]` (`planetId`, `moonType`, `size`, `buildingSlots`, `userId`, `ownerName`; a moon with your `userId` is a colonized own moon), plus `visibility` and `included` |
 | Trade | `GET /api/market/hubs`, `GET /api/market/orders` | Market hubs and public orders |
 | Trade | `GET /api/market/my-trades`, `GET /api/alliance-trade/orders` | Player trades and alliance orders |
@@ -833,6 +932,347 @@ The outcome is delivered later as a pirate report (`GET /api/fleet/pirate-report
 whose `missionId` matches the mission `id`.
 
 ### Galaxy map and system contents
+
+#### Station index (observed 2026-10-20)
+
+A user-supplied successful `GET /api/galaxy/station-index` response contains
+`{ stations: [...] }` with 1,096 entries in that particular snapshot. This is
+an observed count, not a fixed galaxy-wide limit or proof of complete visibility.
+Each observed entry has:
+
+| Field | Observed shape |
+|---|---|
+| `stationId`, `stationName` | Numeric station ID and display name |
+| `systemId`, `systemName` | Numeric containing-system ID and display name |
+| `systemX`, `systemY` | Numeric map coordinates |
+| `ownedByViewerAlliance` | Boolean, relative to the requesting player |
+| `ownerAllianceId` | Numeric alliance ID or `null` |
+| `ownerAllianceName`, `ownerAllianceTag` | Strings or `null` |
+| `capturingAllianceTag` | Capture-alliance tag field; `null` in the inspected examples |
+
+The index provides enough location data to draw station markers without
+per-station or per-system detail requests. Alliance ownership/capture fields
+are dynamic, viewer-dependent state and must not be treated as permanent
+physical galaxy knowledge. This response does not establish a refresh TTL,
+WebSocket update contract, station combat details or complete visibility rules.
+Nexus Overseer fetches this index through `GET_STATION_INDEX` only when the
+Stations layer is enabled. It shares the universe-separated IndexedDB galaxy
+catalog cache, coalesced pending requests and existing polite API transport.
+Successful game-page GETs are passively captured too. Physical station identity
+and system coordinates are stored separately from alliance ownership/capture
+state; catalog observations carry a timestamp and newer snapshots replace
+older ones, including explicit null ownership after abandonment. Catalog
+freshness is 15 minutes, matching map/dynamic data because capture state can
+change; this does not evict the persistent physical data after 15 minutes.
+Re-enabling the layer checks freshness, without per-system/station requests.
+Failures are reported and do not masquerade as an empty successful catalog.
+Backup/restore and universe-specific galaxy clearing include stations.
+Station entries omitted by a later response retain their physical data and
+last observed status/timestamp: index omissions are not assumed to mean
+station destruction or unclaimed ownership. Exported stations carry
+`_observedAt` for the latest individual observation.
+
+Station markers are purple hexagons (green for the viewer's alliance), drawn
+above stars independently of zone rings. The layer defaults off and resets
+on universe changes. Station names/owner tags appear when zoomed in or owned
+by the viewer's alliance; clicked systems include last-known station owner
+and capture tags. Index-only system locations remain unknown visibility and
+never grant permission to scan their contents. The station catalog does not
+promote any system to explored/full visibility.
+The supplied account-specific payload is not included in the repository.
+
+Marker palette verified against the public game frontend on 2026-10-20
+(`GalaxyPage-IYSDV7EB.js` and `GalaxyPage-CFo_cWpP.css`):
+moon types use barren `#9ca3af`, metallic `#d97706`, icy `#67e8f9`,
+volcanic `#ef4444`, hollow `#a78bfa`, ancient `#fbbf24`.
+Planet type labels are neutral in the game, not individually color-coded.
+Zones use sentinel `#22c55e`, open `#f59e0b`, dead `#ef4444`, rift `#7c3aed`.
+The Galaxy Scout badges reuse these semantic colors within the addon layout;
+star thumbnails remain tinted placeholders, not verified game star assets.
+
+Galaxy Scout's map uses this zone palette for rings around star-colored points,
+independently of ownership/search overlays. `Zone rings: on/off` toggles all
+zone rings only; the default is on, retained during tab changes and reset for
+a universe reset. The navigation-marker colors (own cyan `#38bdf8`, saved
+alliance green `#7ee787`, search orange `#f0883e`) are addon conventions, not a
+claim of exact game-map styling. A fresh CSS check on 2026-10-20 confirmed
+sentinel/open/dead breadcrumb colors in `GalaxyPage-CFo_cWpP.css`; its rift
+breadcrumb uses `#a855f7`, distinct from the previously verified map palette
+and this addon's shared zone token `#7c3aed`.
+
+Star point colors verified in the public
+`GalaxyPage-IYSDV7EB.js` renderer and its shared palette imported from
+`MiningModal-DVLP-6Zp.js`: yellow `#fbbf24`, red dwarf `#ef4444`, blue giant
+`#60a5fa`, orange `#f97316`, white dwarf `#e2e8f0`, neutron `#c084fc`.
+Unknown types use a neutral grey. These verified flat marker colors do not
+change the provisional thumbnail artwork described above.
+
+Own chevrons, saved-alliance brackets, search rings and hub diamonds render
+after the full star/zone layer, so subsequent stars cannot obscure them.
+Own systems also use green brackets and the current `GET_AUTH_ME.user.username`
+as their green label, followed by saved allied owners when present; the cyan
+chevron additionally identifies personal colonies. Unknown usernames retain
+an explicit player-ID label. Player/alliance labels start below the system
+(below the selection ring when selected); collision alternatives move downward,
+never above the chevron. Names that cannot fit remain hidden rather than detached
+above their marker. Home uses an accessible house-icon button; the Zone rings
+button reuses `zone-toggle zone-sentinel` with `is-selected` and `aria-pressed`
+kept in sync, filled when enabled and hollow when disabled.
+Zoom/reset controls overlay the top-right map edge;
+the legend follows the map surface below it.
+Dark outlines and backed labels provide contrast; labels use collision-aware
+placement. Star/ring size grows with zoom; navigation symbols use
+CSS-pixel coordinates independent of backing resolution. Labels use native
+HTML spans in a non-interactive overlay positioned relative to the canvas,
+not `fillText`. Their 13px font is rendered by the browser; long names use
+ellipsis rather than horizontally compressed glyphs. DOM text is assigned
+through `textContent`; all label boxes are measured in a batch before
+collision-aware placement at whole CSS-pixel offsets. The overlay is hidden
+from assistive technology because the existing lookup and overview provide
+accessible navigation. Labels clear on redraw/reset, including empty maps.
+The backing buffer
+is rounded from the displayed canvas size multiplied by `devicePixelRatio`;
+the context transform accounts for rounding on each axis. The active Map view
+uses a viewport-height flex layout: the canvas fills the remaining height
+after the toolbar and legend, independently of its backing buffer's intrinsic
+size. Proportional projection preserves galaxy geometry at every aspect ratio.
+The viewport lock applies only when Galaxy Scout and Map are both active;
+Search, directories and other tabs keep normal document scrolling. At heights
+up to 700 CSS pixels, the footer is hidden, but standard panel padding,
+16px inter-panel spacing and legend sizing remain unchanged;
+up to 450 pixels, the in-map controls form a horizontal row.
+`ResizeObserver` handles container/show-hide changes, window
+resize handles viewport changes, and a rearmed resolution media query handles
+pixel-density changes. Resizing preserves the world-space center and zoom;
+pointer navigation and hover use the same CSS-coordinate space.
+Zone toggling does not modify the search,
+position, ownership overlays or cached data and issues no network request.
+
+The inspected reference `galaxy-DJr_n2VN.js` provides name/ID navigation,
+Home and zoom controls, and derives player/alliance occupancy from saved
+planet owners. Nexus Overseer's local lookup adds explicit selection for
+ambiguous names, uses the actual `isHomeworld` planet from `GET /api/auth/me`
+for Home, and retains proportional x/y scaling. Alliance markers derive from
+saved planet **and moon** `userId`/`ownerAllianceTag` values compared with
+`GET_ALLIANCE`'s current member IDs/tag, never from a search-only subset.
+Unknown/unowned bodies are excluded. This is last-known occupancy, not a new
+alliance-wide discovery API or proof of current ownership. Reading local scans
+on initialization adds no game API call; navigation and tooltips are local.
+The map's combined lookup is an ARIA combobox with a local listbox of up to
+50 matching systems, showing plain-text name, ID and zone. Arrow keys update
+`aria-activedescendant`; Enter selects the active, exact or unique match.
+Ambiguous unselected input never chooses arbitrarily. Escape and focus leaving
+the widget close suggestions; the clear icon only resets lookup text.
+
+Map hover and click share the same nearest-system hit test in CSS coordinates,
+with an eight-pixel radius independent of HiDPI backing resolution. Hover
+explicitly sets `display: block` to override the tooltip's hidden CSS default.
+Clicking selects without recentering and opens a non-modal, focusable action
+box with star/zone/visibility, saved own/alliance occupancy and body counts
+from `finderScans`. Missing body groups say `not saved`, never zero. The action
+opens the existing local system overview without fetching data. Names use
+plain text. The box is clamped inside the map, scrolls internally if needed,
+and closes on Escape, outside click, redraw or view reset. A four-CSS-pixel
+drag threshold prevents pan gestures from triggering the click selection.
+The reference sizes its canvas to its parent's `clientWidth`/`clientHeight`
+on mount/window resize and draws hover text as HTML, not canvas text. Its
+inspected renderer does not multiply the backing size by `devicePixelRatio`.
+Nexus Overseer additionally handles HiDPI and container-only resizing.
+
+The reference client's image components derive type-based assets using
+`/api/images/planets/{planetType}.webp` and `/images/moons/{moonType}.webp`.
+Individual image URLs are not documented in the observed system-contents payload.
+The local cache stores these derived relative paths with permanent properties;
+older entries can derive them at display time. URLs resolve against the selected
+universe origin. Asset loading is separate from system-content API requests and
+uses browser HTTP caching; the addon does not store image binaries in IndexedDB.
+
+Galaxy Scout does not display temperature, but retains it in cached physical
+properties. Planet slot capacity uses a saved `maxBuildingSlots` or `buildingSlots`
+when available; otherwise the reference client's base calculation is
+`floor(size / 10)`, reduced to `floor(floor(size / 10) * 0.3)` for gas giants.
+Calculated values are base capacity, not unused slots or a guarantee of bonuses.
+Moon slots continue to use the observed `buildingSlots` without this calculation.
+
+Nexus Overseer caches galaxy reads centrally in a universe-separated local
+IndexedDB database. Map, arm and sector responses have a 15-minute TTL. System
+responses are split into permanent planet/moon properties, separately timestamped
+ownership (one-hour default cache for shared readers, 30 minutes for own dashboard
+moons), and dynamic asteroid contents (15 minutes). Galaxy Scout searches saved
+physical properties first and only loads missing base data. It never refreshes
+ownership or fetches player ranks as part of the base search. Results are rendered
+with cached ownership first, then only unknown ownership in matching systems is
+checked automatically. Known ownership is retained without time-based expiry in
+Galaxy Scout and updated through passive observations or manual checks.
+
+Search availability handling (2026-10-20): the diagnostic
+`Galaxy response did not resolve requested static data` is a missing-data error,
+not itself HTTP 429. Earlier HTTP 429 attempts for the same system can still have
+occurred: API reads retry internally, and a subsequent successful HTTP response
+may omit requested groups. An exhausted 429 retains status 429 through the
+cache/background/client chain and is not converted to a missing-data error.
+The missing-data diagnostic identifies an API response that did not supply the requested
+planet or moon group. The response alone does not prove why that group is absent.
+Per the official galaxy guide, partial visibility exposes catalog information,
+not detailed planet contents. Search therefore uses saved contents at any
+visibility but only requests missing contents for systems with full visibility.
+Systems without full visibility and without the saved groups needed for the
+active search are excluded before scanning, not counted as search issues or
+unavailable-detail errors. Saved planet data is sufficient for planet-only
+criteria; moon criteria require saved moons only for otherwise matching planets.
+Systems with sufficient saved knowledge remain searchable even without current
+full visibility. An empty candidate set reports no searchable systems, without
+recommending repeated API attempts.
+Missing contents remain unknown, never an authoritative empty array.
+
+Moon enrichment requests only the missing moon group; static requests can combine
+newly resolved groups with permanent properties already saved in the shared cache.
+Ownership refreshes still require freshly resolved ownership and never silently
+return stale owners. Unresolved responses expose `GALAXY_DATA_UNAVAILABLE` plus
+the missing group names through the background/client bridge. For static requests,
+the background cache pauses the same unavailable system/group for 15 minutes,
+independently per universe. This pause is in memory and ends on worker restart;
+valid passive observations satisfy requests immediately, and explicit force
+bypasses the pause. Transport errors and 429s are not cached by this mechanism.
+
+Search reports successfully scanned systems separately from unavailable details
+and technical failures. Any skipped details make the saved search incomplete;
+Search issues lists affected system IDs and reasons. An exhausted 429 still stops
+the search explicitly. These changes do not increase retry counts or bypass the
+shared API rate limiter.
+Galaxy Scout does not display player ranks or fetch ranking data. Its separate,
+optional **Check result ownership** action requests current status once per
+matching system, bypassing the ownership TTL, including matches hidden by local
+ownership display filters. No unrelated system is checked. Missing/unresolved
+groups do not erase previously known data; explicitly resolved empty groups do.
+An explicit `userId: null` clears former ownership, including alliance metadata;
+an omitted owner ID does not establish that a body is unowned.
+
+Galaxy Scout's zone buttons support multiple selected zones (none means all).
+Planet types also use a multi-select with no selection meaning all.
+Type options follow the [official galaxy guide](https://s0.nexuslegacy.space/guide/de/galaxy.html),
+checked on 2026-10-20. The guide lists six colonizable planet types and six moon types:
+
+| Body | Guide labels (German) | Addon/API type identifiers, same order |
+| --- | --- | --- |
+| Planet | Felsig, Kristallin, Gasriese, Eis, Terra, Vulkanisch | `rocky`, `crystalline`, `gas_giant`, `ice`, `terra`, `volcanic` |
+| Moon | Karg, Metallisch, Eisig, Vulkanisch, Hohl, Antik | `barren`, `metallic`, `icy`, `volcanic`, `hollow`, `ancient` |
+
+Ancient and metallic are not planet types. Saved searches containing unsupported
+type selections show an explicit Clear search hint rather than silently broadening
+the search. Observed cache data is not rewritten or deleted by this correction.
+The initial arm selection is All arms; sector input is disabled until one arm is selected.
+Search's More filters adds maximum distance from Origin, minimum planet-slot
+capacity (using `planetSlots`) and moon-type multi-select. Distance filtering uses
+the same rounded system distance as displayed results, excludes unknown distances
+when active and runs before content requests. An active maximum requires a known
+origin; invalid/negative/fractional numeric limits report errors without starting
+or replacing the saved search. Empty distance means unlimited; zero is valid.
+The minimum moon-slot filter requires at least one moon belonging to the matching
+planet with `buildingSlots >= minimum` and known `userId: null`; slots are not
+summed and colonized moons do not qualify. Missing moon data is loaded only after
+planet properties match. Unknown ownership of qualifying moons is checked after
+the base search, once per relevant system, requesting both planets and moons.
+Selected moon types and a positive slot minimum must match **one and the same
+free moon**, including after automatic/manual ownership updates and when projecting
+Search results into the Moons list. Moon types without a slot minimum do not
+restrict moon ownership. Unrelated, nonmatching planets do not trigger missing
+moon reads, including when rejected by the new capacity filter.
+
+`galaxy_last_search` stores the last started search in server-scoped local storage:
+versioned criteria, summary, phase, matching system/planet references, sort and
+ownership display filters. Physical and ownership data remain in the shared galaxy
+cache instead of being duplicated in this record. The snapshot is replaced when
+a valid search starts, updated in batches and after ownership checks, and restored
+using local scans only on initialization. Restoring never resumes network work;
+incomplete snapshots are labelled accordingly. Unsaved input edits do not replace
+the last started search. Clear search stops in-flight work, removes this record,
+resets filters/results and leaves collected galaxy knowledge intact. Writes are
+ordered and explicitly scoped to their original universe; stale replies cannot
+restore cleared results. Storage/load errors are shown beside the search controls.
+
+Galaxy Scout's Map, Search, Systems, Planets and Moons views share one search
+snapshot. List views project matching planets into unique systems or associated
+moons, or browse all saved data. A slot-filtered moon projection includes only
+qualifying free moons. Entering list views uses `GET_GALAXY_SCANS` (local database only);
+they do not trigger system API requests or ownership checks. List filtering,
+sorting and 50-row pagination run locally. Cached observations read on a view
+change also update the shared last-known ownership used by map result filters.
+Each list retains its own multi-select security-zone filter (empty selection means
+all zones), intersected with text and shared-result filters. System overview uses
+the same saved snapshot and shows planets, moons, asteroid contents, ownership
+and observation times without additional game requests.
+Map and Search have separate tab panels. Search filters sit immediately above
+results without a canvas in between; Show on map switches to Map and focuses the
+selected system. Returning to Search retains filters, sort, ownership filters and
+results, without rerunning the search. Searches and ownership checks may continue
+while another view is selected, but never switch views automatically. Map remains
+the default on entry from another dashboard tab. Source badges read Known galaxy
+on Map, Completes missing data on Search and Saved data on directories/overview.
+Their tooltips distinguish catalog/account loading during initialization, targeted
+missing-data requests during search, passive learning from gameplay, and local-only
+directory/overview reads. Search progress distinguishes saved-data processing from
+missing system/moon data loading.
+
+Directories also retain independent type multi-select, arm and a single sector
+field accepting one number or an inclusive range such as `35` or `33-35`
+(reversed endpoints are normalized, matching Search; numbers are within each arm),
+distance origin and min/max distance. Systems filter by star type, planet/moon
+count and whether any contents have been recorded, including explicitly empty
+sections; systems have no ownership status or ownership filter. The planet-count
+filter can use a saved map count if no planet contents are recorded; moon counts
+remain unknown until moons are recorded. Planet lists filter size, capacity,
+moon count, any selected moon type present and a minimum number of slots on one
+known-free moon. These two moon conditions are independent and need not refer to
+the same moon. Moon lists filter moon type, size, slots and parent planet type.
+Planet/moon lists additionally filter last-known ownership. Owner names and
+alliance tags are searched through the shared Filter list text field, without
+separate advanced inputs. Type toggles share zone-button sizing, and min/max
+values use the same labeled toolbar inputs as the other advanced controls,
+without enclosing range boxes. Size, slots and planet/moon counts expose only
+minimum thresholds; only distance retains a maximum input. Search likewise
+filters planet size by minimum only.
+Search results use the same type, zone, ownership and alliance badges and
+map/overview actions as directories. Overview opens saved contents and highlights
+the selected matching planet without fetching game data. Sort headers are buttons;
+wide result tables scroll inside their panel rather than widening the page.
+Unknown values never satisfy numeric limits, and unknown ownership is not free.
+Incomplete/invalid numeric ranges display an explicit error, not an unfiltered
+result. All directory filters are local and never resolve missing data or
+ownership over the network. Numeric/special filters live under More filters,
+whose active count remains visible when collapsed. Reset list filters clears only
+the current list's filters and origin, keeping sort, shared search and Show scope.
+
+The page-world galaxy hook also relays successful same-origin GET responses for
+these endpoints to the local cache without issuing additional requests or
+requiring diagnostic recording. Pending identical reads share one request.
+System responses are parsed once for both galaxy-cache and asteroid-field
+consumers. Search, directory and overview rendering group moons by parent once
+per system instead of repeatedly scanning the full moon list for each planet.
+The 15-minute catalog TTL does not expire physical properties or Galaxy Scout's
+known ownership. Destructive per-universe cache clearing is in
+**Options > Data > Danger zone**, with a warning in the server-specific
+confirmation dialog. It is not a normal server lifecycle operation:
+new servers use separate databases. This cache is included in regular JSON backups; galaxy
+WebSocket deltas still do not invalidate it.
+
+Public galaxy structure uses a separate `public:galaxy` IndexedDB entry per
+universe, not `saveSystem` observations. Its strict schema and maintainer workflow
+are documented in [Public galaxy datasets](../data/galaxy/README.md).
+`EXPORT_PUBLIC_GALAXY` migrates legacy knowledge and reads only the requested
+universe through the IndexedDB server index, then creates a whitelisted local
+contribution without HTTP or materializing an all-server backup.
+The maintainer CLI and addon downloader share the same manifest validation.
+`GET_PUBLIC_GALAXY_STATUS` reads installed/check status; `UPDATE_PUBLIC_GALAXY`
+downloads only approved manifest-selected data, with opt-out automatic daily
+checks and a manual override with a 30-second limit. Game hubs now use the same
+15-minute catalog cache so their physical location can enter public exports.
+Installed structure supplements map, lists and static searches but never
+creates ownership, observed group times or full game visibility. Sufficiently
+described public planet/moon groups can satisfy static cache reads while all
+ownership/dynamic reads still require actual observations. No building-slot
+values are shared; missing moon-slot filters can resolve through the API only
+for systems already fully visible in the game.
 
 The map response contains `systems` and may include `userSystemIds`. A system
 entry supplies fields such as its ID, coordinates, sector, arm, and security

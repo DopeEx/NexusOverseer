@@ -114,6 +114,13 @@ colonization actually happened. The same state can be reported repeatedly;
 notification counts must not be interpreted as counts of new colonies.
 
 Other delta types, delivery scope and exact triggers remain unverified.
+Galaxy Scout passively persists the verified system-level colony hint even
+with diagnostic recording disabled. It does not infer planet ownership:
+for known systems with full saved visibility, a new hint prompts a targeted,
+rate-limited HTTP refresh of the real system contents. Unknown or partially
+visible systems are not queried. A newer explicit catalog flag can replace the
+hint, including reporting no colonies; the event is not proof of current
+occupancy.
 For the observed wire format, diagnostic recording behavior and integration
 constraints, see [Galaxy delta events](./api-reference.md#galaxy-delta-galaxydelta).
 

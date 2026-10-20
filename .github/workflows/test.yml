@@ -16,6 +16,7 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: node --test
+      - run: node tools/galaxy-data.js check
 
   windows-updater:
     runs-on: windows-latest
@@ -27,6 +28,10 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
+      - run: npm ci
+      - name: Test public galaxy workflow and Windows starter
+        run: node --test tests/galaxy-public.test.js
+      - run: node tools/galaxy-data.js check
       - name: Test package separation and integrity
         run: python -m unittest discover -s tests -p test_manual_build.py
       - name: Test Windows updater and recovery

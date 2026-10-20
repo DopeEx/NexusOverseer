@@ -21,7 +21,7 @@ export default [
     },
   },
   {
-    files: ['tests/**/*.js', 'tools/demo/server.js', 'eslint.config.js'],
+    files: ['tests/**/*.js', 'tools/demo/server.js', 'tools/galaxy-data.js', 'eslint.config.js'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
@@ -56,6 +56,6 @@ export default [
     },
   },
   {
-    ignores: ['nexus-addon/chart.umd.js', 'nexus-addon/browser-polyfill.js']
+    ignores: ['reference/**', 'nexus-addon/chart.umd.js', 'nexus-addon/browser-polyfill.js']
   },
 ];

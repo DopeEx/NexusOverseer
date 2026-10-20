@@ -19,7 +19,8 @@
   "host_permissions": [
     "https://*.nexuslegacy.space/*",
     "https://s0.nexuslegacy.space/*",
-    "https://nexuslegacy.space/*"
+    "https://nexuslegacy.space/*",
+    "https://raw.githubusercontent.com/DopeEx/NexusOverseer/*"
   ],
   "background": {
     "service_worker": "background-sw.js",
@@ -40,7 +41,7 @@
     },
     {
       "matches": ["https://*.nexuslegacy.space/*"],
-      "js": ["server-storage.js", "diagnostics-relay.js"],
+      "js": ["server-storage.js", "diagnostics-relay.js", "galaxy-cache-relay.js"],
       "run_at": "document_start"
     },
     {

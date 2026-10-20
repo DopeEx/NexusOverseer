@@ -18,6 +18,7 @@ The extension reads the following data from the currently selected Nexus Legacy 
 | Research | Your tech tree progress, active research, per-planet lab levels and speed |
 | Planets & buildings | Your planets, their buildings (to read lab levels), and stationed fleets |
 | Galaxy map | System names, security zones, arm/sector coordinates (for zone tagging and the planet finder) |
+| Live galaxy hints | Verified incoming `colonized` WebSocket notifications: system ID, presence-of-colonies flag and local capture time; stored locally per universe independently of diagnostic recording |
 | Fuel logs | Hydrogen cost per launched mission (type, zone, amount) |
 | Player and alliance data | Player identity, alliance details, and ranking data used by the finder |
 | Trade and logistics | Market orders and trades, logistics outposts, moons, and related fleet/resource state |
@@ -28,6 +29,11 @@ Diagnostic recording is off by default. It excludes request/response headers,
 URL query strings and authentication endpoints, and redacts recognized secret
 fields and token patterns before relaying and storing data. Other private game
 data may remain in payloads. Recording is local only and does not upload logs.
+Functional galaxy hints are separate from these optional logs: only the
+supported system-level fields are retained from the event, without a planet or
+player identity. A new hint for a known, fully visible system can trigger a
+rate-limited game API request to refresh locally saved planet/moon ownership.
+This adds no WebSocket subscription, external upload or community sharing.
 
 The extension does not read or extract the session cookie. It sends API requests through your logged-in game tab, where the browser attaches the game's HttpOnly session cookie. The extension does not write or modify cookies.
 
@@ -49,7 +55,17 @@ No data is used for advertising, profiling, or any purpose unrelated to displayi
 
 ## 3. Where the data is stored
 
-All data is stored **locally on your device only**, in the browser's `storage.local` area or, for optional diagnostic traffic, in an extension-local IndexedDB database. Nothing is uploaded to any server operated by the extension author.
+All data is stored **locally on your device only**, in the browser's `storage.local` area or in extension-local IndexedDB databases for galaxy knowledge and optional diagnostic traffic. Nothing is uploaded to any server operated by the extension author.
+
+The local galaxy database retains known system, planet and moon properties,
+ownership observations and short-lived asteroid snapshots separately for each
+universe. It also learns from successful galaxy responses the game loads while
+you play, independently of optional diagnostic recording. Physical properties
+do not expire automatically. **Options > Data > Danger zone > Clear galaxy
+cache** removes the selected universe's saved galaxy knowledge after a warning
+and confirmation. Regular JSON backups include this database and installed
+public base data. Public datasets are stored separately from personal game
+observations and never create ownership, visibility or observation timestamps.
 
 The extension also writes automatic backup files to your `Downloads/NexusOverseer/` folder before destructive operations (reset, import, schema migrations) and as a weekly auto-backup. These files are plain JSON and remain on your device under your control.
 
@@ -57,7 +73,36 @@ The extension also writes automatic backup files to your `Downloads/NexusOversee
 
 ## 4. Data sharing and third parties
 
-**No game data is shared with any third party.** Game requests are between your browser and `nexuslegacy.space` (the game's own servers). The extension does not contact any analytics service, telemetry endpoint, or server operated by the extension author.
+**The extension never uploads game data to a third party.** Game requests are between your browser and `nexuslegacy.space` (the game's own servers). The extension does not contact any analytics service or telemetry endpoint.
+
+### Public galaxy structure
+
+In all addon packages, public galaxy updates default on and can be disabled
+under **Options > Data > Public galaxy data**. While a dashboard is open,
+the addon can request a public manifest and, when its checksum changes, the
+selected universe's public dataset from
+`raw.githubusercontent.com/DopeEx/NexusOverseer/master/data/galaxy/`.
+Checks run at most once per 24 hours per universe, including failed attempts.
+The manual update button can check immediately, with a 30-second repeat limit.
+No checks run with all dashboards closed.
+
+These are download-only GET requests containing public repository paths and a
+server key, with no game data, credentials, cookies or referrers. GitHub receives
+normal connection metadata such as your IP address. Existing local observations
+take priority over public structure.
+
+The separate **Export public data** action previews counts and, after your
+confirmation, creates a local JSON file from saved data only. A fixed whitelist
+includes system names/zones/coordinates, planet and moon physical properties,
+station names/locations, hub locations and arms. It excludes player and alliance
+identities, ownership, colony names, explored visibility, colony flags,
+resources, buildings and upgrade-dependent slot values. It performs no scans
+or uploads. **Open contribution issue** opens GitHub; you must explicitly attach
+the reviewed file and submit the issue yourself. GitHub issue attachments are
+public. Never attach full backups or diagnostic logs to a contribution.
+Only maintainer-approved data is published to the repository.
+
+### Addon release checks
 
 In the separate Windows manual package, opening the dashboard can contact
 `api.github.com` to check the latest stable release and, for development builds,
@@ -85,7 +130,7 @@ The extension reads game data and sends state-changing requests only when you us
 Data accumulates in local storage as long as the extension is installed. You can:
 
 - **Export** a full JSON backup at any time under Options > Data in the dashboard.
-- **Reset** your recorded stats and reports under Options > Data (a backup is created first; your options are kept).
+- **Reset** your recorded stats, reports and galaxy cache under Options > Data (a backup is created first; your options are kept).
 - **Uninstall** the extension — the browser removes all `storage.local` data on uninstall.
 
 Developer logs are separated by game server and limited to 150 entries per

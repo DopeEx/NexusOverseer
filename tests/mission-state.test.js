@@ -186,7 +186,23 @@ test('timestamps are only a fallback when status is absent', () => {
   assert.equal(missionProgress({ arrivesAt: at(0) }, now(5)).label, 'On site');
 });
 
-test('common countdown and compact mission bars label the same event', t => {
+test('tab countdowns omit event labels in every mission phase', () => {
+  for (const mission of [
+    { status: 'outbound', arrivesAt: at(10) },
+    { status: 'returning', returnArrivesAt: at(10) },
+    { status: 'surveying', returnDepartsAt: at(10) },
+    { status: 'mining', nextCycleAt: at(10) },
+    { status: 'collecting', returnDepartsAt: at(10) },
+    { status: 'exploring', arrivesAt: at(10) },
+    { status: 'patrolling', arrivesAt: at(10) },
+  ]) {
+    assert.equal(missionCountdown(missionProgress(mission, now(5))), '5m 00s', mission.status);
+    assert.equal(missionCountdown(missionProgress(mission, now(11))), 'updating…', mission.status);
+  }
+  assert.equal(missionCountdown(missionProgress({ status: 'mining' })), '—');
+});
+
+test('compact mission bars keep the phase separate from the plain ETA', t => {
   t.mock.method(Date, 'now', () => now(5));
   const oldDocument = globalThis.document;
   t.after(() => { globalThis.document = oldDocument; });
@@ -205,11 +221,11 @@ test('common countdown and compact mission bars label the same event', t => {
   const [track, caption] = bar.el.children;
   assert.equal(track.children[0].style.width, '50.0%');
   assert.equal(caption.children[0].textContent, 'Exploring');
-  assert.equal(caption.children[1].textContent, 'Exploration ends: 5m 00s');
+  assert.equal(caption.children[1].textContent, '5m 00s');
   t.mock.method(Date, 'now', () => now(11));
   bar.upd();
   assert.equal(caption.children[0].textContent, 'Exploring');
-  assert.equal(caption.children[1].textContent, 'Exploration ends: updating…');
+  assert.equal(caption.children[1].textContent, 'updating…');
   assert.equal(missionCountdown(missionProgress({ status: 'mining' })), '—');
 });
 

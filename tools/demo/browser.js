@@ -65,6 +65,10 @@ const server = { key: 'demo', name: 'Demo Universe (fictional)', origin: locatio
 globalThis.nexusStorage = {
   onChanged,
   getActiveServer: async () => ({ ...server }),
+  async withServer(key, run) {
+    if (key !== server.key) throw new Error('Only the fictional demo universe is available.');
+    return run({ ...server });
+  },
   async setActiveServer(key) {
     if (key !== 'demo') throw new Error('Only the fictional demo universe is available.');
   },

@@ -6,7 +6,7 @@
 //   /api/galaxy/systems/{id}/planets       → that system's asteroidFields
 // Per-system scans reuse the finder's shared cache.
 
-import { SCAN_CACHE_MAX, getSystemPlanets } from './finder.js';
+import { loadGalaxyScans, getSystemPlanets } from '../galaxy-client.js';
 import { loadFleetTemplates } from './fleets.js';
 import { usedFleetSlots } from '../mission-state.js';
 import { ALL_RES_COLORS, clearAvailStrip, editFleetDialog, fmt, fuelEstimate, missionProgress, rememberSelection, rememberedSelections, renderAvailStrip, setStatusText, ZONE_COLORS, ZONE_DEFS } from '../common.js';
@@ -436,8 +436,9 @@ async function scan() {
     .map(o => o.s);
   if (!candidates.length) { setStatusText(status, 'No explored systems nearby.'); return; }
 
-  const { planet_scan_cache } = await browser.storage.local.get('planet_scan_cache');
-  const cache = planet_scan_cache || {};
+  let cache;
+  try { cache = await loadGalaxyScans(); }
+  catch (error) { setStatusText(status, `Error: ${error.message}`); return; }
 
   afRunning = true;
   btn.textContent = 'Stop';
@@ -486,7 +487,7 @@ async function scan() {
       if (!meta || !meta.planetCount) continue;   // no bodies → no fields
       let data;
       try {
-        data = await getSystemPlanets(sys.id, cache, ASTEROID_CACHE_TTL);
+        data = await getSystemPlanets(sys.id, cache, { purpose: 'dynamic', maxAge: ASTEROID_CACHE_TTL });
       } catch { errors++; scanned++; continue; }
       scanned++;
       const fields = data.asteroidFields || [];
@@ -495,7 +496,7 @@ async function scan() {
           setStatusText(status, `Scanning… ${scanned}/${systemLimit} systems checked, ${matchingSystems}/${count} contain requested fields.`);
           renderAsteroids();
         }
-        await new Promise(r => setTimeout(r, 80)); // be polite to the game API
+        if (scanned % 25 === 0) await new Promise(r => setTimeout(r, 0));
         continue;
       }
       matchingSystems++;
@@ -521,22 +522,14 @@ async function scan() {
           : `Scanning… ${scanned}/${count} systems, ${afFields.length} fields.`);
         renderAsteroids();
       }
-      await new Promise(r => setTimeout(r, 80)); // be polite to the game API
+      if (scanned % 25 === 0) await new Promise(r => setTimeout(r, 0));
     }
   } finally {
     afRunning = false;
     btn.textContent = 'Scan';
   }
 
-  // Persist the shared scan cache, oldest entries dropped first.
-  const ids = Object.keys(cache);
-  if (ids.length > SCAN_CACHE_MAX) {
-    ids.sort((a, b) => cache[a].at - cache[b].at)
-      .slice(0, ids.length - SCAN_CACHE_MAX)
-      .forEach(id => delete cache[id]);
-  }
   await browser.storage.local.set({
-    planet_scan_cache: cache,
     [ASTEROID_RESULTS_CACHE_KEY]: {
       at: Date.now(),
       planetId,
