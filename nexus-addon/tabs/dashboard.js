@@ -196,11 +196,14 @@ function storageWarnings(d) {
 }
 
 // Things that may need the player's action; an entry only appears when it applies.
-function attentionItems(d) {
+export function attentionItems(d) {
   const on = key => getSetting(`dashboard.attention.${key}`);
   const items = [];
   const busyLabs = new Set(d.research.map(r => r.planetId));
-  const idleLabs = on('labs') ? d.planets.filter(p => p.hasLab && !busyLabs.has(p.id)) : [];
+  const idleLabs = on('labs')
+    ? d.planets.filter(p => p.hasLab && !busyLabs.has(p.id)
+      && !p.construction.some(c => c.key === 'research_lab' && c.upgrading))
+    : [];
   if (idleLabs.length) {
     items.push({ level: 'warn', text: `${idleLabs.length} research lab${idleLabs.length > 1 ? 's' : ''} idle`, tip: idleLabs.map(p => p.name) });
   }
@@ -361,9 +364,14 @@ function planetCard(p, research) {
   }
 
   const running = (research || []).filter(r => r.planetId === p.id);
+  const labUpgrade = p.construction.find(c => c.key === 'research_lab' && c.upgrading);
   if (running.length || p.hasLab) {
     card.appendChild(el('div', 'ov-sub', 'Research'));
-    if (!running.length) card.appendChild(idle('Research idle', 'No research is running on this planet.'));
+    if (!running.length && labUpgrade) {
+      card.appendChild(idle('Research lab upgrading', 'Research is unavailable while the lab is being upgraded.'));
+    } else if (!running.length) {
+      card.appendChild(idle('Research idle', 'No research is running on this planet.'));
+    }
     const list = el('div', 'ov-list');
     for (const r of running) {
       const row = el('div', 'ov-row');

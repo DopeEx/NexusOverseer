@@ -1208,9 +1208,11 @@ async function getDashboardOverview({ polite = true, ...options } = {}) {
       const construction = (detail?.buildings || [])
         .filter(b => b.queueId != null || (b.isUpgrading && future(b.upgradeEndsAt)))
         .map(b => ({
+          key: b.definition?.key,
           name: b.definition?.name || b.definition?.key || 'Building',
           level: b.queueTargetLevel || (b.level || 0) + 1,
           endsAt: b.isUpgrading ? b.upgradeEndsAt : null,
+          upgrading: !!(b.isUpgrading && future(b.upgradeEndsAt)),
           pending: b.queueStatus === 'pending',
           order: b.queueId ?? 0,
         }))
