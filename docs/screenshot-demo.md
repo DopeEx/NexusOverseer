@@ -82,7 +82,7 @@ All eleven regular main tabs are covered:
 | Dashboard | `dashboard.png` | Default view |
 | Statistics | `statistics.png` | Global subtab, all time, all zones |
 | Asteroids | `asteroids.png` | The fictional cached scan is loaded automatically |
-| Galaxy Scout | `galaxy-scout.png` | Demo Arm 1, sectors `1-2`; click Search, wait for automatic unknown-ownership checks, then optionally refresh known ownership and filter Last known ownership |
+| Galaxy Scout | `galaxy-scout.png` | Default Map view, whole galaxy, zone rings, market hubs and alliance markers enabled; leave the system lookup empty |
 | Pirates | `pirates.png` | Camps and battle reports load automatically |
 | Fleets | `fleet-templates.png` | Select Demo - Balanced Mining |
 | Simulator | `combat-simulator.png` | Load my fleet from Aurora, then select the Demo Frontier spy report |
