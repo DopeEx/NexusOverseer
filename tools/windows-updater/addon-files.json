@@ -7,7 +7,7 @@
   "background-sw.js", "server-storage.js", "server-switch.js", "background.js", "sidebar-inject.js",
   "api-scheduler.js", "game-api-client.js", "api-status.js", "api-telemetry.js",
   "galaxy-fetch-hook.js", "game-api-bridge.js", "galaxy-fields.js", "empire-view.js", "guide-content.js", "guide-view.js", "logistics-view.js", "upgrade-queue.js", "building-upgrade.js", "tech-upgrade.js", "ship-upgrade.js",
-  "galaxy-cache.js", "galaxy-client.js", "galaxy-cache-relay.js", "galaxy-directory.js", "galaxy-images.js",
+  "galaxy-cache.js", "galaxy-client.js", "galaxy-cache-relay.js", "galaxy-directory.js", "galaxy-images.js", "asteroid-search.js",
   "galaxy-public.js", "galaxy-sharing.js",
   "diagnostics-core.js", "diagnostics.js", "diagnostics-store.js", "diagnostics-hook.js", "diagnostics-relay.js", "tabs/developer.js",
   "dashboard.html", "theme.css", "dashboard.css", "dashboard.js", "automation-scheduler.js", "common.js", "mission-state.js", "settings.js", "tabs/options.js", "pirate-planner.js", "pirate-plan-cache.js", "human-verification.js",

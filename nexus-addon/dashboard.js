@@ -806,6 +806,9 @@ if (versionLink) {
     versionLink,
     statusLink: document.getElementById('footer-release-status'),
     checkButton: document.getElementById('footer-check-updates'),
+    updateNotice: document.getElementById('update-notice'),
+    updateNoticeLink: document.getElementById('update-notice-link'),
+    dismissUpdateNoticeButton: document.getElementById('dismiss-update-notice'),
     runtime: browser.runtime,
     storage: browser.storage.local,
   });

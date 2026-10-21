@@ -83,6 +83,36 @@ body.expert-mode .hv-banner.show { display: flex; align-items: center; gap: 16px
 .hv-text { display: flex; flex-direction: column; gap: 2px; flex: 1; font-size: 0.85rem; }
 .hv-text b { color: var(--error); font-size: 0.95rem; }
 .hv-banner button { flex-shrink: 0; }
+#update-notice[hidden] { display: none; }
+.update-notice:not([hidden]) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 9px 12px;
+  border: 1px solid var(--info-tint-strong);
+  border-radius: var(--radius-panel);
+  background: var(--info-tint);
+  color: var(--info);
+}
+.update-notice-link {
+  flex: 1;
+  color: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.update-notice-link:hover { text-decoration: underline; }
+.update-notice-dismiss {
+  flex-shrink: 0;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
 body.expert-mode .expert-only { display: block !important; }
 body.expert-mode .asteroids-toolbar.expert-only { display: flex !important; }
 body.expert-mode button.expert-only,
@@ -956,6 +986,57 @@ th.sortable { cursor: pointer; user-select: none; }
 th.sortable:hover { color: var(--text); }
 th.sortable .arrow { margin-left: 4px; color: var(--accent); }
 
+/* List presentation based on Galaxy Scout; columns remain feature-specific. */
+.dashboard-list-panel {
+  min-width: 0;
+  font-family: var(--font-ui);
+}
+.dashboard-list-panel > .reports-header {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 10px 16px;
+}
+.dashboard-list-panel > .reports-header h2 {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.dashboard-list-count {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+.dashboard-list-panel > .reports-header > .dashboard-list-count { margin-right: auto; }
+.dashboard-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+.dashboard-table-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dashboard-table-scroll table { font-family: var(--font-ui); font-size: 0.85rem; }
+.dashboard-table-scroll th button {
+  color: inherit;
+  font: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.dashboard-table-scroll th button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.dashboard-list-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-bottom: 12px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.dashboard-list-status > :not(:has([role="status"]:not(:empty), .api-search-wait:not(:empty))) { display: none; }
+.dashboard-list-status:not(:has([role="status"]:not(:empty), .api-search-wait:not(:empty))) { display: none; }
+.dashboard-list-footer { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+
 .finder-dashboard {
   font-family: var(--font-ui);
 }
@@ -1029,6 +1110,7 @@ th.sortable .arrow { margin-left: 4px; color: var(--accent); }
 .finder-system-overview .finder-system-selected { background: var(--info-bg); box-shadow: inset 2px 0 var(--accent); border-radius: var(--radius-control); }
 .finder-system-selected .finder-body-header h4, .finder-system-selected .finder-body-header h5 { color: var(--accent); }
 .finder-badge { display: inline-block; padding: 2px 6px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--bg-panel); color: var(--text-muted); font-size: 0.72rem; line-height: 1.4; }
+.finder-badge[hidden] { display: none !important; }
 .finder-type-green, .finder-owner-free { color: var(--success); border-color: var(--ok-border); background: var(--ok-bg); }
 .finder-type-blue, .finder-alliance { color: var(--info); border-color: var(--info-border); background: var(--info-bg); }
 .finder-type-gold, .finder-type-orange, .finder-owner-colonized { color: var(--warning); border-color: var(--warn-border); background: var(--warn-bg); }
@@ -1546,16 +1628,20 @@ body:has(.main-tab[data-tab="finder"].active):has(#f-map-panel:not([hidden])) .a
 
 .asteroids-dashboard .asteroids-action-group {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: 6px;
   margin-left: auto;
   align-self: flex-start;
+  padding-top: 23px;
 }
 
 .asteroids-dashboard .asteroids-action-group .asteroids-action-button {
-  margin-top: 23px;
+  margin-top: 0;
 }
+
+.asteroids-dashboard .asteroids-action-group #af-slots { flex-basis: 100%; }
+.asteroids-dashboard .af-mission-note { color: var(--warning); font-size: 0.75rem; }
 
 .asteroids-dashboard .asteroids-action-group .asteroids-action-button.is-running {
   background: #da3633;
@@ -1568,19 +1654,12 @@ body:has(.main-tab[data-tab="finder"].active):has(#f-map-panel:not([hidden])) .a
 }
 
 .asteroids-dashboard .asteroids-results-status {
-  max-width: 420px;
-  margin-left: 8px;
+  max-width: 100%;
   color: var(--text-subtle);
   font-size: 0.75rem;
   line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.asteroids-dashboard .asteroids-toolbar#af-livesearch {
-  margin-top: 0;
-  border-top: 1px solid var(--border);
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .asteroids-dashboard .asteroids-toolbar#af-template {
@@ -1597,57 +1676,31 @@ body:has(.main-tab[data-tab="finder"].active):has(#f-map-panel:not([hidden])) .a
   line-height: 1.2;
 }
 
-.asteroids-results-panel {
-  margin-top: 16px;
-}
-
-.asteroids-results-panel .reports-header h2 {
-  color: var(--text-soft);
-  font-family: var(--font-ui);
-  font-size: 0.95rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-}
-
-.asteroids-results-panel .reports-header,
-.asteroids-results-panel .pagination,
-.asteroids-results-panel #af-count,
-.asteroids-results-panel .asteroids-results-status,
-.asteroids-results-panel #ls-status {
-  font-family: var(--font-ui);
-}
-
-.asteroids-results-panel .reports-header {
-  font-size: 0.82rem;
-}
-
-.asteroids-results-panel #af-count,
-.asteroids-results-panel .asteroids-results-status,
-.asteroids-results-panel #ls-status {
-  color: var(--text-muted) !important;
-  font-size: 0.75rem !important;
-  font-weight: 400;
-}
-
 .asteroids-results-panel #af-avail {
   display: none !important;
 }
-
-.asteroids-results-panel table {
-  font-family: var(--font-ui);
-  font-size: 0.82rem;
+.asteroids-results-panel table { min-width: max-content; }
+.asteroids-results-panel td:nth-child(2) { min-width: 110px; max-width: 320px; }
+.asteroids-results-panel td:last-child { min-width: 120px; }
+.asteroids-results-panel td:nth-child(9) .finder-alliance { margin-left: 4px; }
+.asteroids-results-panel .asteroids-mult-badge {
+  color: var(--warning);
+  border-color: var(--warning);
+  background: transparent;
+  font-variant-numeric: tabular-nums;
 }
-
-.asteroids-results-panel thead th {
-  color: var(--text-slate);
-  font-size: 0.72rem;
-  letter-spacing: 0.02em;
+.asteroids-copy-id {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
 }
-
-.asteroids-results-panel .pagination {
-  font-family: var(--font-ui);
-  font-size: 0.78rem;
-}
+.asteroids-copy-id:hover { color: var(--accent); }
+.asteroids-copy-id:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
 .expeditions-dashboard {
   font-family: var(--font-ui);
@@ -3687,13 +3740,13 @@ body:has(.main-tab[data-tab="finder"].active):has(#f-map-panel:not([hidden])) .a
 
 /* What's new dialog: one card per changelog section (Added, Changed, …). */
 .whatsnew-sections {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
-  gap: 14px;
-  align-items: start;
+  columns: 2 420px;
+  column-gap: 14px;
 }
 .whatsnew-version { margin: 16px 0 10px; }
 .whatsnew-section {
+  break-inside: avoid;
+  margin: 0 0 14px;
   padding: 12px 16px;
   border: 1px solid var(--edge-soft);
   border-radius: var(--radius-panel);

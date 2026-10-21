@@ -104,6 +104,7 @@
     {
       "resources": [
         "dashboard.html",
+        "asteroid-search.js",
         "diagnostics-core.js"
       ],
       "matches": [

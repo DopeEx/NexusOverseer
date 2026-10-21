@@ -6,10 +6,10 @@
 //   /api/galaxy/systems/{id}/planets       → that system's asteroidFields
 // Per-system scans reuse the finder's shared cache.
 
-import { loadGalaxyScans, getSystemPlanets } from '../galaxy-client.js';
+import { loadGalaxyScans, getSystemPlanets, asteroidRow, asteroidMatches, retainMiningFields, visibleAsteroidFields, sameAsteroidSearch, reconcileAsteroidRows } from '../galaxy-client.js';
 import { loadFleetTemplates } from './fleets.js';
 import { usedFleetSlots } from '../mission-state.js';
-import { ALL_RES_COLORS, clearAvailStrip, editFleetDialog, fmt, fuelEstimate, missionProgress, rememberSelection, rememberedSelections, renderAvailStrip, setStatusText, ZONE_COLORS, ZONE_DEFS } from '../common.js';
+import { ALL_RES_COLORS, clearAvailStrip, editFleetDialog, fmt, fuelEstimate, missionProgress, rememberSelection, rememberedSelections, renderAvailStrip, setStatusText, ZONE_DEFS, listBadge, zoneBadge, allianceBadge } from '../common.js';
 
 const ICON_BASE = 'https://s0.nexuslegacy.space/images/resources/';
 // asteroid fieldType → resource icon + label
@@ -36,24 +36,30 @@ const EXCAVATOR_BONUS = 1.2;   // +20% fleet extraction capacity when an Excavat
 const MINING_SHIPS = new Set([...Object.values(REC_SHIP).map(s => s[0]), 'Excavator']);
 const afTypeFilter = new Set();    // empty = any; multi-select like the market
 const afZoneFilter = new Set();    // empty = any
-const lsTypeFilter = new Set();    // live-search type filter (independent)
-const lsZoneFilter = new Set();    // live-search zone filter (independent)
 
 let afInited = false;
 let afPlanets = [];                // [{ id, name, systemId, systemName, isHomeworld }]
 let afRefMS = null;                // chosen reference planet system coords
 let afFields = [];                 // scanned asteroid fields
 let afRunning = false;
+let afStopRequested = false;
+let afGeneration = 0;
 let afSort = { key: 'distance', dir: 1 };
 let afPage = 1;
 const AF_PER_PAGE = 25;
 
 export function resetAsteroidsTab() {
+  afGeneration++;
   afInited = false;
   afPlanets = [];
   afRefMS = null;
   afFields = [];
   afRunning = false;
+  afStopRequested = false;
+  document.getElementById('af-scan').textContent = 'Scan';
+  document.getElementById('af-scan').disabled = false;
+  delete document.getElementById('af-progress').dataset.apiPath;
+  document.getElementById('af-api-wait').textContent = '';
   afPage = 1;
   afTemplates = [];
   afMap = null;
@@ -64,6 +70,8 @@ export function resetAsteroidsTab() {
   afMyUsername = null;
   afMiningFieldIds = new Set();
   afMissions = [];
+  afMissionsAt = 0;
+  Object.keys(allianceTagCache).forEach(k => delete allianceTagCache[k]);
 }
 const MINING_DURATION = 600;   // seconds; fixed for asteroid mining missions
 const ASTEROID_CACHE_TTL = 15 * 60 * 1000;   // fields drain fast — refetch after 15 min
@@ -76,12 +84,13 @@ let afAvailTimer = null;    // periodic availability poll
 let afMyUsername = null;    // this player's username, to spot fields already mined by us
 let afMiningFieldIds = new Set();   // fieldIds with an in-flight/active mine mission
 let afMissions = [];        // current fleet missions from the fleet API
+let afMissionsAt = 0;
 const allianceTagCache = {};   // player name → alliance tag (or null), session cache
 
 async function restoreCachedAsteroidResults(planetId) {
   const stored = await browser.storage.local.get(ASTEROID_RESULTS_CACHE_KEY);
   const cached = stored[ASTEROID_RESULTS_CACHE_KEY];
-  const count = Math.max(1, Math.min(500, parseInt(document.getElementById('af-near').value, 10) || 25));
+  const count = Math.max(1, Math.min(500, parseInt(document.getElementById('af-near').value, 10) || 10));
   const zones = [...afZoneFilter].sort();
   const types = [...afTypeFilter].sort();
   if (!cached || cached.planetId !== planetId || !Array.isArray(cached.fields) ||
@@ -98,16 +107,18 @@ async function restoreCachedAsteroidResults(planetId) {
   const matchingFields = renderAsteroids();
   const ageMinutes = Math.max(0, Math.floor((Date.now() - cached.at) / 60000));
   setStatusText(document.getElementById('af-progress'),
-    `Showing cached scan: ${afFields.length} fields discovered, ${matchingFields} match filters (${ageMinutes} min old).`);
+    `Showing cached${cached.incomplete ? ' incomplete' : ''} scan: ${afFields.length} fields discovered, ${matchingFields} match filters (${ageMinutes} min old).`);
   return true;
 }
 
 // Resolve alliance tags for a set of player names not already cached.
-async function resolveAllianceTags(names) {
+async function resolveAllianceTags(names, generation) {
   const need = [...new Set(names)].filter(n => n && !(n in allianceTagCache));
   await Promise.all(need.map(async name => {
-    const res = await browser.runtime.sendMessage({ type: 'GET_PLAYER_ALLIANCE_TAG', name });
-    allianceTagCache[name] = (res && res.tag) || null;
+    const res = await browser.runtime.sendMessage({ type: 'GET_PLAYER_ALLIANCE_TAG', name,
+      priority: 'background', source: 'asteroid-search' });
+    if (!res || res.error) throw new Error(res?.error || 'No alliance response.');
+    if (generation === afGeneration) allianceTagCache[name] = res.tag || null;
   }));
 }
 
@@ -125,18 +136,13 @@ export async function initAsteroidsTab() {
   afMyUsername = (me && !me.error && me.user) ? me.user.username : null;
 
   const pSel = document.getElementById('af-planet');
-  const lsSel = document.getElementById('ls-planet');
-  pSel.textContent = ''; lsSel.textContent = '';
+  pSel.textContent = '';
   for (const p of afPlanets) {
     const label = p.systemName ? `${p.name} (${p.systemName})` : p.name;
     const o = document.createElement('option');
     o.value = p.id; o.textContent = label;
     if (p.isHomeworld) o.selected = true;
     pSel.appendChild(o);
-    const o2 = document.createElement('option');
-    o2.value = p.id; o2.textContent = label;
-    if (p.isHomeworld) o2.selected = true;
-    lsSel.appendChild(o2);
   }
   const savedSel = await rememberedSelections();
   if (savedSel['af-planet'] && afPlanets.some(p => String(p.id) === savedSel['af-planet'])) {
@@ -155,25 +161,36 @@ export async function initAsteroidsTab() {
 
   drawTypeIcons();
   drawZoneToggles();
-  await loadLiveSearch();   // populate ls-* fields + button from saved config
+  await loadLiveSearch(savedSel);
   await initLsStatus();
   renderLsStatus();
-  refreshSlots();
+  await refreshSlots();
 
   await refreshTemplates();
   const restoredCachedResults = await restoreCachedAsteroidResults(Number(pSel.value));
+  if (lsRunning) await loadLiveResults();
   // Keep the selector in sync with edits made in the Fleets tab.
   browser.storage.local.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
     if (changes.fleet_templates) refreshTemplates();
     // Live search can be stopped from the game-page results window — reflect it.
     if (changes.live_search) {
-      const en = !!(changes.live_search.newValue && changes.live_search.newValue.enabled);
+      const config = changes.live_search.newValue;
+      const en = !!config?.enabled;
       if (en !== lsRunning) { lsRunning = en; setLsButton(); }
+      if (en && !sameAsteroidSearch(config, readLsConfig())) {
+        afStopRequested = true;
+        afGeneration++;
+        afRunning = false;
+        document.getElementById('af-scan').textContent = 'Scan';
+        document.getElementById('af-scan').disabled = false;
+        void loadLiveSearch({}, config).then(loadLiveResults).catch(showLiveError);
+      }
     }
+    if (changes.asteroid_scan_results && lsRunning && !afRunning) void loadLiveResults().catch(showLiveError);
   });
 
-  pSel.addEventListener('change', () => { rememberSelection('af-planet', pSel.value); setRefFromMap(pSel.value); renderAsteroids(); updateAfAvail(); });
+  pSel.addEventListener('change', () => { rememberSelection('af-planet', pSel.value); setRefFromMap(pSel.value); renderAsteroids(); updateAfAvail(); saveLiveSearchIfOn(); });
   document.getElementById('af-scan').addEventListener('click', scan);
   document.getElementById('af-template-select').addEventListener('change', e => { rememberSelection('af-template-select', e.target.value); computeFuel(); });
   document.getElementById('af-results-head').addEventListener('click', e => {
@@ -191,18 +208,12 @@ export async function initAsteroidsTab() {
       rememberSelection(id, e.target.value);
       afPage = 1;
       renderAsteroids();
+      saveLiveSearchIfOn();
     });
   }
 
   // Live-search controls.
   document.getElementById('ls-search').addEventListener('click', toggleLiveSearch);
-  document.getElementById('ls-planet').addEventListener('change', saveLiveSearchIfOn);
-  for (const id of ['ls-mult-min', 'ls-qty-min', 'ls-left-min', 'ls-near']) {
-    document.getElementById(id).addEventListener('input', e => {
-      if (parseFloat(e.target.value) < 0) e.target.value = '';   // positive only
-      saveLiveSearchIfOn();
-    });
-  }
 
   // Ship catalog (names + icons) for the availability strip, then start it.
   const defs = await browser.runtime.sendMessage({ type: 'GET_SHIP_DEFS' });
@@ -214,7 +225,7 @@ export async function initAsteroidsTab() {
     }, 10000);   // catch returning mining fleets without a reload
   }
 
-  if (!restoredCachedResults) setStatusText(status, '');
+  if (!restoredCachedResults && !lsRunning) setStatusText(status, '');
 }
 
 // Ships stationed on the selected mining planet, shown above the fields table.
@@ -230,22 +241,27 @@ async function updateAfAvail() {
 // Galaxy map (all systems with coords + sector id), fetched once and cached.
 async function loadMap() {
   if (afMap) return afMap;
+  const generation = afGeneration;
   const res = await browser.runtime.sendMessage({ type: 'GET_GALAXY_MAP' });
-  if (res.error) throw new Error(res.error);
+  if (res.error) throw Object.assign(new Error(res.error), { status: res.status });
   const systems = res.systems || [];
   const byId = {};
   for (const s of systems) byId[s.id] = s;
-  afMap = { systems, byId };
-  return afMap;
+  const map = { systems, byId };
+  if (generation === afGeneration) afMap = map;
+  return map;
 }
 
 // Systems of a sector (with name/zone/planetCount/visibility), cached.
 async function sectorSystemsFor(sectorId) {
   if (sectorSystems[sectorId]) return sectorSystems[sectorId];
-  const res = await browser.runtime.sendMessage({ type: 'GET_SECTOR_SYSTEMS', sectorId });
-  if (res.error) throw new Error(res.error);
-  sectorSystems[sectorId] = res.systems || [];
-  return sectorSystems[sectorId];
+  const generation = afGeneration;
+  const res = await browser.runtime.sendMessage({ type: 'GET_SECTOR_SYSTEMS', sectorId,
+    priority: 'bulk', source: 'asteroid-search' });
+  if (res.error) throw Object.assign(new Error(res.error), { status: res.status });
+  const systems = res.systems || [];
+  if (generation === afGeneration) sectorSystems[sectorId] = systems;
+  return systems;
 }
 
 // Set the distance reference from the cached map (no fetch if map isn't loaded).
@@ -302,6 +318,7 @@ function drawTypeIcons() {
     afPage = 1;
     rememberSelection('af-type-filter', [...afTypeFilter]);
     renderAsteroids();
+    saveLiveSearchIfOn();
   });
 }
 function drawZoneToggles() {
@@ -309,11 +326,10 @@ function drawZoneToggles() {
     afPage = 1;
     rememberSelection('af-zone-filter', [...afZoneFilter]);
     renderAsteroids();
+    saveLiveSearchIfOn();
   });
 }
 // Live-search filter: persist config on toggle (if currently running).
-function drawLsTypeIcons() { drawTypeInto('ls-type', lsTypeFilter, drawLsTypeIcons, saveLiveSearchIfOn); }
-function drawLsZoneToggles() { drawZoneInto('ls-zone', lsZoneFilter, drawLsZoneToggles, saveLiveSearchIfOn); }
 
 // ── Live search (background, every 5 min) ──────────────────────────────────
 let lsRunning = false;
@@ -322,34 +338,94 @@ function readLsConfig() {
   const num = id => { const v = parseFloat(document.getElementById(id).value); return isNaN(v) ? null : v; };
   return {
     enabled: lsRunning,
-    planetId: Number(document.getElementById('ls-planet').value) || null,
-    multMin: num('ls-mult-min'),
-    qtyMin: num('ls-qty-min'),
-    leftMin: num('ls-left-min'),
-    near: Math.max(1, Math.min(500, parseInt(document.getElementById('ls-near').value, 10) || 25)),
-    types: [...lsTypeFilter],
-    zones: [...lsZoneFilter],
+    planetId: Number(document.getElementById('af-planet').value) || null,
+    multMin: num('af-mult-min'),
+    qtyMin: num('af-qty-min'),
+    leftMin: num('af-left-min'),
+    near: Math.max(1, Math.min(500, parseInt(document.getElementById('af-near').value, 10) || 10)),
+    types: [...afTypeFilter],
+    zones: [...afZoneFilter],
   };
 }
-function saveLiveSearch() { return browser.runtime.sendMessage({ type: 'SET_LIVE_SEARCH', config: readLsConfig() }); }
-function saveLiveSearchIfOn() { if (lsRunning) saveLiveSearch(); }
+let liveConfigVersion = 0;
+async function saveLiveSearch() {
+  const version = ++liveConfigVersion;
+  const generation = afGeneration;
+  const config = readLsConfig();
+  const saved = await rememberedSelections();
+  await browser.storage.local.set({ template_selections: { ...saved,
+    'af-planet': String(config.planetId), 'af-near': String(config.near),
+    'af-mult-min': config.multMin ?? '', 'af-qty-min': config.qtyMin ?? '', 'af-left-min': config.leftMin ?? '',
+    'af-type-filter': config.types, 'af-zone-filter': config.zones,
+  } });
+  if (version !== liveConfigVersion || generation !== afGeneration) return;
+  const response = await browser.runtime.sendMessage({ type: 'SET_LIVE_SEARCH', config });
+  if (!response || response.error) throw new Error(response?.error || 'No Auto Scan response.');
+}
+function saveLiveSearchIfOn() {
+  if (lsRunning) void saveLiveSearch().catch(showLiveError);
+  else {
+    liveConfigVersion++;
+    void browser.storage.local.set({ live_search: readLsConfig() }).catch(showLiveError);
+  }
+}
+function showLiveError(error) {
+  console.error('[NexusOverseer] Live search failed:', error);
+  setStatusText(document.getElementById('ls-status'), `Error: ${error.message}`);
+}
+let liveResultRead = 0;
+async function loadLiveResults() {
+  const read = ++liveResultRead;
+  const generation = afGeneration;
+  const { asteroid_scan_results: snapshot } = await browser.storage.local.get(ASTEROID_RESULTS_CACHE_KEY);
+  if (read !== liveResultRead || generation !== afGeneration || !lsRunning || afRunning || !snapshot?.config ||
+      !sameAsteroidSearch(snapshot.config, readLsConfig())) return;
+  afFields = snapshot.fields;
+  afRefMS = snapshot.referenceSystem;
+  if (Array.isArray(snapshot.missions) && (snapshot.missionsAt ?? Date.now()) >= afMissionsAt) {
+    afMissions = snapshot.missions;
+    afMissionsAt = snapshot.missionsAt ?? Date.now();
+    afMiningFieldIds = new Set(afMissions.filter(m => m.missionType === 'mine' && m.targetFieldId != null).map(m => m.targetFieldId));
+  }
+  renderAsteroids();
+  setStatusText(document.getElementById('af-progress'), snapshot.updating ? 'Updating…'
+    : snapshot.incomplete ? 'Partial results' : '');
+}
 
 let lsStatusData = null;
 let lsStatusTimer = null;
 
+function scanCounts(status, completed = false) {
+  const target = status.target;
+  const progress = status.targetProgress;
+  const targetText = Number.isFinite(target) && Number.isFinite(progress)
+    ? `Target ${progress}/${target}` +
+      (completed && progress < target ? ' (not reached)' : '')
+    : 'Target —';
+  const fields = status.matchingFields == null
+    ? `Listed ${status.found || 0}`
+    : `Fields ${status.matchingFields}` +
+      (status.missionExceptions ? ` + ${status.missionExceptions} mission${status.missionExceptions === 1 ? '' : 's'}` : '');
+  return `${targetText} · Checked ${status.scanned || 0} · ${fields}`;
+}
+
 async function renderLsStatus() {
   const status = document.getElementById('ls-status');
   if (!status) return;
+  status.title = 'Target counts systems with selected resource types, or nearby systems in selected zones when no type is selected. Checked counts inspected systems. Fields counts fields matching all filters; own mission exceptions are separate. Auto Scan runs every 5 minutes and reuses field data for up to 15 minutes.';
+  delete status.dataset.apiPath;
+  document.getElementById('ls-api-wait').textContent = '';
   if (!lsRunning) { setStatusText(status, ''); return; }
   const s = lsStatusData;
-  const time = t => new Date(t).toLocaleTimeString();
-  if (s && s.state === 'scanning' && Date.now() - s.at < 90000) {
-    const prog = s.limit ? ` ${s.scanned}/${s.limit} systems` : '';
-    setStatusText(status, `🔍 ${s.phase || 'Scanning…'}${prog}${s.matchingSystems ? `, ${s.matchingSystems} with matching types` : ''}, ${s.found || 0} matches so far`);
+  const time = t => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (s && s.state === 'scanning') {
+    if (s.apiPath) status.dataset.apiPath = s.apiPath;
+    setStatusText(status, `🔍 ${s.phase || 'Scanning…'}${s.target != null ? ` ${scanCounts(s)}` : ''}`);
     return;
   }
   if (s && s.state === 'error') {
-    setStatusText(status, `⚠ Last scan failed at ${time(s.at)}: ${s.error}`, 'warning');
+    setStatusText(status, `⚠ ${time(s.at)} · ${s.error}` +
+      (s.target != null ? ` · ${scanCounts(s, true)}` : ''), 'warning');
     return;
   }
   let next = '';
@@ -357,20 +433,19 @@ async function renderLsStatus() {
     const alarm = await browser.alarms.get('nexus-livesearch');
     if (alarm) {
       const mins = Math.max(0, Math.ceil((alarm.scheduledTime - Date.now()) / 60000));
-      next = ` Next scan in ~${mins} min.`;
+      next = ` · Next ~${mins}m`;
     }
   } catch { /* alarms unavailable */ }
-  const noType = lsTypeFilter.size ? '' : ' ⚠ No resource type selected — every field type will match.';
   if (s && s.state === 'idle') {
-    setStatusText(status, `Last scan ${time(s.at)}: ${s.scanned} systems, ${s.found} matches${s.fresh ? ` (${s.fresh} new)` : ''}.${next}${noType}`);
+    setStatusText(status, `${time(s.at)} · ${scanCounts(s, true)}${next}`);
   } else {
-    setStatusText(status, `Waiting for first scan…${next}${noType}`);
+    setStatusText(status, `Waiting…${next}`);
   }
 }
 
 function setLsButton() {
   const btn = document.getElementById('ls-search');
-  btn.textContent = lsRunning ? 'Stop Live Search' : 'Live Search';
+  btn.textContent = lsRunning ? 'Stop Auto Scan' : 'Auto Scan';
   btn.classList.toggle('is-running', lsRunning);
   renderLsStatus();
 }
@@ -385,170 +460,237 @@ async function initLsStatus() {
   if (!lsStatusTimer) lsStatusTimer = setInterval(renderLsStatus, 15000);
 }
 async function toggleLiveSearch() {
-  if (!lsRunning && !document.getElementById('ls-planet').value) return;   // need a planet
+  if (!lsRunning && !document.getElementById('af-planet').value) return;
+  if (afRunning) { afStopRequested = true; afGeneration++; afRunning = false; }
   lsRunning = !lsRunning;
   setLsButton();
-  await saveLiveSearch();
+  document.getElementById('af-scan').textContent = 'Scan';
+  document.getElementById('af-scan').disabled = false;
+  try { await saveLiveSearch(); }
+  catch (error) { lsRunning = false; setLsButton(); showLiveError(error); }
 }
 
 // Restore the live-search controls from the persisted config.
-async function loadLiveSearch() {
-  const { live_search: cfg } = await browser.storage.local.get('live_search');
+async function loadLiveSearch(saved = {}, config) {
+  const cfg = config ?? (await browser.storage.local.get('live_search')).live_search;
   if (cfg) {
-    if (cfg.planetId != null) document.getElementById('ls-planet').value = cfg.planetId;
-    document.getElementById('ls-mult-min').value = cfg.multMin ?? '';
-    document.getElementById('ls-qty-min').value = cfg.qtyMin ?? '';
-    document.getElementById('ls-left-min').value = cfg.leftMin ?? '';
-    document.getElementById('ls-near').value = cfg.near ?? 25;
-    lsTypeFilter.clear(); (cfg.types || []).forEach(t => lsTypeFilter.add(t));
-    lsZoneFilter.clear(); (cfg.zones || []).forEach(z => lsZoneFilter.add(z));
+    if (cfg.planetId != null && (cfg.enabled || !saved['af-planet'])) document.getElementById('af-planet').value = String(cfg.planetId);
+    for (const [id, key] of [['af-mult-min', 'multMin'], ['af-qty-min', 'qtyMin'], ['af-left-min', 'leftMin'], ['af-near', 'near']]) {
+      if (cfg.enabled || saved[id] == null) document.getElementById(id).value = String(cfg[key] ?? (key === 'near' ? 10 : ''));
+    }
+    if (cfg.enabled || !Array.isArray(saved['af-type-filter'])) {
+      afTypeFilter.clear(); (cfg.types || []).forEach(t => afTypeFilter.add(t));
+    }
+    if (cfg.enabled || !Array.isArray(saved['af-zone-filter'])) {
+      afZoneFilter.clear(); (cfg.zones || []).forEach(z => afZoneFilter.add(z));
+    }
     lsRunning = !!cfg.enabled;
   }
-  drawLsTypeIcons();
-  drawLsZoneToggles();
+  drawTypeIcons();
+  drawZoneToggles();
   setLsButton();
 }
 
 async function scan() {
   const btn = document.getElementById('af-scan');
-  if (afRunning) { afRunning = false; return; }
+  if (afRunning) {
+    afStopRequested = true;
+    btn.disabled = true;
+    return;
+  }
+  if (lsRunning) {
+    try { await saveLiveSearch(); } catch (error) { showLiveError(error); }
+    return;
+  }
 
   const status = document.getElementById('af-progress');
   const planetId = Number(document.getElementById('af-planet').value);
   const p = afPlanets.find(x => x.id === planetId);
   if (!p) return;
-  const count = Math.max(1, Math.min(500, parseInt(document.getElementById('af-near').value, 10) || 25));
-
-  setStatusText(status, 'Loading galaxy map…');
-  let map;
-  try { map = await loadMap(); } catch (e) { setStatusText(status, `Error: ${e.message}`); return; }
-  const src = map.byId[p.systemId];
-  if (!src) { setStatusText(status, 'Source system not on the map.'); return; }
-  afRefMS = { x: src.x, y: src.y };
-
-  // The N nearest explored systems (asteroid fields need at least partial vis).
-  // A selected zone also narrows the scan targets, rather than merely hiding
-  // fields from the nearest systems after the scan completes.
-  const candidates = map.systems
-    .filter(s => s.id !== p.systemId && (s.visibility === 'full' || s.visibility === 'partial'))
-    .map(s => ({ s, d: Math.hypot(s.x - src.x, s.y - src.y) }))
-    .sort((a, b) => a.d - b.d)
-    .map(o => o.s);
-  if (!candidates.length) { setStatusText(status, 'No explored systems nearby.'); return; }
-
-  let cache;
-  try { cache = await loadGalaxyScans(); }
-  catch (error) { setStatusText(status, `Error: ${error.message}`); return; }
-
+  const count = Math.max(1, Math.min(500, parseInt(document.getElementById('af-near').value, 10) || 10));
+  const generation = ++afGeneration;
   afRunning = true;
+  afStopRequested = false;
+  btn.disabled = false;
   btn.textContent = 'Stop';
   const targetZones = new Set(afZoneFilter);
   const targetTypes = new Set(afTypeFilter);
+  const config = readLsConfig();
+  const previous = afFields;
+  const foundFields = [];
+  const observations = new Map();
+  const reconcile = (pending = true) => {
+    afFields = retainMiningFields(foundFields, previous, afMiningFieldIds, observations, pending);
+    renderAsteroids();
+  };
+  const observe = (sys, meta, data) => {
+    const at = data._galaxyCache?.times?.asteroidFields ?? Date.now();
+    const rows = (data.asteroidFields || []).map(f => asteroidRow(f, sys, meta, at));
+    observations.set(sys.id, { fields: rows, at });
+    return rows;
+  };
   const systemLimit = targetTypes.size ? 500 : count;
-  const targets = [];
-  let errors = 0;
-  const targetDescription = targetZones.size
-    ? `${[...targetZones].join(', ')} zone`
-    : 'all zones';
-  setStatusText(status, targetTypes.size
-    ? `Finding up to ${systemLimit} systems in ${targetDescription} for ${[...targetTypes].join(', ')} fields…`
-    : `Finding ${count} nearest systems in ${targetDescription}…`);
-  for (const sys of candidates) {
-    if (!afRunning || (!targetTypes.size && targets.length >= count)) break;
-    let meta;
-    try {
-      meta = (await sectorSystemsFor(sys.sectorId)).find(s => s.id === sys.id);
-    } catch {
-      errors++;
-      continue;
-    }
-    if (!meta || (targetZones.size && !targetZones.has(meta.securityZone))) continue;
-    targets.push({ sys, meta });
-  }
-  if (!afRunning) {
-    btn.textContent = 'Scan';
-    return;
-  }
-  if (!targets.length) {
-    afRunning = false;
-    btn.textContent = 'Scan';
-    setStatusText(status, targetZones.size
-      ? `No explored systems found in ${[...targetZones].join(', ')} zone.`
-      : 'No explored systems nearby.');
-    return;
-  }
-
-  afFields = [];
-  afPage = 1;
-  let scanned = 0, matchingSystems = 0;
+  let errors = 0, scanned = 0, matchingSystems = 0, inZone = 0;
+  let stopReason = '';
+  const current = () => generation === afGeneration;
+  const reportIssue = (system, error) => {
+    const label = system ? `${system.name || `#${system.id}`} (#${system.id})` : 'Owner alliance details';
+    console.warn(`[NexusOverseer] Asteroid search issue for ${label}:`, error);
+    if (error.status === 429) stopReason = 'Stopped: API rate limit (429). Retry the search later; saved results are retained';
+    if (error.status === 401) stopReason = 'Stopped: Please log in to Nexus Legacy; saved results are retained';
+    errors++;
+    const item = document.createElement('li');
+    item.textContent = `${label}: ${error.status ? `HTTP ${error.status}: ` : ''}${error.message}`;
+    document.getElementById('af-search-issues-list').appendChild(item);
+    document.getElementById('af-search-issues-summary').textContent = `Search issues (${errors})`;
+    document.getElementById('af-search-issues').hidden = false;
+  };
+  const clearWait = () => {
+    delete status.dataset.apiPath;
+    document.getElementById('af-api-wait').textContent = '';
+  };
+  const progress = () => {
+    const visible = visibleAsteroidFields(afFields, config, afMiningFieldIds);
+    const exceptions = visible.filter(f => f.missing || f.unconfirmed || !asteroidMatches(f, config)).length;
+    return `Scanning… ${scanCounts({
+      target: count, targetProgress: targetTypes.size ? matchingSystems : inZone,
+      typeFiltered: !!targetTypes.size, scanned,
+      matchingFields: visible.length - exceptions, missionExceptions: exceptions,
+    })}.`;
+  };
+  document.getElementById('af-search-issues').hidden = true;
+  document.getElementById('af-search-issues-list').textContent = '';
+  clearWait();
   try {
-    for (const { sys, meta } of targets) {
-      if (!afRunning || (targetTypes.size && (matchingSystems >= count || scanned >= systemLimit))) break;
-      if (!meta || !meta.planetCount) continue;   // no bodies → no fields
+    setStatusText(status, 'Loading galaxy map…');
+    status.dataset.apiPath = '/api/galaxy/map';
+    const map = await loadMap();
+    if (!current()) return;
+    clearWait();
+    if (afStopRequested) { setStatusText(status, 'Stopped.'); return; }
+    const src = map.byId[p.systemId];
+    if (!src) throw new Error('Source system not on the map.');
+    const cache = await loadGalaxyScans();
+    if (!current()) return;
+    await refreshSlots();
+    if (!current()) return;
+    afRefMS = { x: src.x, y: src.y };
+    const candidates = map.systems
+      .filter(s => s.id !== p.systemId && (s.visibility === 'full' || s.visibility === 'partial'))
+      .map(s => ({ s, d: Math.hypot(s.x - src.x, s.y - src.y) }))
+      .sort((a, b) => a.d - b.d)
+      .map(o => o.s);
+    reconcile();
+    afPage = 1;
+    renderAsteroids();
+    const saveResults = incomplete => browser.storage.local.set({
+      [ASTEROID_RESULTS_CACHE_KEY]: {
+        at: Date.now(), planetId, referenceSystem: { x: src.x, y: src.y },
+        fields: [...afFields], near: count,
+        zones: [...targetZones].sort(), types: [...targetTypes].sort(), incomplete, config,
+      },
+    });
+    for (const sys of candidates) {
+      if (afStopRequested || (targetTypes.size
+        ? matchingSystems >= count || scanned >= systemLimit : inZone >= count)) break;
+      let meta;
       let data;
       try {
+        setStatusText(status, progress());
+        status.dataset.apiPath = `/api/galaxy/sectors/${sys.sectorId}/systems`;
+        meta = (await sectorSystemsFor(sys.sectorId)).find(s => s.id === sys.id);
+        if (!current()) return;
+        if (afStopRequested) break;
+        if (!meta) throw new Error('System missing from sector response.');
+        if (targetZones.size && !targetZones.has(meta.securityZone)) continue;
+        inZone++;
+        if (!meta.planetCount) continue;
+        status.dataset.apiPath = `/api/galaxy/systems/${sys.id}/planets`;
+        scanned++;
         data = await getSystemPlanets(sys.id, cache, { purpose: 'dynamic', maxAge: ASTEROID_CACHE_TTL, source: 'asteroid-search' });
-      } catch { errors++; scanned++; continue; }
-      scanned++;
+      } catch (error) {
+        if (!current()) return;
+        reportIssue(sys, error);
+        if (stopReason || afStopRequested) break;
+        continue;
+      } finally {
+        if (current()) clearWait();
+      }
+      if (!current()) return;
       const fields = data.asteroidFields || [];
+      const rows = observe(sys, meta, data);
       if (targetTypes.size && !fields.some(f => targetTypes.has(f.fieldType))) {
-        if (scanned % 10 === 0) {
-          setStatusText(status, `Scanning… ${scanned}/${systemLimit} systems checked, ${matchingSystems}/${count} contain requested fields.`);
-          renderAsteroids();
-        }
+        reconcile();
+        setStatusText(status, progress());
         if (scanned % 25 === 0) await new Promise(r => setTimeout(r, 0));
+        if (!current()) return;
         continue;
       }
       matchingSystems++;
-      for (const f of fields) {
-        afFields.push({
-          fieldId: f.id,
-          name: f.name || `#${f.id}`,
-          system: meta.name || `#${sys.id}`,
-          systemId: sys.id,
-          type: f.fieldType || '—',
-          mult: f.richness ?? null,
-          remaining: f.remainingResources ?? null,
-          total: f.totalResources ?? null,
-          zone: meta.securityZone || '—',
-          sx: sys.x, sy: sys.y,
-          minerPresent: f.controllerName || null,
-          ownerName: (f.outpostShieldMaxHp ?? 0) > 0 ? (f.controllerName || null) : null,
-        });
-      }
-      if (scanned % 10 === 0) {
-        setStatusText(status, targetTypes.size
-          ? `Scanning… ${scanned}/${systemLimit} systems checked, ${matchingSystems}/${count} contain requested fields.`
-          : `Scanning… ${scanned}/${count} systems, ${afFields.length} fields.`);
-        renderAsteroids();
-      }
+      foundFields.push(...rows);
+      reconcile();
+      setStatusText(status, progress());
+      renderAsteroids();
+      await saveResults(true);
+      if (!current()) return;
       if (scanned % 25 === 0) await new Promise(r => setTimeout(r, 0));
+      if (!current()) return;
+    }
+    if (!stopReason && !afStopRequested) {
+      for (const field of previous) {
+        if (!afMiningFieldIds.has(field.fieldId) || observations.has(field.systemId)) continue;
+        try {
+          status.dataset.apiPath = `/api/galaxy/systems/${field.systemId}/planets`;
+          const data = await getSystemPlanets(field.systemId, cache,
+            { purpose: 'dynamic', maxAge: ASTEROID_CACHE_TTL, source: 'asteroid-search' });
+          if (!current()) return;
+          observe({ id: field.systemId, x: field.sx, y: field.sy },
+            { name: field.system, securityZone: field.zone }, data);
+          reconcile();
+        } catch (error) {
+          if (!current()) return;
+          reportIssue({ id: field.systemId, name: field.system }, error);
+          if (stopReason) break;
+        } finally {
+          if (current()) clearWait();
+        }
+        if (afStopRequested) break;
+      }
+    }
+    reconcile(false);
+    await saveResults(!!stopReason || afStopRequested || errors > 0);
+    if (!current()) return;
+    const matchingFields = renderAsteroids();
+    const visible = visibleAsteroidFields(afFields, config, afMiningFieldIds);
+    const exceptions = visible.filter(f => f.missing || f.unconfirmed || !asteroidMatches(f, config)).length;
+    const scanSummary = scanCounts({
+      target: count, targetProgress: targetTypes.size ? matchingSystems : inZone,
+      typeFiltered: !!targetTypes.size, scanned,
+      matchingFields: matchingFields - exceptions, missionExceptions: exceptions,
+    }, true);
+    setStatusText(status, `${stopReason || (afStopRequested ? 'Stopped' : errors ? 'Incomplete' : 'Done')}: ` +
+      scanSummary +
+      (!inZone ? ' · no explored systems for these filters' : '') +
+      (errors ? ` · ${errors} systems failed (see Search issues)` : '') + '.');
+    const owners = afFields.filter(f => f.ownerName).map(f => f.ownerName);
+    if (!stopReason && !afStopRequested && owners.length) {
+      void resolveAllianceTags(owners, generation)
+        .then(() => { if (current()) renderAsteroids(); })
+        .catch(error => { if (current()) reportIssue(null, error); });
+    }
+  } catch (error) {
+    if (current()) {
+      console.warn('[NexusOverseer] Asteroid search failed:', error);
+      setStatusText(status, `Error: ${error.message}`);
     }
   } finally {
-    afRunning = false;
-    btn.textContent = 'Scan';
+    if (current()) {
+      clearWait();
+      afRunning = false;
+      btn.textContent = 'Scan';
+      btn.disabled = false;
+    }
   }
-
-  await browser.storage.local.set({
-    [ASTEROID_RESULTS_CACHE_KEY]: {
-      at: Date.now(),
-      planetId,
-      referenceSystem: { x: src.x, y: src.y },
-      fields: afFields,
-      near: count,
-      zones: [...targetZones].sort(),
-      types: [...targetTypes].sort(),
-    },
-  });
-
-  await resolveAllianceTags(afFields.filter(f => f.ownerName).map(f => f.ownerName));
-
-  const matchingFields = renderAsteroids();
-  const scanSummary = targetTypes.size
-    ? `${matchingSystems} systems with requested fields after checking ${scanned}/${systemLimit} systems`
-    : `${scanned} systems`;
-  setStatusText(status, `Done: ${afFields.length} fields discovered in ${scanSummary}; ` +
-    `${matchingFields} match filters` + (errors ? ` · ${errors} skipped (errors)` : '') + '.');
 }
 
 function distance(f) {
@@ -665,53 +807,42 @@ async function sendMineMission(f) {
 // "used/max fleet slots" and in-flight mine missions — both come from the
 // missions endpoint. afMiningFieldIds drives the "already mining" row highlight.
 async function refreshSlots() {
+  const generation = afGeneration;
+  const requestedAt = Date.now();
   const mi = await browser.runtime.sendMessage({ type: 'GET_MISSIONS' });
+  if (generation !== afGeneration) return;
+  if (!mi || mi.error) {
+    console.warn('[NexusOverseer] Mining mission refresh failed:', mi?.error || 'No response');
+    setStatusText(document.getElementById('af-slots'), `Error: ${mi?.error || 'No mission response'}`);
+    return;
+  }
   if (mi.maxFleetSlots != null) {
     document.getElementById('af-slots').textContent = `${usedFleetSlots(mi.missions)}/${mi.maxFleetSlots} fleet slots`;
   }
   afMiningFieldIds = new Set(
     (mi.missions || []).filter(m => m.missionType === 'mine' && m.targetFieldId != null).map(m => m.targetFieldId));
   afMissions = mi.missions || [];
+  afMissionsAt = requestedAt;
+  afFields = afFields.filter(f => (!f.missing && !f.unconfirmed) || afMiningFieldIds.has(f.fieldId));
   renderAsteroids();
-}
-
-function applyMissionMarkers() {
-  const missionsByField = new Map();
-  for (const mission of afMissions) {
-    if (mission.missionType !== 'mine' || mission.targetFieldId == null) continue;
-    const missions = missionsByField.get(mission.targetFieldId) || [];
-    missions.push(mission);
-    missionsByField.set(mission.targetFieldId, missions);
-  }
-
-  for (const row of document.querySelectorAll('#af-results-tbody tr')) {
-    const missions = missionsByField.get(Number(row.dataset.field)) || [];
-    if (!missions.length) continue;
-    row.style.borderLeft = '3px solid #f0883e';
-    const systemCell = row.children[1];
-    if (!systemCell) continue;
-    const badge = document.createElement('span');
-    badge.className = 'af-mission-badge';
-    badge.style.cssText = 'display:inline-block;margin-left:5px;font-size:0.7rem;padding:1px 5px;border-radius:4px;background:#f0883e22;border:1px solid var(--orange);color:var(--orange);vertical-align:middle;';
-    badge.textContent = missions.length > 1 ? `⛏ ×${missions.length}` : '⛏';
-    badge.title = missions.map(mission => `Fleet: ${missionProgress(mission).label}`).join('\n');
-    systemCell.append(badge);
-  }
 }
 
 export function renderAsteroids() {
   const tbody = document.getElementById('af-results-tbody');
-  tbody.textContent = '';
+  const existing = new Map([...tbody.children].map(row => [Number(row.dataset.field), row]));
+  const rendered = [];
+  const setText = (node, text) => { if (node.textContent !== text) node.textContent = text; };
 
   document.querySelectorAll('#af-results-head th.sortable').forEach(th => {
-    const old = th.querySelector('.arrow');
-    if (old) old.remove();
+    let arrow = th.querySelector('.arrow');
     if (th.dataset.key === afSort.key) {
-      const arrow = document.createElement('span');
-      arrow.className = 'arrow';
-      arrow.textContent = afSort.dir === -1 ? '▼' : '▲';
-      th.appendChild(arrow);
-    }
+      if (!arrow) {
+        arrow = document.createElement('span');
+        arrow.className = 'arrow';
+        th.appendChild(arrow);
+      }
+      setText(arrow, afSort.dir === -1 ? '▼' : '▲');
+    } else if (arrow) arrow.remove();
   });
 
   let rows = afFields.map(f => {
@@ -723,18 +854,8 @@ export function renderAsteroids() {
       rec, recShips: rec ? rec.count : null,
     };
   });
-  if (afTypeFilter.size) rows = rows.filter(f => afTypeFilter.has(f.type));
-  if (afZoneFilter.size) rows = rows.filter(f => afZoneFilter.has(f.zone));
-
-  const num = (id, dflt) => {
-    const v = parseFloat(document.getElementById(id).value);
-    return isNaN(v) ? dflt : v;
-  };
-  const multMin = num('af-mult-min', -Infinity), qtyMin = num('af-qty-min', -Infinity);
-  const leftMin = num('af-left-min', -Infinity);
-  rows = rows.filter(f =>
-    (f.mult ?? -Infinity) >= multMin && (f.remaining ?? -Infinity) >= qtyMin
-    && (f.leftPct ?? -Infinity) >= leftMin);
+  const config = readLsConfig();
+  rows = visibleAsteroidFields(rows, config, afMiningFieldIds);
   const { key, dir } = afSort;
   rows.sort((a, b) => {
     const va = a[key], vb = b[key];
@@ -755,26 +876,60 @@ export function renderAsteroids() {
   const pageRows = rows.slice((afPage - 1) * AF_PER_PAGE, afPage * AF_PER_PAGE);
 
   for (const f of pageRows) {
-    const tr = document.createElement('tr');
+    let tr = existing.get(f.fieldId);
+    if (!tr) {
+      tr = document.createElement('tr');
+      for (let i = 0; i < 12; i++) tr.appendChild(document.createElement('td'));
+      const ship = document.createElement('span');
+      ship.textContent = '🚀';
+      ship.className = 'asteroids-fleet-ship';
+      tr.children[0].appendChild(ship);
+      const system = document.createElement('span');
+      const note = document.createElement('span');
+      note.className = 'af-mission-note';
+      const badge = document.createElement('span');
+      badge.className = 'af-mission-badge';
+      badge.style.cssText = 'display:inline-block;margin-left:5px;font-size:0.7rem;padding:1px 5px;border-radius:4px;background:#f0883e22;border:1px solid var(--orange);color:var(--orange);vertical-align:middle;';
+      tr.children[1].append(system, note, badge);
+      tr.children[2].appendChild(listBadge('', 'asteroids-type-badge'));
+      tr.children[3].appendChild(document.createElement('span'));
+      tr.children[6].appendChild(zoneBadge(f.zone));
+      const fieldId = document.createElement('button');
+      fieldId.type = 'button';
+      fieldId.className = 'asteroids-copy-id';
+      fieldId.textContent = String(f.fieldId);
+      fieldId.title = 'Copy field ID';
+      fieldId.onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(String(f.fieldId));
+          fieldId.title = 'Copied';
+          setStatusText(document.getElementById('af-progress'), `Copied ID ${f.fieldId}`);
+        } catch (error) {
+          console.warn('[NexusOverseer] Copying asteroid field ID failed:', error);
+          fieldId.title = 'Copy failed';
+          setStatusText(document.getElementById('af-progress'), `Copy failed: ${error.message}`);
+        }
+      };
+      tr.children[7].appendChild(fieldId);
+      const owner = document.createElement('span');
+      const alliance = allianceBadge('');
+      tr.children[8].append(owner, alliance);
+      tr.children[10].className = 'af-fuel';
+      tr.children[10].textContent = '…';
+    }
     tr.dataset.system = f.systemId;
     tr.dataset.field = f.fieldId;
-    if ((afMyUsername && f.minerPresent === afMyUsername) || afMiningFieldIds.has(f.fieldId)) {
-      tr.style.background = 'rgba(63,185,80,0.15)';   // already mining / claimed by us
-    }
-
-    const sendTd = document.createElement('td');
-    const ship = document.createElement('span');
-    ship.textContent = '🚀';
-    ship.title = 'Send mining fleet here';
-    ship.className = 'asteroids-fleet-ship';
-    ship.addEventListener('click', () => sendMineMission(f));
-    sendTd.appendChild(ship);
-    tr.appendChild(sendTd);
+    tr.dataset.unavailable = String(!!f.missing || !!f.unconfirmed);
+    tr.style.background = (afMyUsername && f.minerPresent === afMyUsername) || afMiningFieldIds.has(f.fieldId)
+      ? 'rgba(63,185,80,0.15)' : '';
+    const ship = tr.children[0].children[0];
+    ship.title = f.missing || f.unconfirmed ? 'Field is not confirmed; cannot send another fleet.' : 'Send mining fleet here';
+    ship.onclick = !f.missing && !f.unconfirmed ? () => sendMineMission(f) : null;
 
     const content = f.remaining == null ? '—'
       : `${fmt(f.remaining)} / ${fmt(f.total ?? 0)}`;
     const tag = f.ownerName ? allianceTagCache[f.ownerName] : null;
-    const owner = f.ownerName ? (tag ? `${f.ownerName} [${tag}]` : f.ownerName) : '—';
+    const owner = f.ownerName || '—';
     const cells = [
       f.system, String(f.type).replace(/_/g, ' '),
       f.mult == null ? '—' : `×${f.mult}`,
@@ -788,19 +943,52 @@ export function renderAsteroids() {
       f.rec ? `${f.rec.count}× ${f.rec.name}` : '—',
     ];
     cells.forEach((v, i) => {
-      const td = document.createElement('td');
-      td.textContent = v;
-      if (i === 1) td.style.color = TYPE_COLOR[f.type] || '#f1f6ff';
-      else if (i === 2 && f.mult != null) td.style.color = '#ffc070';
-      else if (i === 5) td.style.color = ZONE_COLORS[f.zone] || ZONE_COLORS.unknown;
-      else if (i === 9) td.className = 'af-fuel';
-      tr.appendChild(td);
+      const td = tr.children[i + 1];
+      if (i === 0) setText(td.children[0], v);
+      else if (i === 1) {
+        setText(td.children[0], v);
+        td.children[0].style.color = TYPE_COLOR[f.type] || 'var(--text-muted)';
+        td.children[0].style.borderColor = TYPE_COLOR[f.type] || 'var(--border-strong)';
+      }
+      else if (i === 2) {
+        setText(td.children[0], v);
+        td.children[0].className = f.mult == null ? '' : 'finder-badge asteroids-mult-badge';
+      }
+      else if (i === 5) {
+        zoneBadge(f.zone, td.children[0]);
+      }
+      else if (i === 6) setText(td.children[0], v);
+      else if (i === 7) {
+        setText(td.children[0], owner);
+        td.children[0].className = f.ownerName ? 'finder-badge' : '';
+        setText(td.children[1], tag ? `[${tag}]` : '');
+        td.children[1].hidden = !tag;
+      }
+      else if (i !== 9) setText(td, v);
     });
-    tbody.appendChild(tr);
+    const own = afMiningFieldIds.has(f.fieldId);
+    const note = own ? (f.missing ? 'Field no longer present - own mining mission still active'
+        : f.unconfirmed ? 'Field not rechecked - own mining mission still active'
+          : !asteroidMatches(f, config) ? 'Own mining mission - outside filters' : '') : '';
+    const label = tr.children[1].children[1];
+    setText(label, note ? ` · ${note}` : '');
+    label.hidden = !note;
+    const missions = afMissions.filter(m => m.missionType === 'mine' && m.targetFieldId === f.fieldId);
+    const badge = tr.children[1].children[2];
+    setText(badge, missions.length > 1 ? `⛏ ×${missions.length}` : '⛏');
+    badge.hidden = !missions.length;
+    badge.style.display = missions.length ? 'inline-block' : 'none';
+    badge.title = missions.map(m => `Fleet: ${missionProgress(m).label}`).join('\n');
+    tr.style.borderLeft = missions.length ? '3px solid #f0883e' : '';
+    tr.title = f.observedAt ? `Field data checked: ${new Date(f.observedAt).toLocaleString()}` : '';
+    rendered.push(tr);
   }
-  document.getElementById('af-count').textContent = `${rows.length} fields`;
+  reconcileAsteroidRows(tbody, rendered);
+  const systems = new Set(rows.map(row => row.systemId)).size;
+  const exceptions = rows.filter(row => row.missing || row.unconfirmed || !asteroidMatches(row, config)).length;
+  document.getElementById('af-count').textContent = `${rows.length} field${rows.length === 1 ? '' : 's'} in ${systems} system${systems === 1 ? '' : 's'}` +
+    (exceptions ? ` (${exceptions} own mission exception${exceptions === 1 ? '' : 's'})` : '');
   computeFuel();
-  applyMissionMarkers();
   return rows.length;
 }
 
@@ -817,18 +1005,35 @@ async function computeFuel() {
     .map(([shipDefId, quantity]) => ({ shipDefId: Number(shipDefId), quantity }))
     .filter(s => s.quantity > 0);
   if (!ships.length) {
-    cells().forEach(c => { c.textContent = '—'; c.title = tpl ? 'Template has no ships' : 'No template selected'; });
+    cells().forEach(c => {
+      if (c.textContent !== '—') c.textContent = '—';
+      c.style.color = '';
+      c.title = tpl ? 'Template has no ships' : 'No template selected';
+    });
     return;
   }
   for (const tr of document.querySelectorAll('#af-results-tbody tr')) {
     if (gen !== afFuelGen) return;
     const cell = tr.querySelector('.af-fuel');
+    if (tr.dataset.unavailable === 'true') {
+      if (cell) {
+        if (cell.textContent !== '—') cell.textContent = '—';
+        cell.style.color = '';
+        cell.title = 'Field is not confirmed';
+      }
+      continue;
+    }
     const sysId = Number(tr.dataset.system);
     if (!cell || !sysId) continue;
     const est = await fuelEstimate(planetId, sysId, ships, 'mine');
     if (gen !== afFuelGen) return;
-    if (est.error) { cell.textContent = '—'; cell.title = est.error; continue; }
-    cell.textContent = `${est.fuelCost}`;
+    if (est.error) {
+      if (cell.textContent !== '—') cell.textContent = '—';
+      cell.style.color = '';
+      cell.title = est.error;
+      continue;
+    }
+    if (cell.textContent !== `${est.fuelCost}`) cell.textContent = `${est.fuelCost}`;
     cell.style.color = est.inRange === false ? '#ff6b7a' : '';
     cell.title = est.inRange === false ? 'Out of range' : `distance ${est.distance.toFixed(1)} ly`;
   }

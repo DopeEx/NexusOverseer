@@ -1,6 +1,6 @@
 // Planet Finder tab: galaxy map, filters, scan loop.
 
-import { cssVar, setStatusText } from '../common.js';
+import { cssVar, setStatusText, listBadge, zoneBadge, allianceBadge } from '../common.js';
 import { loadGalaxyScans, getSystemPlanets } from '../galaxy-client.js';
 import { systemCacheFresh, readSavedCatalog } from '../galaxy-cache.js';
 import { buildGalaxyDirectory, DIRECTORY_RANGES, directoryOwner, directoryOwnership, hasKnownOwnership, matchesSearchMoon, moonsByPlanet, parseSectorRange, planetSlots, queryGalaxyDirectory, systemBodyRows } from '../galaxy-directory.js';
@@ -490,35 +490,19 @@ for (const [id, step] of [['prev', -1], ['next', 1]]) {
 }
 
 function typeBadge(value, group) {
-  const badge = document.createElement('span');
   const types = {
     yellow: 'gold', orange: 'orange', red_dwarf: 'red', blue_giant: 'blue', white_dwarf: 'neutral', neutron: 'purple',
   };
   const moonType = MOON_TYPES.includes(value);
   const color = group === 'systems' && Object.hasOwn(types, value) ? types[value] : 'neutral';
-  badge.className = `finder-badge ${group === 'moons' && moonType ? `finder-moon-${value}` : `finder-type-${color}`}`;
-  badge.textContent = value == null ? 'unknown' : String(value).replace(/_/g, ' ');
-  return badge;
+  return listBadge(value == null ? 'unknown' : String(value).replace(/_/g, ' '),
+    group === 'moons' && moonType ? `finder-moon-${value}` : `finder-type-${color}`);
 }
 
 function ownershipBadge(status, owner) {
   const badge = document.createElement('span');
   badge.className = `finder-badge finder-owner-${status}`;
   badge.textContent = status === 'free' ? 'Free' : status === 'colonized' ? `Colonized · ${owner}` : 'Unknown ownership';
-  return badge;
-}
-
-function allianceBadge(tag) {
-  const badge = document.createElement('span');
-  badge.className = 'finder-badge finder-alliance';
-  badge.textContent = `[${tag}]`;
-  return badge;
-}
-
-function zoneBadge(zone) {
-  const badge = document.createElement('span');
-  badge.className = `finder-badge finder-zone-${['sentinel', 'open', 'dead', 'rift'].includes(zone) ? zone : 'unknown'}`;
-  badge.textContent = zone || 'unknown';
   return badge;
 }
 
