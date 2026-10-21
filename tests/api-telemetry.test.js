@@ -102,14 +102,24 @@ test('a failed telemetry write is explicit and does not poison later writes', as
 test('diagnostic retention preserves separate scheduling and payload caps across writers', async () => {
   const server = 'telemetry-test';
   await clearDiagnosticLogs(server);
-  await writeDiagnosticLogs(server, Array.from({ length: 1005 }, (_, id) => ({
-    kind: 'scheduling', timestamp: id, data: { event: 'dispatch', source: 'galaxy-search', id },
+  await writeDiagnosticLogs(server, Array.from({ length: 5005 }, (_, id) => ({
+    kind: 'scheduling', timestamp: id, data: {
+      event: 'dispatch', source: 'galaxy-search', id, scope: 'system-details',
+      consumers: ['galaxy-search'], priority: 'bulk',
+      contributors: { 'galaxy-search': 180, 'native-game': 40, dashboard: 60, 'background-maintenance': 90 },
+      localGeneral: 370, localScope: 180, serverRemaining: 30, scopeServerRemaining: 0,
+      generalResetAt: 1792535950882, scopeResetAt: 1792535950882,
+    },
   })), 150, 10000000);
   await writeDiagnosticLogs(server, Array.from({ length: 155 }, (_, id) => ({
     kind: 'api', timestamp: id, data: { status: 200 },
   })), 150, 10000000);
   const entries = await readDiagnosticLogs(server);
-  assert.equal(entries.filter(entry => entry.kind === 'scheduling').length, 1000);
+  const scheduling = entries.filter(entry => entry.kind === 'scheduling');
+  assert.equal(scheduling.length, 5000);
+  assert.equal(scheduling[0].data.id, 5004);
+  assert.equal(scheduling.at(-1).data.id, 5);
+  assert.ok(new TextEncoder().encode(JSON.stringify(entries)).length < 10000000);
   assert.equal(entries.filter(entry => entry.kind === 'api').length, 150);
   await clearDiagnosticLogs(server, 'scheduling');
   assert.equal((await readDiagnosticLogs(server)).length, 150);

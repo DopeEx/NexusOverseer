@@ -286,6 +286,72 @@ test('dynamic freshness is independent of permanent planet data and empty fields
   assert.equal(systemCacheFresh(await readSystem('s0', 1), 'dynamic'), true);
 });
 
+test('actual API included.fields marks empty and populated asteroidFields as resolved and reusable', async () => {
+  for (const asteroidFields of [[], [{ id: 11748, fieldType: 'ore', richness: 3, remainingResources: 85000 }]]) {
+    let requests = 0;
+    const cache = service(async () => {
+      requests++;
+      return {
+        planets: [], moons: [], asteroidFields, visibility: 'full',
+        included: { planets: true, moons: true, fields: true },
+      };
+    });
+    const systemId = asteroidFields.length ? 2 : 1;
+    const data = await cache.system('s0', systemId, { purpose: 'dynamic' });
+    assert.deepEqual(data.asteroidFields, asteroidFields);
+    assert.equal(systemCacheFresh(await readSystem('s0', systemId), 'dynamic'), true);
+    await cache.system('s0', systemId, { purpose: 'dynamic' });
+    assert.equal(requests, 1, 'resolved field observations must avoid repeat traffic');
+  }
+});
+
+test('passively observed fields use the API inclusion key while explicit exclusions preserve old data and time', async () => {
+  const at = Date.now() - DYNAMIC_TTL - 1;
+  await saveSystem('s0', 1, { asteroidFields: contents().asteroidFields, visibility: 'full', included: { fields: true } }, at);
+  const original = await readSystem('s0', 1);
+  assert.deepEqual(original.data.asteroidFields, contents().asteroidFields);
+  assert.equal(original.data._galaxyCache.times.asteroidFields, at);
+  await saveSystem('s0', 1, {
+    planets: [], moons: [], asteroidFields: [], visibility: 'full',
+    included: { planets: true, moons: true, fields: false, asteroidFields: true },
+  });
+  const excluded = await readSystem('s0', 1);
+  assert.deepEqual(excluded.data.asteroidFields, contents().asteroidFields);
+  assert.equal(excluded.data._galaxyCache.times.asteroidFields, at);
+  const cache = service(async () => ({
+    planets: [], moons: [], asteroidFields: [], visibility: 'full',
+    included: { planets: true, moons: true, fields: false },
+  }));
+  await assert.rejects(cache.system('s0', 1, { purpose: 'dynamic' }),
+    { code: 'GALAXY_DATA_UNAVAILABLE', groups: ['asteroidFields'] });
+  await saveSystem('s0', 1, { asteroidFields: [], included: { fields: true } });
+  assert.deepEqual((await readSystem('s0', 1)).data.asteroidFields, []);
+  assert.equal(systemCacheFresh(await readSystem('s0', 1), 'dynamic'), true);
+});
+
+test('field inclusion supports array and legacy keys without treating missing or fogged fields as empty', async () => {
+  const cases = [
+    { included: ['fields'], expected: true },
+    { included: ['asteroidFields'], expected: true },
+    { included: { asteroidFields: true }, expected: true },
+    { included: ['planets', 'moons'], expected: false },
+    { included: { planets: true, moons: true }, expected: false },
+    { included: { fields: false }, expected: false },
+    { included: { fields: true }, visibility: 'fog', expected: false },
+    { included: { fields: true }, asteroidFields: undefined, expected: false },
+  ];
+  for (const [index, { expected, ...response }] of cases.entries()) {
+    const cache = service(async () => ({ planets: [], asteroidFields: [], visibility: 'full', ...response }));
+    if (expected) {
+      assert.deepEqual((await cache.system('s0', index + 1, { purpose: 'dynamic' })).asteroidFields, []);
+    } else {
+      await assert.rejects(cache.system('s0', index + 1, { purpose: 'dynamic' }),
+        { code: 'GALAXY_DATA_UNAVAILABLE' });
+      assert.equal(systemCacheFresh(await readSystem('s0', index + 1), 'dynamic'), false);
+    }
+  }
+});
+
 test('omitted and unresolved groups never erase previously known bodies or refresh their clocks', async () => {
   const at = Date.now() - 50000;
   await saveSystem('s0', 1, contents(123), at);

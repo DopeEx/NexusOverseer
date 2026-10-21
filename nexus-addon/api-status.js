@@ -49,8 +49,8 @@ export function initApiStatus() {
   if (!panel) return;
   const summary = document.getElementById('api-status-summary');
   const details = document.getElementById('api-status-details');
-  const progress = document.getElementById('f-progress');
-  const searchWait = document.getElementById('f-api-wait');
+  const searches = [['f-progress', 'f-api-wait'], ['af-progress', 'af-api-wait'], ['ls-status', 'ls-api-wait']]
+    .map(([progress, wait]) => ({ progress: document.getElementById(progress), wait: document.getElementById(wait) }));
   const selector = document.getElementById('server-select');
   const compactNavigation = window.matchMedia('(max-width: 900px)');
   const position = () => {
@@ -68,15 +68,20 @@ export function initApiStatus() {
     if (stopped || busy || document.hidden) return;
     busy = true;
     const selected = selector.value;
-    const path = progress?.dataset.apiPath;
+    const snapshots = searches.map(search => ({ ...search, path: search.progress?.dataset.apiPath }));
+    const paths = [...new Set(snapshots.map(search => search.path).filter(Boolean))];
+    if (!paths.length) paths.push(undefined);
     try {
-      const status = await browser.runtime.sendMessage({ type: 'GET_API_STATUS', ...(path ? { path } : {}) });
+      const statuses = await Promise.all(paths.map(async path => {
+        const status = await browser.runtime.sendMessage({ type: 'GET_API_STATUS', ...(path ? { path } : {}) });
+        if (!status || status.error) throw new Error(status?.error || 'No scheduler status received.');
+        if (new URL(status.origin).hostname !== `${selected}.nexuslegacy.space`) {
+          throw new Error('Scheduler status belongs to a different universe; retrying.');
+        }
+        return status;
+      }));
       if (stopped || selector.value !== selected) return;
-      if (!status || status.error) throw new Error(status?.error || 'No scheduler status received.');
-      if (new URL(status.origin).hostname !== `${selected}.nexuslegacy.space`) {
-        throw new Error('Scheduler status belongs to a different universe; retrying.');
-      }
-      const view = statusView(status);
+      const view = statusView(statuses[0]);
       panel.dataset.state = view.state;
       summary.textContent = view.summary;
       details.textContent = '';
@@ -85,8 +90,9 @@ export function initApiStatus() {
         paragraph.textContent = text;
         details.appendChild(paragraph);
       }
-      if (searchWait) {
-        const wait = status.request;
+      for (const { progress, wait: searchWait, path } of snapshots) {
+        if (!searchWait) continue;
+        const wait = statuses[paths.indexOf(path)]?.request;
         const shortPause = ['budget', 'server', 'pacing'].includes(wait?.reason) &&
           wait.until - Date.now() <= 1000;
         const text = path && progress.dataset.apiPath === path && !shortPause ? waitText(wait) : '';
@@ -98,7 +104,9 @@ export function initApiStatus() {
       panel.dataset.state = 'error';
       summary.textContent = 'API · status unavailable';
       details.textContent = error.message;
-      if (searchWait) searchWait.textContent = path && progress.dataset.apiPath === path ? ' · API status unavailable' : '';
+      for (const { progress, wait, path } of snapshots) {
+        if (wait) wait.textContent = path && progress.dataset.apiPath === path ? ' · API status unavailable' : '';
+      }
       if (lastError !== error.message) console.error('[NexusOverseer] API status display failed:', error);
       lastError = error.message;
     } finally {
@@ -114,7 +122,9 @@ export function initApiStatus() {
     summary.textContent = 'API · loading…';
     details.textContent = '';
     panel.dataset.state = 'loading';
-    if (searchWait) searchWait.textContent = '';
+    for (const { wait } of searches) {
+      if (wait) wait.textContent = '';
+    }
     void refresh();
   };
   selector.addEventListener('change', onChange);

@@ -70,7 +70,7 @@ export function writeDiagnosticLogs(serverKey, entries, streamLimit, byteLimit) 
       let bytes = 0;
       for (const row of rows) {
         counts[row.kind] = (counts[row.kind] || 0) + 1;
-        if (counts[row.kind] > (row.kind === 'scheduling' ? 1000 : streamLimit) || bytes + row.bytes > byteLimit) store.delete(row.id);
+        if (counts[row.kind] > (row.kind === 'scheduling' ? 5000 : streamLimit) || bytes + row.bytes > byteLimit) store.delete(row.id);
         else bytes += row.bytes;
       }
     };

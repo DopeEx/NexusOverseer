@@ -153,9 +153,23 @@ test('dashboard polls only scheduler metadata, clears stopped search hints, and 
     }
   }
   globalThis.browser.runtime.sendMessage = sendMessage;
+  element('af-progress').dataset.apiPath = '/api/galaxy/systems/3/planets';
+  element('ls-status').dataset.apiPath = '/api/galaxy/systems/3/planets';
+  await scheduled();
+  assert.match(element('af-api-wait').textContent, /^ · System details: API server pause/);
+  assert.equal(element('af-api-wait').textContent, element('ls-api-wait').textContent,
+    'manual and live asteroid scans use the same hints as Galaxy Scout');
+  assert.equal(messages.length, 3, 'matching inline paths share one metadata poll');
+  assert.ok(messages.every(message => message.type === 'GET_API_STATUS'));
+  delete element('af-progress').dataset.apiPath;
+  delete element('ls-status').dataset.apiPath;
+  await scheduled();
+  assert.equal(element('af-api-wait').textContent, '');
+  assert.equal(element('ls-api-wait').textContent, '');
+  const beforeHidden = messages.length;
   document.hidden = true;
   await scheduled();
-  assert.equal(messages.length, 1, 'hidden dashboards must not poll');
+  assert.equal(messages.length, beforeHidden, 'hidden dashboards must not poll');
   document.hidden = false;
   delete element('f-progress').dataset.apiPath;
   element('server-select').listeners.change();

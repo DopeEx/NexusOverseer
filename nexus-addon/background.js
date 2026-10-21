@@ -12,6 +12,7 @@ import { createGalaxyCache, saveSystem, saveCatalog, saveGalaxyDelta, readGalaxy
 import { createGalaxySharing } from './galaxy-sharing.js';
 import { createApiScheduler, retryDelay } from './api-scheduler.js';
 import { createTrafficRecorder, trafficSource } from './api-telemetry.js';
+import { asteroidRow, asteroidMatches, retainMiningFields, visibleAsteroidFields, sameAsteroidSearch } from './galaxy-client.js';
 
 const recordTraffic = createTrafficRecorder({ enabled: () => getSetting('developer.apiWaitRecording') === true });
 const apiScheduler = createApiScheduler({ storage: browser.storage.session, record: recordTraffic });
@@ -261,75 +262,87 @@ const LS_INTERVAL_MIN = 5;
 const LS_ABORT_AFTER_ERRORS = 6;       // bail the scan after this many consecutive API failures
 
 async function setLiveSearch(config) {
-  await browser.storage.local.set({ live_search: config });
+  const serverKey = await galaxyServerKey();
+  const storage = globalThis.nexusStorage?.forServer?.(serverKey) || browser.storage.local;
+  const { live_search: previous } = await storage.get('live_search');
+  const changed = !previous || !config || previous.enabled !== config.enabled || !sameAsteroidSearch(previous, config);
+  if (changed) liveSearchControl(serverKey).version++;
+  await storage.set({ live_search: config });
   if (config && config.enabled) {
     browser.alarms.create(LS_ALARM, { periodInMinutes: LS_INTERVAL_MIN });
-    // Config (filter/planet) may have changed — reset seen so matches re-notify.
-    await browser.storage.local.set({ live_search_seen: [] });
-    liveSearchScan();   // run one immediately so the user isn't waiting 5 min
+    if (changed) await storage.set({ live_search_seen: [] });
+    void liveSearchScan(serverKey).catch(error => console.error('[NexusOverseer] Live search failed:', error));
   } else {
     browser.alarms.clear(LS_ALARM);
+    await storage.set({ live_search_status: { state: 'stopped', at: Date.now() } });
   }
   return { ok: true };
 }
 
 async function stopLiveSearch() {
   const { live_search } = await browser.storage.local.get('live_search');
-  await browser.storage.local.set({ live_search: { ...(live_search || {}), enabled: false } });
-  browser.alarms.clear(LS_ALARM);
-  return { ok: true };
+  return setLiveSearch({ ...(live_search || {}), enabled: false });
 }
 
 // Sector systems with a cross-scan TTL cache (names/zones change rarely).
-async function lsSectorSystems(sectorId) {
-  return (await galaxyCatalog(`/api/galaxy/sectors/${sectorId}/systems`)).systems || [];
+async function lsSectorSystems(serverKey, sectorId) {
+  return (await galaxyCache.catalog(serverKey, `/api/galaxy/sectors/${sectorId}/systems`)).systems || [];
 }
 
-function fieldMatches(f, cfg) {
-  const leftPct = f.totalResources ? (f.remainingResources / f.totalResources) * 100 : null;
-  if (cfg.types?.length && !cfg.types.includes(f.fieldType)) return false;
-  if (cfg.zones?.length && !cfg.zones.includes(f.zone)) return false;
-  if (cfg.multMin != null && !((f.richness ?? -Infinity) >= cfg.multMin)) return false;
-  if (cfg.qtyMin != null && !((f.remainingResources ?? -Infinity) >= cfg.qtyMin)) return false;
-  if (cfg.leftMin != null && !((leftPct ?? -Infinity) >= cfg.leftMin)) return false;
-  return true;
+function fieldMatches(field, config) {
+  return asteroidMatches({
+    type: field.fieldType, zone: field.zone, mult: field.richness,
+    remaining: field.remainingResources, total: field.totalResources,
+  }, config);
 }
 
-let lsScanning = false;
-let lsRerun = false;
-
-// Progress/result of the latest scan, shown in the Asteroids tab.
-function setLsStatus(status) {
-  return browser.storage.local.set({ live_search_status: { ...status, at: Date.now() } }).catch(() => {});
+const liveSearchControls = new Map();
+function liveSearchControl(serverKey) {
+  if (!liveSearchControls.has(serverKey)) liveSearchControls.set(serverKey, { version: 0, running: false, rerun: false });
+  return liveSearchControls.get(serverKey);
 }
 
-async function liveSearchScan() {
-  if (lsScanning) { lsRerun = true; return; }   // config changed or alarm overlapped: rerun afterwards
-  lsScanning = true;
+async function liveSearchScan(serverKey) {
+  serverKey ||= (await globalThis.nexusStorage?.getSelectedServer?.())?.key || await galaxyServerKey();
+  const control = liveSearchControl(serverKey);
+  if (control.running) { control.rerun = true; return; }
+  control.running = true;
   try {
     do {
-      lsRerun = false;
-      await runLiveSearchScan();
-    } while (lsRerun);
+      control.rerun = false;
+      await runLiveSearchScan(serverKey, control, control.version);
+    } while (control.rerun);
   } finally {
-    lsScanning = false;
+    control.running = false;
   }
 }
 
-async function runLiveSearchScan() {
-  const { live_search: cfg } = await browser.storage.local.get('live_search');
+async function runLiveSearchScan(serverKey, control, version) {
+  const storage = globalThis.nexusStorage?.forServer?.(serverKey) || browser.storage.local;
+  const current = () => control.version === version;
+  const setLsStatus = status => current()
+    ? storage.set({ live_search_status: { ...status, at: Date.now() } }) : Promise.resolve();
+  const { live_search: cfg, asteroid_scan_results: previous } = await storage.get(['live_search', 'asteroid_scan_results']);
+  if (!current()) return;
   if (!cfg || !cfg.enabled || cfg.planetId == null) return;
+  const options = { serverKey, serverOrigin: `https://${serverKey}.nexuslegacy.space`,
+    priority: 'background', source: 'asteroid-search' };
 
   try {
-    await setLsStatus({ state: 'scanning', phase: 'Loading galaxy map…', scanned: 0, limit: 0, matchingSystems: 0, found: 0 });
-    const planets = (await getPlanets()).planets || [];
+    await setLsStatus({ state: 'scanning', phase: 'Loading source planet…', apiPath: '/api/planets', scanned: 0, limit: 0, matchingSystems: 0, found: 0 });
+    const planetData = await getPlanets(options);
+    if (!current()) return;
+    if (planetData.error) throw new Error(planetData.error);
+    const planets = planetData.planets || [];
     const planet = planets.find(p => p.id === cfg.planetId);
     if (!planet || planet.systemId == null) { await setLsStatus({ state: 'error', error: 'Source planet not found.' }); return; }
-    const map = await galaxyCatalog('/api/galaxy/map');
+    await setLsStatus({ state: 'scanning', phase: 'Loading galaxy map…', apiPath: '/api/galaxy/map', scanned: 0, limit: 0, matchingSystems: 0, found: 0 });
+    const map = await galaxyCache.catalog(serverKey, '/api/galaxy/map');
+    if (!current()) return;
     const src = (map.systems || []).find(s => s.id === planet.systemId);
     if (!src) { await setLsStatus({ state: 'error', error: 'Source system not on the map.' }); return; }
 
-    const want = Math.max(1, Math.min(500, cfg.near || 25));
+    const want = Math.max(1, Math.min(500, cfg.near || 10));
     const candidates = (map.systems || [])
       .filter(s => s.id !== src.id && (s.visibility === 'full' || s.visibility === 'partial'))
       .map(s => ({ s, d: Math.hypot(s.x - src.x, s.y - src.y) }))
@@ -342,77 +355,154 @@ async function runLiveSearchScan() {
     const typeSet = new Set(cfg.types || []);
     const zoneSet = new Set(cfg.zones || []);
     const systemLimit = typeSet.size ? 500 : want;
-    const matches = [];
+    await setLsStatus({ state: 'scanning', phase: 'Loading own missions…', apiPath: '/api/fleet/missions', scanned: 0, limit: systemLimit, found: 0 });
+    const missionsAt = Date.now();
+    const missionData = await apiFetch('/api/fleet/missions', options);
+    if (!current()) return;
+    const missionIds = new Set((missionData.missions || [])
+      .filter(m => m.missionType === 'mine' && m.targetFieldId != null).map(m => m.targetFieldId));
+    const oldFields = previous?.fields || [];
+    const fields = [];
+    const observations = new Map();
+    const matchesNow = () => visibleAsteroidFields(retainMiningFields(fields, oldFields, missionIds, observations), cfg, missionIds);
     let errStreak = 0;
+    let errors = 0;
+    let stopError;
     let inZone = 0, scanned = 0, matchingSystems = 0;
-    const report = (phase) => setLsStatus({ state: 'scanning', phase, scanned, limit: systemLimit, matchingSystems, found: matches.length });
+    const counts = matches => ({
+      target: want, typeFiltered: !!typeSet.size,
+      targetProgress: typeSet.size ? matchingSystems : inZone,
+      scanned, limit: systemLimit, matchingSystems, found: matches.length,
+      matchingFields: matches.filter(f => !f.missing && !f.unconfirmed && asteroidMatches(f, cfg)).length,
+      missionExceptions: matches.filter(f => f.missing || f.unconfirmed || !asteroidMatches(f, cfg)).length,
+    });
+    const report = (phase, apiPath) => setLsStatus({ state: 'scanning', phase, apiPath, ...counts(matchesNow()) });
+    const saveSnapshot = (incomplete, pending = false) => current() ? storage.set({
+      asteroid_scan_results: {
+        at: Date.now(), planetId: cfg.planetId, near: want,
+        zones: [...(cfg.zones || [])].sort(), types: [...(cfg.types || [])].sort(),
+        config: cfg, referenceSystem: { x: src.x, y: src.y },
+        missions: missionData.missions || [], missionsAt,
+        fields: retainMiningFields(fields, oldFields, missionIds, observations,
+          pending && previous?.planetId === cfg.planetId), incomplete, updating: pending,
+      },
+    }) : Promise.resolve();
+    const observe = (sys, meta, data) => {
+      const at = data._galaxyCache?.times?.asteroidFields ?? Date.now();
+      const rows = (data.asteroidFields || []).map(f => asteroidRow(f, sys, meta, at));
+      observations.set(sys.id, { fields: rows, at });
+      return rows;
+    };
     await report('Scanning systems…');
     for (const sys of candidates) {
+      if (!current()) return;
       if (typeSet.size ? (matchingSystems >= want || scanned >= systemLimit) : inZone >= want) break;
       let sector;
-      try { sector = await lsSectorSystems(sys.sectorId); }
-      catch { if (++errStreak >= LS_ABORT_AFTER_ERRORS) break; continue; }
+      await report('Loading sector data…', `/api/galaxy/sectors/${sys.sectorId}/systems`);
+      if (!current()) return;
+      try { sector = await lsSectorSystems(serverKey, sys.sectorId); }
+      catch (error) {
+        errors++;
+        console.warn(`[NexusOverseer] Asteroid live search skipped sector ${sys.sectorId}:`, error);
+        if (error.status === 429 || error.status === 401 || ++errStreak >= LS_ABORT_AFTER_ERRORS) {
+          stopError = error;
+          break;
+        }
+        continue;
+      }
+      if (!current()) return;
       const meta = sector.find(s => s.id === sys.id);
       if (!meta || (zoneSet.size && !zoneSet.has(meta.securityZone))) { errStreak = 0; continue; }
       inZone++;
       if (!meta.planetCount) { errStreak = 0; continue; }
       let data;
-      try { data = await galaxyCache.system(await galaxyServerKey(), sys.id, { purpose: 'dynamic', force: true }); }
-      catch { if (++errStreak >= LS_ABORT_AFTER_ERRORS) break; continue; }
-      errStreak = 0;
+      await report('Scanning systems…', `/api/galaxy/systems/${sys.id}/planets`);
+      if (!current()) return;
       scanned++;
-      if (scanned % 5 === 0) report('Scanning systems…');
+      try {
+        data = await galaxyCache.system(serverKey, sys.id, {
+          purpose: 'dynamic', priority: 'background', source: 'asteroid-search',
+        });
+      } catch (error) {
+        errors++;
+        console.warn(`[NexusOverseer] Asteroid live search skipped system ${sys.id}:`, error);
+        if (error.status === 429 || error.status === 401 || ++errStreak >= LS_ABORT_AFTER_ERRORS) {
+          stopError = error;
+          break;
+        }
+        continue;
+      }
+      if (!current()) return;
+      errStreak = 0;
+      const rows = observe(sys, meta, data);
       if (typeSet.size) {
         if (!(data.asteroidFields || []).some(f => typeSet.has(f.fieldType))) {
+          await saveSnapshot(true, true);
           continue;
         }
         matchingSystems++;
       }
-      for (const f of (data.asteroidFields || [])) {
-        const zone = meta.securityZone || 'unknown';
-        if (fieldMatches({ ...f, zone }, cfg)) {
-          matches.push({
-            id: f.id,
-            name: f.name || `#${f.id}`,
-            system: meta.name || `#${sys.id}`,
-            systemId: sys.id,
-            type: f.fieldType || '—',
-            mult: f.richness ?? null,
-            remaining: f.remainingResources ?? null,
-            leftPct: f.totalResources ? Math.round((f.remainingResources / f.totalResources) * 100) : null,
-            zone,
-            controllerName: f.controllerName || null,
-          });
-        }
-      }
+      fields.push(...rows);
+      await saveSnapshot(true, true);
       if (scanned % 25 === 0) await new Promise(r => setTimeout(r, 0));
     }
 
-    const { live_search_seen } = await browser.storage.local.get('live_search_seen');
+    if (!current()) return;
+    if (!stopError) {
+      for (const field of oldFields) {
+        if (!missionIds.has(field.fieldId) || observations.has(field.systemId)) continue;
+        try {
+          await report('Checking own mining mission…', `/api/galaxy/systems/${field.systemId}/planets`);
+          if (!current()) return;
+          const data = await galaxyCache.system(serverKey, field.systemId, { purpose: 'dynamic', ...options });
+          if (!current()) return;
+          observe({ id: field.systemId, x: field.sx, y: field.sy },
+            { name: field.system, securityZone: field.zone }, data);
+        } catch (error) {
+          if (!current()) return;
+          console.warn('[NexusOverseer] Own mining field check failed:', error);
+          stopError = error;
+          break;
+        }
+      }
+    }
+    if (!current()) return;
+    const matches = matchesNow().map(f => ({
+      ...f, id: f.fieldId, controllerName: f.minerPresent,
+      leftPct: f.total ? f.remaining / f.total * 100 : null,
+      ownMission: missionIds.has(f.fieldId),
+      outsideFilters: !asteroidMatches(f, cfg),
+    }));
+    const { live_search_seen } = await storage.get('live_search_seen');
+    if (!current()) return;
     const seen = new Set(live_search_seen || []);
-    const fresh = matches.filter(m => !seen.has(m.id));
+    const fresh = matches.filter(m => !m.missing && !m.unconfirmed && !seen.has(m.id));
     // Keep the full current match list + timestamp for the on-click results window.
-    await browser.storage.local.set({
+    await saveSnapshot(!!stopError || errors > 0);
+    if (!current()) return;
+    await storage.set({
       live_search_seen: matches.map(m => m.id),
       live_search_last_matches: matches,
       live_search_last_at: Date.now(),
     });
 
     await setLsStatus({
-      state: errStreak >= LS_ABORT_AFTER_ERRORS ? 'error' : 'idle',
-      error: errStreak >= LS_ABORT_AFTER_ERRORS ? 'Scan aborted after repeated API errors.' : null,
-      scanned, matchingSystems, found: matches.length, fresh: fresh.length,
+      state: stopError || errors ? 'error' : 'idle',
+      error: stopError?.status === 429
+        ? 'Stopped: API rate limit (429). Retry the search later; saved results are retained.'
+        : stopError ? stopError.message : errors ? `Incomplete: ${errors} systems failed; only checked results are shown.` : null,
+      ...counts(matches), fresh: fresh.length,
     });
 
-    if (fresh.length) {
+    if (current() && fresh.length) {
       const top = fresh[0];
       browser.notifications.create(`${LS_ALARM}-${Date.now()}`, {
         type: 'basic',
         iconUrl: browser.runtime.getURL('icons/icon128.png'),
         title: '🪨 Asteroid match',
         message: fresh.length === 1
-          ? `${top.name} (${top.type}) in ${top.system} matches your live search.`
-          : `${fresh.length} new fields match your live search — incl. ${top.name} in ${top.system}.`,
+          ? `${top.name} (${top.type}) in ${top.system} matches your Auto Scan filters.`
+          : `${fresh.length} new fields match your Auto Scan filters — incl. ${top.name} in ${top.system}.`,
       });
     }
   } catch (err) {

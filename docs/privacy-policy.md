@@ -47,7 +47,7 @@ device fingerprints and is not part of regular backups.
 
 **Record API wait times**, under Options > Developer / Debug, is a separate
 opt-in switch, off by default and independent of payload recording. Scheduling
-metadata stays in the local diagnostic database per universe, limited to 1,000
+metadata stays in the local diagnostic database per universe, limited to 5,000
 events and sharing the 10 MB per-server diagnostic storage cap. It can be viewed,
 exported as JSONL or cleared in API Wait Times. Regular backups exclude it.
 Worker-interrupted waits are marked incomplete when recording next resumes;
