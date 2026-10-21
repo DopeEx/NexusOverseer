@@ -6,15 +6,55 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-10-21
+
 ### Added
 - Asteroid scans support a configurable system target, show results as systems
   are checked, reuse fresh saved field data and keep active own mining missions
   visible with clear confirmed, missing or unconfirmed states. API wait hints
   are shown during scans.
+- Auto Scan in the Asteroids tab repeats searches every five minutes using the
+  same filters as manual scans and notifies you about newly matching fields.
+  Target, checked-system, matching-field and own-mission counts are shown
+  separately. Fresh field observations are reused for up to 15 minutes.
+- Asteroid field IDs can be copied directly from the results table, with
+  explicit feedback if clipboard access fails.
+- Manual Windows installations show a dismissible update notice in the
+  dashboard. Dismissing it hides that release's notice until a different release
+  is available; the footer update link remains accessible.
 
 ### Changed
 - API wait analysis retains up to 5,000 scheduling events per server within the
   existing 10 MB diagnostic storage cap.
+- Asteroids uses the Galaxy Scout list styling, compact shared scan controls
+  and zone, resource and alliance badges. Auto Scan updates existing rows in
+  place so controls remain usable while values change.
+
+### Fixed
+- Asteroid refreshes remove stale and no-longer-matching fields instead of
+  accumulating old results. Active own mining missions remain visible outside
+  the filters; confirmed missing fields no longer show old resources or offer a
+  mining launch, while failed checks remain explicitly unconfirmed.
+- Stopping Auto Scan, changing its filters or switching universes no longer lets
+  late replies publish obsolete results. Manual scans ignore replies from a
+  previous universe, and interrupted scans retain their collected matches.
+- Asteroid scans stop visibly when authentication or rate-limit recovery is
+  exhausted, retaining partial results. System-detail reads respect the shared
+  API budget, and alliance-tag lookups no longer delay scan results.
+- Galaxy field caching recognizes the API's field-inclusion metadata, including
+  confirmed empty fields. Omitted or hidden fields are not mistaken for empty
+  observations, so fresh saved data can be reused correctly.
+- Repeated asteroid-table updates share pending fuel estimates and reuse
+  successful estimates instead of issuing duplicate requests; failed estimates
+  remain retryable.
+- API status failures and wrong-universe responses are reported explicitly
+  instead of leaving misleading status or wait hints on screen.
+
+### Documentation
+- Expanded the README and User Guide for asteroid scans, Auto Scan, field
+  freshness, active mining mission markers and dismissible update notices.
+  Clarified existing automatic backup options without changing their schedule
+  or contents.
 
 ## [2.3.0] - 2026-10-21
 

@@ -65,7 +65,10 @@ No player account, actual coordinates or real economy data is shown.
 - **Galaxy Scout**: search systems and arms using a persistent local planet/moon
   database. Physical properties do not expire; unknown result ownership is checked
   automatically after the base search, while known ownership stays cached.
-- **Asteroid Fields**: search by zone and resource type, start mining fleets, and use escort templates.
+- **Asteroid Fields**: scan with shared resource/zone filters and a configurable
+  system target, or enable Auto Scan every five minutes with notifications for
+  new matches. Results appear progressively, reuse fresh saved fields and keep
+  active own mining missions visible. Start mining fleets and use escort templates.
 - **Fleet Templates**: reusable fleet compositions, including escort templates for mining.
 - **Market**: browse and track trades.
 - **Tech Tree and upgrades**: research overview plus building, ship and tech upgrade queues.
@@ -75,8 +78,38 @@ No player account, actual coordinates or real economy data is shown.
 - **API traffic status**: shared request scheduling respects endpoint budgets
   and prioritizes interactions. The API indicator shows activity and budget
   pauses; Galaxy Search explains longer waits beside its progress.
-- **Backups**: JSON export and import of your data and options (Options > Data).
+- **Backups**: JSON export and import of your data and options (Options > Data),
+  plus automatic data backups weekly by default, daily or off.
 - **Developer / Debug**: Options has General, Data and Developer / Debug subtabs in the same style as Statistics. General separates general preferences and dashboard controls into panels; Data separates storage, public galaxy data, private backups and the danger zone. Developer tools provide console log levels, a read-only resource history with UTC time buckets, and expandable API, galaxy-delta and WebSocket logs with search, copy, JSONL export and per-stream clearing.
+
+### Asteroid scans
+
+The **Asteroids** tab shares one filter set between **Scan** and **Auto Scan**.
+**Target systems** defaults to 10 and preserves saved values. With resource types
+selected, the target counts systems containing any selected type, checking at
+most 500 systems; other field filters can reduce the displayed matches.
+Results appear as systems are checked. Fresh field observations are reused for
+up to 15 minutes, and hovering a row shows the field-data check time.
+
+**Auto Scan** repeats the search every five minutes in the background and sends
+a browser notification for newly matching fields. Its status separates the
+target, checked systems, matching fields and own-mission exceptions. Change the
+shared filters to update the search, or select **Stop Auto Scan** to disable it.
+The game-sidebar Auto Scan panel is not available; use the dashboard tab.
+
+New scans replace stale results. Fields with an active own mining mission remain
+visible even outside the filters. Confirmed missing fields remain only as mission
+markers, without old resource values or a launch action; unsuccessful checks are
+labelled unconfirmed rather than missing. API waits and scan errors are shown
+explicitly, and interrupted scans preserve collected results. Click a field ID
+to copy it.
+
+### Automatic data backups
+
+Automatic data backups are configured under **Options > Data**: weekly
+(default), daily or off, with **Back up now** for an immediate backup. They are
+saved under `Downloads/NexusOverseer` and include galaxy knowledge, but not
+diagnostic logs. They are separate from the Windows updater's file backups.
 
 ### Local galaxy knowledge
 
@@ -263,6 +296,9 @@ These checks apply only to manual Windows packages, not store packages.
 Use **Check for updates** beside the footer version to check immediately,
 without waiting for the six-hour cache. The button shows progress and the result;
 manual checks have a 30-second click cooldown. Its tooltip shows the last check.
+An available update also appears as a dismissible dashboard notice. Dismissing
+it hides the notice for that release, not the footer link; a different release
+can show a new notice.
 
 <details>
 <summary>Update instructions, backups, troubleshooting and publishing</summary>

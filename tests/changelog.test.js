@@ -43,5 +43,27 @@ test('the bundled release notes include all sections for the manifest version', 
   for (const heading of ['Added', 'Changed', 'Fixed', 'Documentation']) {
     assert.ok(previous.includes(`### ${heading}`), heading);
   }
-  assert.deepEqual(notes.map(entry => entry.version), ['2.3.0']);
+  assert.deepEqual(notes.map(entry => entry.version), ['2.4.0']);
+});
+
+test('release metadata agrees and the published version leaves Unreleased empty', async () => {
+  const manifest = JSON.parse(await readFile(new URL('../nexus-addon/manifest.json', import.meta.url), 'utf8'));
+  const metadata = JSON.parse(await readFile(new URL('../nexus-addon/package.json', import.meta.url), 'utf8'));
+  const changelog = await readFile(new URL('../nexus-addon/CHANGELOG.md', import.meta.url), 'utf8');
+  assert.equal(metadata.version, manifest.version);
+  assert.equal(changelog.split('## [Unreleased]')[1].split(/^## \[/m)[0].trim(), '');
+  const heading = changelog.split(/\r?\n/).find(line => line.startsWith(`## [${manifest.version}] - `));
+  assert.ok(heading, 'the manifest version has a dated changelog section');
+  assert.match(heading, / - \d{4}-\d{2}-\d{2}$/);
+});
+
+test('changelog categories stay ordered within every version', async () => {
+  const changelog = await readFile(new URL('../nexus-addon/CHANGELOG.md', import.meta.url), 'utf8');
+  for (const section of changelog.split(/^## \[/m).slice(1)) {
+    const headings = [...section.matchAll(/^### (.+)$/gm)].map(match => match[1].trim());
+    const rank = heading => heading.startsWith('Important') ? -1 : ({ Added: 0, Changed: 1, Fixed: 2 }[heading] ?? 3);
+    for (let index = 1; index < headings.length; index++) {
+      assert.ok(rank(headings[index - 1]) <= rank(headings[index]), `${section.split('\n')[0]}: ${headings.join(', ')}`);
+    }
+  }
 });
