@@ -60,6 +60,10 @@
       </nav>
 
   <div id="hv-banner" class="hv-banner" role="alert"></div>
+  <div id="update-notice" class="update-notice" role="status" aria-live="polite" hidden>
+    <a id="update-notice-link" class="update-notice-link" href="https://github.com/DopeEx/NexusOverseer/releases" target="_blank" rel="noopener noreferrer"></a>
+    <button id="dismiss-update-notice" class="update-notice-dismiss" type="button" aria-label="Dismiss update notice" title="Dismiss">&times;</button>
+  </div>
 
   <div class="subtabs" id="statistics-subtabs">
     <button class="tab subtab active" data-tab="global">Global</button>
@@ -362,10 +366,10 @@
         <label class="opt-row"><span>Record diagnostic traffic<span class="opt-note debug-description">Off by default. Captures new game API and WebSocket traffic locally while enabled.</span></span>
           <input class="m-switch" type="checkbox" data-setting="developer.recording" />
         </label>
-        <label class="opt-row"><span>Record API wait times<span class="opt-note debug-description">Independent of traffic capture. Stores local scheduling metadata only: source, budgets, wait phases and outcomes. Up to 1,000 scheduling events per server; no request or response contents.</span></span>
+        <label class="opt-row"><span>Record API wait times<span class="opt-note debug-description">Independent of traffic capture. Stores local scheduling metadata only: source, budgets, wait phases and outcomes. Up to 5,000 scheduling events per server; no request or response contents.</span></span>
           <input class="m-switch" type="checkbox" data-setting="developer.apiWaitRecording" />
         </label>
-        <p class="opt-note">Reload open game tabs after updating or reloading the extension to ensure diagnostic capture is active. Both recording switches take effect without reloading game tabs. Traffic recording keeps at most 150 entries per stream; wait recording keeps up to 1,000 scheduling events. All streams share a 10 MB limit per server. Traffic entries allow up to 256,000 characters, with explicit markers when content is truncated. Headers, query strings and authentication endpoints are excluded from traffic capture; recognized secrets are redacted. Payloads can still contain private game data: review exports before sharing.</p>
+        <p class="opt-note">Reload open game tabs after updating or reloading the extension to ensure diagnostic capture is active. Both recording switches take effect without reloading game tabs. Traffic recording keeps at most 150 entries per stream; wait recording keeps up to 5,000 scheduling events. All streams share a 10 MB limit per server. Traffic entries allow up to 256,000 characters, with explicit markers when content is truncated. Headers, query strings and authentication endpoints are excluded from traffic capture; recognized secrets are redacted. Payloads can still contain private game data: review exports before sharing.</p>
         <p class="opt-note">Diagnostic traffic is stored separately from statistics in a local database. Use JSONL export to back up logs; regular data backups do not include them.</p>
         <p id="debug-status" class="opt-note" role="status" aria-live="polite"></p>
       </div>
@@ -1112,10 +1116,10 @@
       </details>
     </div>
 
-    <div class="dashboard-panel finder-results-panel">
+    <div class="dashboard-panel dashboard-list-panel finder-results-panel">
       <div class="reports-header">
         <h2>Matches</h2>
-        <span id="f-match-count" class="finder-match-count"></span>
+        <span id="f-match-count" class="finder-match-count dashboard-list-count"></span>
         <div class="finder-ownership-check">
           <span id="f-ownership-progress" class="finder-status" role="status" aria-live="polite"></span>
           <button id="f-check-ownership" class="toolbar-button secondary-button" disabled title="Request current ownership once per system in the base search results, including results hidden by ownership filters">Check result ownership</button>
@@ -1133,7 +1137,7 @@
           <input id="f-exclude-mine" type="checkbox" />Exclude mine
         </label>
       </div>
-      <div class="finder-directory-scroll">
+      <div class="finder-directory-scroll dashboard-table-scroll">
       <table>
         <thead id="f-results-head">
           <tr>
@@ -1234,8 +1238,8 @@
       <label>Left % ≥
         <input id="af-left-min" type="number" min="0" max="100" placeholder="0" />
       </label>
-      <label>Nearest systems
-        <input id="af-near" class="asteroids-near-input" type="number" min="1" max="500" value="25" />
+      <label title="Target counts systems, not field rows. With Type selected, continue until this many systems contain any selected type, checking at most 500 systems. Mult, Qty and Left filters apply afterwards; fewer systems may have displayed fields. One system can provide several fields.">Target systems
+        <input id="af-near" class="asteroids-near-input" type="number" min="1" max="500" value="10" />
       </label>
       <label>Type
         <span id="af-type" class="res-icons asteroids-type-icons"></span>
@@ -1245,34 +1249,8 @@
       </label>
       <div class="asteroids-action-group">
         <button id="af-scan" class="asteroids-action-button">Scan</button>
+        <button id="ls-search" class="asteroids-action-button" title="Repeat the scan every 5 minutes with these filters. Field data is reused for up to 15 minutes.">Auto Scan</button>
         <span id="af-slots" title="Fleet slots in use"></span>
-      </div>
-    </div>
-
-    <div class="toolbar-panel asteroids-toolbar" id="af-livesearch">
-      <label title="Background scan every 5 min; notifies on a new match even when this tab or the browser isn't focused.">Live Search :
-        <select id="ls-planet"></select>
-      </label>
-      <label>Mult ≥
-        <input id="ls-mult-min" type="number" step="0.01" min="0" placeholder="0" />
-      </label>
-      <label>Qty ≥
-        <input id="ls-qty-min" type="number" min="0" placeholder="0" />
-      </label>
-      <label>Left % ≥
-        <input id="ls-left-min" type="number" min="0" max="100" placeholder="0" />
-      </label>
-      <label>Nearest systems
-        <input id="ls-near" class="asteroids-near-input" type="number" min="1" max="500" value="25" />
-      </label>
-      <label>Type
-        <span id="ls-type" class="res-icons asteroids-type-icons"></span>
-      </label>
-      <label>Zone
-        <span id="ls-zone" class="asteroids-zone-toggles"></span>
-      </label>
-      <div class="asteroids-action-group">
-        <button id="ls-search" class="asteroids-action-button">Live Search</button>
       </div>
     </div>
 
@@ -1283,38 +1261,46 @@
       <span class="asteroids-template-note">🚀 on a row opens the fleet editor seeded from the ship recommendation. Edit templates in the Fleets tab.</span>
     </div>
 
-    <div class="reports-section mission-panel statistics-list-panel asteroids-results-panel">
+    <div class="dashboard-panel dashboard-list-panel asteroids-results-panel">
       <div class="reports-header">
         <h2>Asteroid fields</h2>
-        <span id="af-count" class="asteroids-count"></span>
-        <span id="af-progress" class="asteroids-results-status"></span>
-        <span id="ls-status" class="asteroids-results-status"></span>
-        <div class="pagination">
-          <button id="af-btn-prev">← Prev</button>
-          <span id="af-page-info">Page 1</span>
-          <button id="af-btn-next">Next →</button>
-        </div>
+        <span id="af-count" class="asteroids-count dashboard-list-count"></span>
       </div>
+      <div class="dashboard-list-status">
+        <span class="asteroids-results-status"><span id="af-progress" role="status" aria-live="polite" title="Target counts systems with selected types, or nearby systems in selected zones without a type filter. Checked counts inspected systems; Fields counts matches after all filters. Own mission exceptions are separate."></span><span id="af-api-wait" class="api-search-wait"></span></span>
+        <span class="asteroids-results-status"><span id="ls-status" role="status" aria-live="polite"></span><span id="ls-api-wait" class="api-search-wait"></span></span>
+      </div>
+      <details id="af-search-issues" class="finder-directory-more" hidden>
+        <summary id="af-search-issues-summary">Search issues</summary>
+        <ul id="af-search-issues-list"></ul>
+      </details>
       <div id="af-avail" aria-hidden="true"></div>
+      <div class="dashboard-table-scroll" role="region" aria-label="Asteroid fields table" tabindex="0">
       <table>
         <thead id="af-results-head">
           <tr>
             <th title="Send mining fleet"></th>
-            <th class="sortable" data-key="system">System</th>
-            <th class="sortable" data-key="type">Type</th>
-            <th class="sortable" data-key="mult" title="Richness multiplier">Mult.</th>
-            <th class="sortable" data-key="remaining" title="Remaining / total resources">Content</th>
-            <th class="sortable" data-key="leftPct" title="Percentage of resources still present">Left %</th>
-            <th class="sortable" data-key="zone">Zone</th>
-            <th class="sortable" data-key="fieldId">Field ID</th>
-            <th class="sortable" data-key="ownerName" title="Owner of the Outpost built on this field, if any">Outpost</th>
-            <th class="sortable" data-key="distance">Distance</th>
+            <th class="sortable" data-key="system"><button type="button">System</button></th>
+            <th class="sortable" data-key="type"><button type="button">Type</button></th>
+            <th class="sortable" data-key="mult" title="Richness multiplier"><button type="button">Mult.</button></th>
+            <th class="sortable" data-key="remaining" title="Remaining / total resources"><button type="button">Content</button></th>
+            <th class="sortable" data-key="leftPct" title="Percentage of resources still present"><button type="button">Left %</button></th>
+            <th class="sortable" data-key="zone"><button type="button">Zone</button></th>
+            <th class="sortable" data-key="fieldId"><button type="button">Field ID</button></th>
+            <th class="sortable" data-key="ownerName" title="Owner of the Outpost built on this field, if any"><button type="button">Outpost</button></th>
+            <th class="sortable" data-key="distance"><button type="button">Distance</button></th>
             <th title="Hydrogen to send the selected template here">Fuel Cost</th>
-            <th class="sortable" data-key="recShips" title="Recommended ships to clear the field in 10 mining cycles">Ships Recommendation</th>
+            <th class="sortable" data-key="recShips" title="Recommended ships to clear the field in 10 mining cycles"><button type="button">Ships Recommendation</button></th>
           </tr>
         </thead>
         <tbody id="af-results-tbody"></tbody>
       </table>
+      </div>
+      <div class="dashboard-list-footer">
+        <button id="af-btn-prev" class="toolbar-button secondary-button" type="button">Previous</button>
+        <span id="af-page-info" class="dashboard-list-count">Page 1</span>
+        <button id="af-btn-next" class="toolbar-button secondary-button" type="button">Next</button>
+      </div>
     </div>
   </div>
 

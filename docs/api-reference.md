@@ -209,13 +209,80 @@ profile. Timer intervals are triggers, not guaranteed request frequencies.
 | Research start | Uses scheduled POST and initiates a separate follow-up scrape | Returns the confirmed action result without awaiting the entire scrape |
 | Runtime message handling | Network-only reads/actions and explicit-server local galaxy scan/delta reads bypass `withServer`; storage-processing operations retain protected scopes | Request origins are pinned; explicit server storage access protects galaxy-cache migration from another operation's temporary scope |
 | Background scrape | 15-minute alarm, installation/update and manual triggers; loads multiple endpoints in parallel and visits open universes | Classify periodic versus explicit work; do not let an entire scrape inherit action-level priority |
-| Asteroid live search | Five-minute alarm plus an immediate run when enabled/changed; can examine up to 500 systems depending on filters | Long-running scan needs cancellation and bounded access to scope budget |
+| Asteroid live search | Five-minute alarm plus an immediate run when enabled/changed; shares manual filters and results, with up to 500 candidate detail checks | Per-server run versions invalidate stopped/superseded passes; all reads use central budgets |
 | Dashboard overview | Manual/automatic distinction via `polite`; automatic refresh depends on settings and displayed completions | Existing distinction is not a full priority model |
 | Dashboard automations | Scouting, pirates and expeditions run sequentially in a shared 15-second cycle, gated by expert mode and feature readiness/switches | Long tasks delay later tasks; no overlapping cycle starts |
 | Visible Scouting view | One-second UI timer calls ship availability every ten ticks while the subview is open; mission refresh has a separate due check | Display polling is distinct from executing an automation |
 | Realtime report/status observer | Observes successful watched requests and actively re-fetches their pathname at background priority | Additional traffic, not passive response reuse; query parameters are not retained; active add-on transport is excluded |
 | Galaxy response observer/cache | Passively relays selected fetch/XHR responses; cache coalesces matching pending system/catalog reads | Reuse existing mechanisms rather than duplicating requests or cache logic |
 | Universe catalog | Scheduled request to `https://nexuslegacy.space/api/universes` | Separate origin, conservatively included in the shared local ceiling; its quota relationship is unknown |
+
+Asteroid scans resolve sector metadata only as each nearby candidate is needed,
+rather than preparing all explored sectors before fetching fields. Manual scans
+show and save collected fields immediately, without waiting for optional owner
+alliance tags. Target systems defaults to 10 without overwriting saved values.
+With a resource-type selection, the target counts systems containing any selected
+type (at most 500 detail checks), not individual field rows; without it, the target
+limits nearby systems in the selected zones. Other field filters apply to the
+displayed results. Scan status separates target progress (for example, 10/10
+systems with selected types), systems checked, fields matching all filters and
+own-mission exceptions. A completed pass explicitly reports whether the system
+target was reached (a shortfall is marked `not reached`); routine status uses
+compact `Target 10/10 · Checked 83 · Fields 16` counters, with explanations and
+cache timing in the tooltip rather than repeated sentences. The table also counts the distinct systems represented by
+its displayed fields. Both manual and live scans reuse dynamic field observations for
+15 minutes and use central scheduler status for inline waits, like Galaxy Scout.
+Exhausted 429 retries and authentication failures stop further scan requests;
+collected results remain saved. All network attempts still use central admission.
+
+Scan and Auto Scan share one filter toolbar and one dashboard result table.
+Auto Scan evaluates the same criteria immediately and on five-minute triggers,
+not necessarily with new network data: field observations remain reusable for
+15 minutes. The UI distinguishes the latest run time from each row's field-data
+check time. Scan during Auto Scan requests another background pass rather than
+starting a second competing dashboard loop. Filter changes supersede the old
+pass; Stop prevents further systems and publication from the old pass once its
+current read returns. Origin and storage keys are captured for each pass.
+
+Each pass replaces ordinary results, so previously matching fields disappear
+when they no longer meet the filters or are absent in a resolved system response.
+Known own mining missions are the only filter exception, labelled in the same
+table. Previously listed mission fields outside the candidate range are also
+checked through the shared dynamic cache. An absent field retains only a mission
+marker with null resource values and no launch action; an unperformed/failed check
+is labelled unconfirmed instead. Those exceptions end with the mission. Incomplete
+passes publish their checked subset and labelled own mission markers, not a union
+of stale ordinary hits. The game-page results window consumes the same live result
+set and removes mission exceptions when its mission refresh reports their end.
+The game-page Auto Scan Belts panel is currently disabled, including its sidebar
+entry and notification/runtime opening paths; Auto Scan remains available in the
+dashboard's Asteroids tab.
+The game-page window also applies the current filters locally to saved matches
+on opening and on configuration changes, using the same pure filter module as
+the dashboard/background. Tightening a threshold therefore hides obsolete matches
+immediately, without waiting for a completed pass or making extra game requests.
+Own-mission exception labels are recalculated against the current filters.
+Dashboard updates reconcile rows by field ID instead of clearing the table.
+Galaxy Scout and Asteroids share the `dashboard-list-panel` presentation:
+common heading/count typography and table spacing, with `dashboard-table-scroll`
+for table-only horizontal scrolling and keyboard-operable sort headings.
+Asteroids keeps its own columns, uses a separate compact status row, and places
+pagination below the table so neither status nor navigation scrolls offscreen.
+Zone and alliance badges share the same builders and styles as Galaxy Scout;
+asteroid resource types use the same badge frame with resource-specific colors.
+Outpost owners use a neutral badge, without claiming planet-colonization status.
+Badge nodes are updated in place alongside the retained result rows.
+Absent outposts show only a dash, with no visible owner/alliance badge. Known
+multipliers use a warning-tone outline badge with a transparent background and
+the same font size, weight and padding as the other Scout-style badges;
+unknown values remain plain dashes.
+Field IDs are keyboard-accessible copy buttons. Clipboard success and failures
+are reported inline; the ID itself remains visible and unchanged.
+These classes are the reusable baseline for further list migrations; other tabs
+are not automatically restyled.
+Unchanged rows and controls remain attached; values and mission badges update
+in place. During a pass, prior ordinary hits remain until their system is checked;
+the final snapshot removes any remaining old hits outside the completed search.
 
 Source entry points:
 [background request handling and observers](../nexus-addon/background.js),
@@ -319,7 +386,7 @@ passively observed native starts. General local budget spans universes, whereas
 these contribution snapshots are per-origin, so they are not a complete
 causality attribution. No paths, game IDs, bodies or credentials are logged.
 
-Events are written asynchronously to local diagnostics (1,000 scheduling events,
+Events are written asynchronously to local diagnostics (5,000 scheduling events,
 10 MB shared per server) and exposed in API Wait Times with a per-source summary,
 expandable JSON, JSONL export and clear action. Summaries cover retained events
 only; they are not lifetime totals. Wait totals count completed central queue
@@ -1583,6 +1650,16 @@ entry supplies fields such as its ID, coordinates, sector, arm, and security
 zone. The system-contents endpoint returns separate `planets`,
 `asteroidFields`, and `moons` arrays; `included` indicates which entity groups
 were resolved. Any one of these arrays can be empty.
+
+The supplied live response from 21 October 2026 uses
+`included: { planets: true, moons: true, fields: true }`: the inclusion key is
+`fields`, although the corresponding array is named `asteroidFields`. The cache
+maps these names for both fetched and passively observed responses, retaining
+compatibility with older `asteroidFields` inclusion markers. An explicit
+`fields: false` remains unresolved, not an empty-field observation; `fields: true`
+with `asteroidFields: []` is a resolved empty result. The captured request uses
+the plain `/api/galaxy/systems/{systemId}/planets` route, without an `include`
+query, so this mismatch does not require extra requests or a transport change.
 
 Abbreviated illustrative system-contents response (not an exhaustive schema):
 

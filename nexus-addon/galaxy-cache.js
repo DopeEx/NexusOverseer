@@ -72,8 +72,11 @@ function resolved(data, group) {
   if (!Array.isArray(data[group])) return false;
   if (data._galaxyCache?.times?.[group]) return true;
   if (data.visibility === 'fog') return false;
-  if (Array.isArray(data.included)) return data.included.includes(group);
-  if (data.included && typeof data.included === 'object') return data.included[group] === true;
+  const inclusionKey = group === 'asteroidFields' ? 'fields' : group;
+  if (Array.isArray(data.included)) return data.included.includes(inclusionKey) || data.included.includes(group);
+  if (data.included && typeof data.included === 'object') {
+    return data.included[Object.hasOwn(data.included, inclusionKey) ? inclusionKey : group] === true;
+  }
   return true;
 }
 

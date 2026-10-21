@@ -6,6 +6,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- Asteroid scans support a configurable system target, show results as systems
+  are checked, reuse fresh saved field data and keep active own mining missions
+  visible with clear confirmed, missing or unconfirmed states. API wait hints
+  are shown during scans.
+
+### Changed
+- API wait analysis retains up to 5,000 scheduling events per server within the
+  existing 10 MB diagnostic storage cap.
+
 ## [2.3.0] - 2026-10-21
 
 ### Added

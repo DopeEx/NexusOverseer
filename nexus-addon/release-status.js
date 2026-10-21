@@ -2,6 +2,7 @@ const API = 'https://api.github.com/repos/DopeEx/NexusOverseer';
 const RELEASES = 'https://github.com/DopeEx/NexusOverseer/releases';
 export const CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const CACHE_KEY = 'manual_release_status_v1';
+const DISMISSED_UPDATE_KEY = 'manual_release_dismissed_update_v1';
 
 export function compareVersions(left, right) {
   const parse = value => {
@@ -76,8 +77,12 @@ export async function getReleaseStatus({ installation, version, storage, fetcher
   return result;
 }
 
-export async function initReleaseStatus({ versionLink, statusLink, checkButton, runtime, storage, fetcher = fetch }) {
+export async function initReleaseStatus({
+  versionLink, statusLink, checkButton, updateNotice, updateNoticeLink,
+  dismissUpdateNoticeButton, runtime, storage, fetcher = fetch,
+}) {
   const version = runtime.getManifest().version;
+  let activeNoticeVersion = null;
   const showFailure = message => {
     console.warn('[NexusOverseer] Release check:', message);
     statusLink.hidden = false;
@@ -105,6 +110,8 @@ export async function initReleaseStatus({ versionLink, statusLink, checkButton, 
       checkButton.disabled = true;
       checkButton.textContent = 'Checking…';
     }
+    if (updateNotice) updateNotice.hidden = true;
+    activeNoticeVersion = null;
     let newer = false;
     try {
       versionLink.textContent = installation.channel === 'master'
@@ -143,6 +150,20 @@ export async function initReleaseStatus({ versionLink, statusLink, checkButton, 
         statusLink.textContent = `Update available: v${status.latest}`;
         statusLink.title = 'Open the stable release. Use Update-Nexus.bat to install it, then reload the extension.';
         if (status.comparisonError) statusLink.title += ` Commit comparison unavailable: ${status.comparisonError}`;
+        if (updateNotice && updateNoticeLink) {
+          updateNoticeLink.href = status.url;
+          updateNoticeLink.textContent = `Update available: v${status.latest}`;
+          let dismissed;
+          try {
+            dismissed = (await storage.get(DISMISSED_UPDATE_KEY))[DISMISSED_UPDATE_KEY];
+          } catch (error) {
+            console.warn('[NexusOverseer] Could not read update notice dismissal:', error);
+          }
+          if (dismissed !== status.latest) {
+            activeNoticeVersion = status.latest;
+            updateNotice.hidden = false;
+          }
+        }
       } else if (force && !status.comparisonError) {
         statusLink.hidden = false;
         statusLink.href = status.url;
@@ -164,6 +185,21 @@ export async function initReleaseStatus({ versionLink, statusLink, checkButton, 
   if (checkButton) {
     checkButton.hidden = false;
     checkButton.addEventListener('click', () => { void runCheck(true); });
+  }
+  if (dismissUpdateNoticeButton && updateNotice) {
+    dismissUpdateNoticeButton.addEventListener('click', async () => {
+      const dismissedVersion = activeNoticeVersion;
+      if (!dismissedVersion) return;
+      try {
+        await storage.set({ [DISMISSED_UPDATE_KEY]: dismissedVersion });
+        if (activeNoticeVersion === dismissedVersion) {
+          activeNoticeVersion = null;
+          updateNotice.hidden = true;
+        }
+      } catch (error) {
+        console.error('[NexusOverseer] Could not dismiss update notice:', error);
+      }
+    });
   }
   await runCheck();
 }

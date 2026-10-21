@@ -22,8 +22,19 @@ function fixture({ channel = 'release', revision = 'v2.1.0', latest = 'v2.2.0', 
   };
   const versionLink = { textContent: 'v2.1.0', title: 'Show what is new' };
   const statusLink = { hidden: true };
+  const updateNotice = { hidden: true };
+  const updateNoticeLink = {};
+  const dismissUpdateNoticeButton = {
+    addEventListener(event, handler) {
+      assert.equal(event, 'click');
+      this.click = handler;
+    },
+  };
   const runtime = { getManifest: () => ({ version: '2.1.0' }), getURL: file => `extension:${file}` };
-  return { storage, installation, fetcher, calls, data, versionLink, statusLink, runtime, version: '2.1.0', now: 100 };
+  return {
+    storage, installation, fetcher, calls, data, versionLink, statusLink,
+    updateNotice, updateNoticeLink, dismissUpdateNoticeButton, runtime, version: '2.1.0', now: 100,
+  };
 }
 
 test('version comparison is numeric, handles four components and rejects invalid inputs', () => {
@@ -126,11 +137,46 @@ test('footer retains version button, labels dev and renders independent update l
   assert.equal(stable.versionLink.textContent, 'v2.1.0');
   assert.equal(stable.statusLink.textContent, 'Update available: v2.2.0');
   assert.equal(stable.statusLink.href, 'https://github.com/DopeEx/NexusOverseer/releases/tag/v2.2.0');
+  assert.equal(stable.updateNotice.hidden, false);
+  assert.equal(stable.updateNoticeLink.textContent, 'Update available: v2.2.0');
   const dev = fixture({ channel: 'master', revision: sha, latest: 'v2.1.0' });
   await initReleaseStatus(dev);
   assert.equal(dev.versionLink.textContent, 'v2.1.0 · dev · aaaaaaa · ahead of release');
   assert.match(dev.versionLink.title, /3 commits ahead/);
   assert.equal(dev.statusLink.hidden, true);
+  assert.equal(dev.updateNotice.hidden, true);
+});
+
+test('dismissed update notice stays hidden until a different release is available', async () => {
+  const first = fixture();
+  await initReleaseStatus(first);
+  await first.dismissUpdateNoticeButton.click();
+  assert.equal(first.updateNotice.hidden, true);
+
+  const sameUpdate = fixture();
+  Object.assign(sameUpdate.data, first.data);
+  await initReleaseStatus(sameUpdate);
+  assert.equal(sameUpdate.updateNotice.hidden, true);
+
+  const newUpdate = fixture({ latest: 'v2.3.0' });
+  Object.assign(newUpdate.data, first.data);
+  newUpdate.data.manual_release_status_v1.checkedAt -= CHECK_INTERVAL;
+  await initReleaseStatus(newUpdate);
+  assert.equal(newUpdate.updateNotice.hidden, false);
+  assert.equal(newUpdate.updateNoticeLink.textContent, 'Update available: v2.3.0');
+});
+
+test('a dismissal storage read failure does not hide the available update', async t => {
+  t.mock.method(console, 'warn', () => {});
+  const f = fixture();
+  const get = f.storage.get;
+  f.storage.get = async key => {
+    if (key === 'manual_release_dismissed_update_v1') throw new Error('storage unavailable');
+    return get(key);
+  };
+  await initReleaseStatus(f);
+  assert.equal(f.statusLink.textContent, 'Update available: v2.2.0');
+  assert.equal(f.updateNotice.hidden, false);
 });
 
 test('offline and rate-limit failures remain visible and cached, never reported up to date', async t => {

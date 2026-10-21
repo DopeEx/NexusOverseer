@@ -175,7 +175,7 @@ before sharing.
 **Record API wait times** is an independent, default-off switch in the same
 tab. **API Wait Times** shows source summaries, wait reasons and durations,
 expandable details, JSONL export and per-server clearing without recording
-request or response contents. Up to 1,000 scheduling events are retained per
+request or response contents. Up to 5,000 scheduling events are retained per
 server, sharing the diagnostic 10 MB cap. Counts cover retained events, not
 lifetime totals; the waiting source is not necessarily the cause of congestion.
 
@@ -201,7 +201,7 @@ Diagnostic logs are not public galaxy contributions. Timestamps indicate capture
 time, not a verified time of the underlying game action.
 
 Traffic logs remain local and server-separated, with at most 150 entries per
-traffic stream; scheduling retains up to 1,000 events. All streams share
+traffic stream; scheduling retains up to 5,000 events. All streams share
 10,000,000 UTF-8 bytes of entry JSON per server (excluding storage-container
 overhead). Each sanitized entry allows 256,000 JSON characters. Oversized entries
 retain API metadata and up to 100,000 serialized characters per body preview.

@@ -12,6 +12,23 @@ export function setStore(s) { store = s; }   // setter: other modules can't reas
 export let activeTab = 'dashboard';
 export function setActiveTab(t) { activeTab = t; }
 
+export function listBadge(text, variant = '') {
+  const badge = document.createElement('span');
+  badge.className = `finder-badge${variant ? ` ${variant}` : ''}`;
+  badge.textContent = text;
+  return badge;
+}
+
+export function zoneBadge(zone, badge = listBadge('')) {
+  badge.className = `finder-badge finder-zone-${['sentinel', 'open', 'dead', 'rift'].includes(zone) ? zone : 'unknown'}`;
+  if (badge.textContent !== (zone || 'unknown')) badge.textContent = zone || 'unknown';
+  return badge;
+}
+
+export function allianceBadge(tag) {
+  return listBadge(`[${tag}]`, 'finder-alliance');
+}
+
 // Message class by wording, so every status line is colored consistently:
 // failures are errors (red), unmet preconditions are warnings (yellow).
 const ERROR_TEXT = /\bfailed\b|^(⚠\s*)?(error|failed)\b|^could not\b|^unable to\b/i;
@@ -676,12 +693,19 @@ export async function fuelEstimate(sourcePlanetId, targetSystemId, ships, missio
   if (_fuelCache.has(key)) return _fuelCache.get(key);
   const body = { sourcePlanetId, targetSystemId, ships };
   if (missionType) body.missionType = missionType;
-  const est = await browser.runtime.sendMessage({
+  const pending = browser.runtime.sendMessage({
     type: 'GET_FUEL_ESTIMATE',
     body,
   });
-  if (!est.error) _fuelCache.set(key, est);
-  return est;
+  _fuelCache.set(key, pending);
+  try {
+    const est = await pending;
+    if (est.error) _fuelCache.delete(key);
+    return est;
+  } catch (error) {
+    _fuelCache.delete(key);
+    throw error;
+  }
 }
 
 // Fill a box with "On this planet:" + a chip (icon + qty × name) per ship that

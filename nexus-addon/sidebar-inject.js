@@ -6,6 +6,7 @@
 const ext = (typeof browser !== 'undefined' ? browser : chrome);
 const rt = ext.runtime;
 const DASH_URL = rt.getURL('dashboard.html');
+const AUTO_SCAN_PANEL_ENABLED = false;
 
 // lucide-style "line chart" icon, matching the other sidebar icons.
 const ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
@@ -19,14 +20,6 @@ const GUIDE_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="1
   class="lucide lucide-book-open sidebar-link-icon" aria-hidden="true">
   <path d="M12 7v14"></path><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"></path></svg>`;
 
-const ASTEROIDS_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
-  fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-  class="sidebar-link-icon" aria-hidden="true">
-  <path d="m14 13-8.381 8.38a1 1 0 0 1-3.001-3L11 9.999"/>
-  <path d="M15.973 4.027A13 13 0 0 0 5.902 2.373c-1.398.342-1.092 2.158.277 2.601a19.9 19.9 0 0 1 5.822 3.024"/>
-  <path d="M16.001 11.999a19.9 19.9 0 0 1 3.024 5.824c.444 1.369 2.26 1.676 2.603.278A13 13 0 0 0 20 8.069"/>
-  <path d="M18.352 3.352a1.205 1.205 0 0 0-1.704 0l-5.296 5.296a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l5.296-5.296a1.205 1.205 0 0 0 0-1.704z"/></svg>`;
-
 function buildSection() {
   const section = document.createElement('div');
   section.className = 'sidebar-section';
@@ -35,9 +28,6 @@ function buildSection() {
     <div class="sidebar-section-label">Addon</div>
     <a class="sidebar-link" href="${DASH_URL}" target="_blank" rel="noopener" data-nexus-addon="1">
       ${ICON}<span class="sidebar-link-label">Nexus Overseer</span>
-    </a>
-    <a class="sidebar-link" href="#" data-nexus-lsbelts="1">
-      ${ASTEROIDS_ICON}<span class="sidebar-link-label">Live Search Belts</span>
     </a>
     <a class="sidebar-link" href="#" data-nexus-guide="1">
       ${GUIDE_ICON}<span class="sidebar-link-label">User Guide</span>
@@ -61,12 +51,13 @@ function makeDraggable(el, handle) {
 }
 
 function openFieldsPanelSafe() {
+  if (!AUTO_SCAN_PANEL_ENABLED) return;
   openFieldsPanel().catch(err => {
     console.warn('[NexusOverseer] Could not open live-search window:', err);
     if (fieldsPanel) { fieldsPanel.remove(); fieldsPanel = null; }
     window.alert(/context invalidated/i.test(String(err && err.message))
       ? 'The NexusOverseer extension was reloaded. Please reload this page (Ctrl+F5) and try again.'
-      : `Could not open the live-search window: ${err && err.message || err}`);
+      : `Could not open the Auto Scan window: ${err && err.message || err}`);
   });
 }
 
@@ -276,10 +267,12 @@ function lsConfirm(message, ships, defs, untilFullState = null, escortRetreatThr
 
 let fieldsPanel = null;
 async function openFieldsPanel() {
+  const { asteroidMatches, visibleAsteroidFields } = await import(rt.getURL('asteroid-search.js'));
   if (fieldsPanel) { fieldsPanel.remove(); fieldsPanel = null; }
   const { live_search_last_matches, live_search_last_at, live_search } =
     await ext.storage.local.get(['live_search_last_matches', 'live_search_last_at', 'live_search']);
   let matches = live_search_last_matches || [];
+  let liveConfig = live_search || {};
   const running = !!(live_search && live_search.enabled);
 
   const panel = document.createElement('div');
@@ -290,7 +283,7 @@ async function openFieldsPanel() {
   header.className = 'nx-ls-header';
   const titleWrap = document.createElement('div');
   const heading = document.createElement('h1');
-  heading.innerHTML = 'Nexus <span>Overseer</span>: Live Search Belts';
+  heading.innerHTML = 'Nexus <span>Overseer</span>: Auto Scan Belts';
   const title = document.createElement('div');
   title.textContent = `Asteroid matches (${matches.length})`;
   title.className = 'nx-sub-label';
@@ -305,14 +298,14 @@ async function openFieldsPanel() {
   collapse.className = 'nx-overlay-close';
   collapse.textContent = '\u2212';
   collapse.title = 'Collapse';
-  collapse.setAttribute('aria-label', 'Collapse Live Search Belts');
+  collapse.setAttribute('aria-label', 'Collapse Auto Scan Belts');
   collapse.setAttribute('aria-expanded', 'true');
   collapse.onclick = () => {
     const collapsed = panel.classList.toggle('nx-ls-collapsed');
     content.hidden = collapsed;
     collapse.textContent = collapsed ? '+' : '\u2212';
     collapse.title = collapsed ? 'Expand' : 'Collapse';
-    collapse.setAttribute('aria-label', `${collapsed ? 'Expand' : 'Collapse'} Live Search Belts`);
+    collapse.setAttribute('aria-label', `${collapsed ? 'Expand' : 'Collapse'} Auto Scan Belts`);
     collapse.setAttribute('aria-expanded', String(!collapsed));
   };
   const close = document.createElement('button');
@@ -512,10 +505,22 @@ async function openFieldsPanel() {
 
   // Row picked via the radio column, for the "Optimise Mining Fleet" button.
   let selectedMatchId = null;
+  const optBtn = document.createElement('button');
+  optBtn.textContent = 'Optimise Mining Fleet';
+  optBtn.title = 'Set the editor to the recommended ship count for the selected row';
+  const paintOptBtn = () => {
+    optBtn.disabled = selectedMatchId == null;
+    optBtn.className = 'nx-btn nx-btn-secondary';
+  };
 
   function renderRows() {
     body.textContent = '';
-    if (!matches.length) { body.textContent = 'No current matches.'; return; }
+    const visible = visibleAsteroidFields(
+      matches.map(m => ({ ...m, fieldId: m.id })), liveConfig, miningFieldIds);
+    if (!visible.some(m => m.id === selectedMatchId && !m.missing && !m.unconfirmed)) selectedMatchId = null;
+    paintOptBtn();
+    title.textContent = `Asteroid matches (${visible.length})`;
+    if (!visible.length) { body.textContent = 'No current matches.'; return; }
 
     const table = document.createElement('table');
     table.className = 'nx-ls-table';
@@ -525,7 +530,7 @@ async function openFieldsPanel() {
       <th class="nx-ls-numeric">Left %</th>
       <th>Recommended</th></tr></thead>`;
     const tb = document.createElement('tbody');
-    for (const m of matches) {
+    for (const m of visible) {
       const tr = document.createElement('tr');
       if ((myUsername && m.controllerName === myUsername) || miningFieldIds.has(m.id)) {
         tr.className = 'nx-ls-mining';   // already mining / claimed by us
@@ -534,6 +539,7 @@ async function openFieldsPanel() {
       const selTd = document.createElement('td');
       const selInp = document.createElement('input');
       selInp.type = 'radio'; selInp.name = 'nx-ls-row-select';
+      selInp.disabled = !!(m.missing || m.unconfirmed);
       selInp.checked = selectedMatchId === m.id;
       selInp.addEventListener('change', () => { selectedMatchId = m.id; paintOptBtn(); });
       selTd.appendChild(selInp);
@@ -545,8 +551,9 @@ async function openFieldsPanel() {
       const recShips = recShipsFor(m);
       const tplShips = effectiveShips();
       const ships = tplShips.length ? tplShips : fleetWithRec(recShips);
-      const canMine = !!(planetId && ships.length);
-      const mineTip = !planetId ? 'Live search has no source planet set.'
+      const canMine = !!(planetId && ships.length && !m.missing && !m.unconfirmed);
+      const mineTip = !planetId ? 'Auto Scan has no source planet set.'
+        : m.missing || m.unconfirmed ? 'This field is not a confirmed mining target.'
         : !ships.length ? 'No recommendation and no ships set in the editor.'
         : 'Send the recommended fleet to mine this field.';
 
@@ -597,11 +604,18 @@ async function openFieldsPanel() {
       mineTd.appendChild(mineBtn);
 
       const fuelTd = document.createElement('td');
-      fuelTd.textContent = `${ships.length ? '…' : '—'} (${m.system})`;
-      if (ships.length && m.systemId != null) {
+      fuelTd.textContent = `${ships.length && !m.missing && !m.unconfirmed ? '…' : '—'} (${m.system})`;
+      const note = m.missing ? 'Field no longer present - own mining mission still active'
+        : m.unconfirmed ? 'Field not rechecked - own mining mission still active'
+          : !asteroidMatches(m, liveConfig) ? 'Own mining mission - outside filters' : '';
+      if (note) {
+        fuelTd.textContent += ` · ${note}`;
+        tr.title = note;
+      }
+      if (ships.length && m.systemId != null && !m.missing && !m.unconfirmed) {
         ext.runtime.sendMessage({ type: 'GET_FUEL_ESTIMATE', body: { sourcePlanetId: planetId, targetSystemId: m.systemId, ships } })
-          .then(est => { fuelTd.textContent = `${est && est.fuelCost != null ? est.fuelCost : '?'} (${m.system})`; })
-          .catch(() => { fuelTd.textContent = `? (${m.system})`; });
+          .then(est => { fuelTd.textContent = `${est && est.fuelCost != null ? est.fuelCost : '?'} (${m.system})${note ? ` · ${note}` : ''}`; })
+          .catch(() => { fuelTd.textContent = `? (${m.system})${note ? ` · ${note}` : ''}`; });
       }
 
       const cell = (txt, extra = '') => { const td = document.createElement('td'); td.style.cssText = extra; td.textContent = txt; return td; };
@@ -629,15 +643,29 @@ async function openFieldsPanel() {
 
   // Live-refresh title/timestamp/rows when a background scan writes new results,
   // so the window doesn't sit on a stale "as of" time. Self-removes once closed.
+  let panelRevision = 0;
   function onScan(changes, area) {
-    if (area !== 'local' || !('live_search_last_at' in changes || 'live_search_last_matches' in changes)) return;
     if (!panel.isConnected) { ext.storage.onChanged.removeListener(onScan); return; }
-    ext.storage.local.get(['live_search_last_matches', 'live_search_last_at']).then(d => {
-      matches = d.live_search_last_matches || [];
-      title.textContent = `Asteroid matches (${matches.length})`;
-      sub.textContent = d.live_search_last_at ? `as of ${new Date(d.live_search_last_at).toLocaleTimeString()}` : 'no scan yet';
+    if (area !== 'local') return;
+    panelRevision++;
+    if (area === 'local' && changes.live_search) {
+      const updated = changes.live_search.newValue;
+      if (updated && updated.planetId !== liveConfig.planetId) {
+        ext.storage.onChanged.removeListener(onScan);
+        openFieldsPanelSafe();
+        return;
+      }
+      liveConfig = updated || {};
+      curRunning = !!updated?.enabled;
+      paintToggle();
       renderRows();
-    });
+    }
+    if (changes.live_search_last_matches) matches = changes.live_search_last_matches.newValue || [];
+    if (changes.live_search_last_at) {
+      const at = changes.live_search_last_at.newValue;
+      sub.textContent = at ? `as of ${new Date(at).toLocaleTimeString()}` : 'no scan yet';
+    }
+    if (changes.live_search_last_matches || changes.live_search_last_at) renderRows();
   }
   ext.storage.onChanged.addListener(onScan);
 
@@ -649,8 +677,8 @@ async function openFieldsPanel() {
   const toggleBtn = document.createElement('button');
   let curRunning = running;
   const paintToggle = () => {
-    toggleBtn.textContent = curRunning ? 'Stop Live Search' : 'Start Live Search';
-    note.textContent = curRunning ? 'Live search running (every 5 min).' : 'Live search stopped.';
+    toggleBtn.textContent = curRunning ? 'Stop Auto Scan' : 'Auto Scan';
+    note.textContent = curRunning ? 'Auto Scan every 5 min; field data reused for up to 15 min.' : 'Auto Scan stopped.';
     toggleBtn.className = curRunning ? 'nx-btn nx-ls-stop' : 'nx-btn nx-btn-primary';
   };
   paintToggle();
@@ -659,11 +687,12 @@ async function openFieldsPanel() {
       await ext.runtime.sendMessage({ type: 'STOP_LIVE_SEARCH' });
       curRunning = false;
     } else {
-      if (!live_search || live_search.planetId == null) {
-        window.alert('Configure live search in the Tracker’s Asteroids tab first (planet + filters).');
+      const { live_search: savedConfig } = await ext.storage.local.get('live_search');
+      if (!savedConfig || savedConfig.planetId == null) {
+        window.alert('Configure Auto Scan in the Tracker’s Asteroids tab first (planet + filters).');
         return;
       }
-      await ext.runtime.sendMessage({ type: 'SET_LIVE_SEARCH', config: { ...live_search, enabled: true } });
+      await ext.runtime.sendMessage({ type: 'SET_LIVE_SEARCH', config: { ...savedConfig, enabled: true } });
       curRunning = true;
     }
     paintToggle();
@@ -671,18 +700,10 @@ async function openFieldsPanel() {
 
   // Sets the editor to the recommended ship count for the row picked via the
   // radio column (escorts kept, miner swapped in — same merge as the pickaxe).
-  const optBtn = document.createElement('button');
-  optBtn.textContent = 'Optimise Mining Fleet';
-  optBtn.title = 'Set the editor to the recommended ship count for the selected row';
-  const paintOptBtn = () => {
-    const has = selectedMatchId != null;
-    optBtn.disabled = !has;
-    optBtn.className = 'nx-btn nx-btn-secondary';
-  };
   paintOptBtn();
   optBtn.onclick = () => {
     const m = matches.find(x => x.id === selectedMatchId);
-    if (!m) return;
+    if (!m || m.missing || m.unconfirmed) return;
     const recShips = recShipsFor(m).slice();
     if (excavator) {
       const excId = nameToId['Excavator'];
@@ -705,6 +726,11 @@ async function openFieldsPanel() {
   panel.append(header, content);
   document.body.append(panel);
   makeDraggable(panel, header);
+  const revision = panelRevision;
+  const latest = await ext.storage.local.get(['live_search', 'live_search_last_matches', 'live_search_last_at']);
+  if (revision === panelRevision) {
+    onScan(Object.fromEntries(Object.entries(latest).map(([key, newValue]) => [key, { newValue }])), 'local');
+  }
 }
 
 ext.runtime.onMessage.addListener(msg => {

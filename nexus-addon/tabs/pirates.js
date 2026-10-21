@@ -263,8 +263,8 @@ async function automatePirateAttacks() {
       });
       if (res.error) {
         if (String(res.error).includes('Human verification')) {
-          stopAttackAutomation(`Attack failed: ${res.error}`, true);
           pauseAutomationsForHumanVerification(res.error);
+          stopAttackAutomation(`Attack failed: ${res.error}`, true);
         } else {
           setStatusText(autoStatus, `Attack failed: ${res.error}`, 'warning');
         }
