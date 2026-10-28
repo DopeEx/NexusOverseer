@@ -2,9 +2,15 @@ import { systemCacheFresh } from './galaxy-cache.js';
 export { asteroidMatches, visibleAsteroidFields, reconcileAsteroidRows } from './asteroid-search.js';
 
 export async function loadGalaxyScans() {
-  const response = await browser.runtime.sendMessage({ type: 'GET_GALAXY_SCANS' });
-  if (response.error) throw new Error(response.error);
-  return response.scans;
+  const scans = {};
+  let page = { type: 'GET_GALAXY_SCANS' };
+  while (page) {
+    const response = await browser.runtime.sendMessage(page);
+    if (response.error) throw new Error(response.error);
+    Object.assign(scans, response.scans);
+    page = response.next == null ? null : { type: 'GET_GALAXY_SCANS', snapshot: response.snapshot, offset: response.next };
+  }
+  return scans;
 }
 
 export async function getSystemPlanets(systemId, cache, { purpose = 'ownership', group = 'both', maxAge, force = false, priority = 'bulk', source = 'galaxy-cache' } = {}) {
