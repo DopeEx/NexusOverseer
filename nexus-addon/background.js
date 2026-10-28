@@ -44,6 +44,38 @@ async function galaxyServerKey() {
   return (await globalThis.nexusStorage?.getActiveServer?.())?.key || 's0';
 }
 
+// runtime messages are capped (64 MiB in Chromium), so large scan sets are sent in pages.
+const SCAN_PAGE_BYTES = 16 * 1024 * 1024;
+const scanSnapshots = new Map();
+
+async function galaxyScanPage(serverKey, { snapshot, offset = 0 }) {
+  const now = Date.now();
+  for (const [id, entry] of scanSnapshots) if (entry.expires < now) scanSnapshots.delete(id);
+  let entry = snapshot && scanSnapshots.get(snapshot);
+  if (!entry) {
+    if (offset) throw new Error('Galaxy scan snapshot expired.');
+    entry = { id: `${now}:${Math.random()}`, rows: Object.entries(await galaxyCache.scans(serverKey)) };
+    scanSnapshots.set(entry.id, entry);
+  }
+  entry.expires = now + 60000;
+  const scans = {};
+  let bytes = 0;
+  let index = offset;
+  while (index < entry.rows.length) {
+    const [key, value] = entry.rows[index];
+    const size = JSON.stringify(value).length * 2;
+    if (index > offset && bytes + size > SCAN_PAGE_BYTES) break;
+    scans[key] = value;
+    bytes += size;
+    index++;
+  }
+  if (index >= entry.rows.length) {
+    scanSnapshots.delete(entry.id);
+    return { scans };
+  }
+  return { scans, snapshot: entry.id, next: index };
+}
+
 async function galaxyCatalog(path, options) {
   return galaxyCache.catalog(await galaxyServerKey(), path, options);
 }
@@ -644,7 +676,7 @@ const handleRuntimeMessage = async (msg, context = null, options = {}) => {
         }
         return { ...result, ...refresh };
       }
-      if (msg.type === 'GET_GALAXY_SCANS') return { scans: await galaxyCache.scans(serverKey) };
+      if (msg.type === 'GET_GALAXY_SCANS') return await galaxyScanPage(serverKey, msg);
       if (msg.type === 'CLEAR_GALAXY_CACHE') {
         galaxySharing.cancel(serverKey);
         await galaxyCache.clear(serverKey);
