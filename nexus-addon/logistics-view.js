@@ -210,8 +210,79 @@ async function openView() {
   const onKey = e => { if (e.key === 'Escape') { closeView(); document.removeEventListener('keydown', onKey); } };
   document.addEventListener('keydown', onKey);
 
+  const cached = colonyCache && colonyCache.origin === location.origin && Date.now() - colonyCache.fetchedAt < CACHE_TTL_MS
+    ? colonyCache : null;
+  if (cached) {
+    render(page, cached.colonies);
+    applyPendingDeliver();
+    if (Date.now() - cached.fetchedAt > CACHE_REVALIDATE_MS) void revalidateColonies();
+    return;
+  }
   let colonies;
   try {
+    colonies = await fetchColonies('interactive');
+  } catch (e) {
+    page.querySelector('.lv-sub').textContent = `Error: ${e.message}`;
+    return;
+  }
+  if (!overlay) return;
+  render(page, colonies);
+  applyPendingDeliver();
+}
+
+// Colony snapshot kept across close/reopen so the view opens instantly; it is
+// refreshed in the background and by targeted reloads after a send.
+const CACHE_TTL_MS = 2 * 60 * 1000;
+const CACHE_REVALIDATE_MS = 15 * 1000;
+let colonyCache = null;   // { origin, colonies, fetchedAt, version }
+let inflight = null;
+
+function fetchColonies(priority) {
+  const origin = location.origin;
+  const version = colonyCache?.version ?? 0;
+  if (inflight && inflight.origin === origin) return inflight.promise;
+  const promise = loadColonies(priority).then(colonies => {
+    // A send during the load makes this snapshot stale; keep the newer local state.
+    if (colonyCache && colonyCache.origin === origin && colonyCache.version !== version) return colonyCache.colonies;
+    if (colonyCache && colonyCache.origin === origin) {
+      mergeColonies(colonyCache.colonies, colonies);
+      colonyCache.fetchedAt = Date.now();
+      return colonyCache.colonies;
+    }
+    colonyCache = { origin, colonies, fetchedAt: Date.now(), version: 0 };
+    return colonies;
+  }).finally(() => { if (inflight?.promise === promise) inflight = null; });
+  inflight = { origin, promise };
+  return promise;
+}
+
+// Update colonies in place so staged builders keep pointing at live objects.
+function mergeColonies(target, fresh) {
+  const same = (a, b) => a.kind === b.kind && a.id === b.id;
+  for (const f of fresh) {
+    const existing = target.find(c => same(c, f));
+    if (existing) Object.assign(existing, f);
+    else target.push(f);
+  }
+  for (let i = target.length - 1; i >= 0; i--) {
+    if (!fresh.some(f => same(f, target[i]))) target.splice(i, 1);
+  }
+}
+
+async function revalidateColonies() {
+  try {
+    await fetchColonies('check');
+  } catch (e) {
+    console.error('[NexusOverseer] Could not refresh Quartermaster data.', e);
+    return;
+  }
+  if (overlay && !dragItem) rerender();
+}
+
+async function loadColonies(priority) {
+  const jget = path => globalThis.nexusGameApi(path, { source: 'logistics', priority });
+  let colonies;
+  {
     const [planetList, outpostData, meData] = await Promise.all([
       jget('/api/planets'), jget('/api/outposts').catch(() => ({})), jget('/api/auth/me').catch(() => ({})),
     ]);
@@ -245,13 +316,8 @@ async function openView() {
       return { id: p.id, systemId: p.systemId, kind: 'Planet', name: p.name, res, ships: (fleet.fleet || []) };
     }).concat(moonCol,
       outposts.map(o => ({ id: o.id, systemId: o.systemId, kind: 'Outpost', name: o.name || `Outpost #${o.id}`, res: o, ships: null, deployed: o.deployedShipCount })));
-  } catch (e) {
-    page.querySelector('.lv-sub').textContent = `Error: ${e.message}`;
-    return;
   }
-  if (!overlay) return;
-  render(page, colonies);
-  applyPendingDeliver();
+  return colonies;
 }
 
 // Prefill a planet→planet resource delivery, e.g. from the building-upgrade
@@ -460,7 +526,63 @@ async function jpost(path, body) {
 }
 const fuelEstimate = (sourcePlanetId, targetSystemId, ships) =>
   jpost('/api/fleet/fuel-estimate', { sourcePlanetId, targetSystemId, ships });
-function refresh() { closeView(); openView(); }
+
+// Re-fetch a single colony in place (planets/moons: detail + fleet; outposts come
+// from one shared list), so a transfer costs 2-4 requests instead of a full reload.
+async function reloadColony(c, outposts) {
+  if (c.kind === 'Outpost') {
+    const o = outposts.find(x => x.id === c.id);
+    if (o) { c.res = o; c.deployed = o.deployedShipCount; }
+    return;
+  }
+  const base = c.kind === 'Moon' ? `/api/moons/${c.id}` : `/api/planets/${c.id}`;
+  const [detail, fleet] = await Promise.all([jget(base).catch(() => null), jget(`${base}/fleet`).catch(() => null)]);
+  const res = detail && (c.kind === 'Moon' ? detail.moon : detail.planet);
+  if (res) c.res = res;
+  if (fleet) c.ships = fleet.fleet || [];
+}
+
+// Show the sent goods as gone from the source right away; the server state follows.
+function applySentLocally(b, ships) {
+  const src = b.mode === 'collect' ? allColonies.find(c => c.kind === 'Planet' && c.id === b.srcPlanetId) : b.src;
+  if (!src) return;
+  for (const s of ships) {
+    const f = (src.ships || []).find(x => x.shipDefId === s.shipDefId);
+    if (f) f.quantity = Math.max(0, (f.quantity || 0) - s.quantity);
+  }
+  if (b.mode === 'resource' && src.res) {
+    for (const [k, e] of Object.entries(b.res)) src.res[k] = Math.max(0, (src.res[k] || 0) - e.amount);
+  }
+}
+
+function rerender() {
+  if (!overlay) return;
+  const page = overlay.querySelector('.nx-qm-page');
+  const scrollers = [overlay, page].map(el => [el, el.scrollTop]);
+  const keep = builder;
+  while (page.children.length > 1) page.lastElementChild.remove();
+  render(page, allColonies);
+  if (keep) { builder = keep; renderBuilder(); }
+  for (const [el, top] of scrollers) el.scrollTop = top;
+}
+
+async function refreshAfterSend(b, ships) {
+  const affected = b.mode === 'collect'
+    ? [allColonies.find(c => c.kind === 'Planet' && c.id === b.srcPlanetId), b.outpost]
+    : [b.src, b.target];
+  const colonies = [...new Set(affected.filter(Boolean))];
+  applySentLocally(b, ships);
+  if (colonyCache) colonyCache.version++;
+  rerender();
+  try {
+    const outposts = colonies.some(c => c.kind === 'Outpost')
+      ? await jget('/api/outposts').then(d => d.outposts || (Array.isArray(d) ? d : [])) : [];
+    await Promise.all(colonies.map(c => reloadColony(c, outposts)));
+  } catch (e) {
+    console.error('[NexusOverseer] Could not refresh Quartermaster colonies.', e);
+  }
+  rerender();
+}
 
 // Stage a dropped resource/ship into the top builder card. Same source+target+mode
 // accumulates (more resources or ship types); a different combo starts fresh.
@@ -914,8 +1036,12 @@ async function renderBuilder() {
   send.onclick = async () => {
     if (!getShips().length) return;
     send.disabled = true; setStatusText(status, 'Sending…');
-    try { const s = sendSpec(); await jpost(s.path, s.body); builder = null; refresh(); }
-    catch (e) { setStatusText(status, e.message, 'error'); send.disabled = false; }
+    try {
+      const s = sendSpec(), ships = getShips();
+      await jpost(s.path, s.body);
+      builder = null;
+      void refreshAfterSend(b, ships);
+    } catch (e) { setStatusText(status, e.message, 'error'); send.disabled = false; }
   };
 
   const foot = document.createElement('div');

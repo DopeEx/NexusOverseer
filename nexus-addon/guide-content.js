@@ -48,7 +48,7 @@ globalThis.NX_GUIDE_SECTIONS = [
   ]],
   ['Quartermaster (📦 top bar)', [
     ['Overview', 'Resource and ship cards for your planets, moons and outposts. Moons and outposts sit in the left column; the planet grid uses the remaining width and fits more planets per row on wider screens.'],
-    ['Move by drag & drop', 'Drag a resource or ship from a colony onto another to stage a transfer in the docked builder card at the top: adjust amounts, choose the allowed transport types (selection is remembered), see fuel + ETA, then Send. Hold the item in a highlighted top or bottom edge zone to scroll to colonies outside the visible area.'],
+    ['Move by drag & drop', 'Drag a resource or ship from a colony onto another to stage a transfer in the docked builder card at the top: adjust amounts, choose the allowed transport types (selection is remembered), see fuel + ETA, then Send. The view stays open and updates the affected colonies; reopening within two minutes shows recent data immediately while it refreshes in the background. Hold the item in a highlighted top or bottom edge zone to scroll to colonies outside the visible area.'],
     ['Cargo controls', 'Fill sets one resource to the most the available transport fleet can carry alongside the other goods. If the load exceeds capacity, Fit to fleet reduces all resource amounts proportionally to fit. Both controls respect the selected transport types and the stock on the source colony. Review the amounts before pressing Send.'],
     ['What each drop does', 'Planet→planet: deliver resources / transfer (relocate) ships. Planet→outpost: supply resources / deploy ships. Drag an outpost resource onto a planet to collect it (choose source planet + resource types). Nothing sends until you press Send.'],
   ]],
