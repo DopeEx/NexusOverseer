@@ -3643,6 +3643,7 @@ const refetchPending = new Set();
 
 browser.webRequest.onCompleted.addListener(
   details => {
+    if (details.method !== 'GET') return;
     if (details.tabId === -1) return;                       // our own re-fetches
     if (details.statusCode < 200 || details.statusCode >= 300) return;
     const url = new URL(details.url);

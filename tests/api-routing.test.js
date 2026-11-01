@@ -524,7 +524,7 @@ test('successful add-on transport does not trigger its own realtime follow-up', 
   globalThis.browser.tabs.query = async () => [{ id: 42 }];
   globalThis.browser.tabs.sendMessage = async () => {
     sends++;
-    observer({ tabId: 42, statusCode: 200, url: 'https://s0.nexuslegacy.space/api/fleet/missions' });
+    observer({ tabId: 42, method: 'GET', statusCode: 200, url: 'https://s0.nexuslegacy.space/api/fleet/missions' });
     return { ok: true, data: { missions: [] } };
   };
   await loadBackground();
@@ -532,6 +532,31 @@ test('successful add-on transport does not trigger its own realtime follow-up', 
   await listener({ type: 'GET_MISSIONS' });
   await settle();
   assert.equal(sends, 1);
+});
+
+test('successful POST actions do not trigger realtime GET follow-ups', async () => {
+  makeBrowserStub();
+  globalThis.browser.alarms.get = async () => null;
+  let observer;
+  let tabQueries = 0;
+  globalThis.browser.webRequest.onCompleted.addListener = listener => { observer = listener; };
+  globalThis.browser.tabs.query = async () => {
+    tabQueries++;
+    return [];
+  };
+  globalThis.nexusStorage = {
+    serverFromUrl: () => ({ key: 's0', origin: 'https://s0.nexuslegacy.space' }),
+    getActiveServer: async () => ({ key: 's0', origin: 'https://s0.nexuslegacy.space' }),
+  };
+  await loadBackground();
+  observer({
+    tabId: 42,
+    method: 'POST',
+    statusCode: 200,
+    url: 'https://s0.nexuslegacy.space/api/fleet/reports/read-all',
+  });
+  await settle();
+  assert.equal(tabQueries, 0);
 });
 
 test('manual and automatic dispatches both use action headroom', async t => {
