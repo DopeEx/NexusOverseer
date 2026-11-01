@@ -24,6 +24,7 @@ class ManualBuildTests(unittest.TestCase):
             self.assertEqual(len(list(directory.iterdir())), 3)
             with zipfile.ZipFile(directory / f'nexus-overseer-{version}.zip') as chrome:
                 self.assertEqual(set(chrome.namelist()), set(BUILD['FILES']))
+                self.assertIn('production-rates.js', chrome.namelist())
                 self.assertNotIn('scripts', json.loads(chrome.read('manifest.json'))['background'])
                 addon = {name: chrome.read(name) for name in chrome.namelist()}
                 self.assertEqual(json.loads(addon['.nexus-install.json'])['channel'], 'store')

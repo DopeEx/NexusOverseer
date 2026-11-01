@@ -60,7 +60,7 @@ No player account, actual coordinates or real economy data is shown.
 
 ## Features
 
-- **Dashboard**: default tab with total resources and hourly production across planets and moons, active missions, research, and per-colony queues and fleets.
+- **Dashboard**: default tab with total resources and hourly production across planets and moons, including the account development bonus; population growth slows toward housing capacity. Also shows active missions, research, and per-colony queues and fleets.
 - **Statistics**: survey, pirate, mining, battle, debris, expedition, xeno and wormhole reports with all-time, daily, hourly and yesterday views, charts and loss/rebuild costs.
 - **Galaxy Scout**: search systems and arms using a persistent local planet/moon
   database. Physical properties do not expire; unknown result ownership is checked
