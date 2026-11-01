@@ -103,6 +103,11 @@ export function publicGalaxyFromRows(serverKey, rows) {
         const prior = new Map((system[group] || []).map(body => [body.id, body]));
         system[group] = data[group].map(body => ({ ...prior.get(body.id), ...pick(group === 'moons'
           ? { ...body, planetId: body.planetId ?? body.parentPlanetId } : body, group) }));
+        // Body IDs are globally unique; the most recent observation owns them.
+        const claimed = new Set(system[group].map(body => body.id));
+        for (const [otherId, other] of systems) {
+          if (otherId !== systemId && other[group]) other[group] = other[group].filter(body => !claimed.has(body.id));
+        }
       }
     }
     for (const group of ['stations', 'hubs', 'arms']) {
@@ -135,17 +140,29 @@ export function mergePublicGalaxies(existing, incoming) {
   validatePublicGalaxy(incoming, existing.serverKey);
   const conflicts = [];
   let added = 0, filled = 0;
-  const mergeList = (left, right, group, path) => {
+  // Body IDs are globally unique; when the incoming data places one in another system, the incoming placement wins.
+  existing = structuredClone(existing);
+  for (const system of incoming.systems) for (const group of ['planets', 'moons']) {
+    const claimed = new Set((system[group] || []).map(body => body.id));
+    if (!claimed.size) continue;
+    for (const other of existing.systems) {
+      if (other.id !== system.id && other[group]) other[group] = other[group].filter(body => !claimed.has(body.id));
+    }
+  }
+  const mergeList = (left, right, group, path, owner = '') => {
     const key = group === 'stations' ? 'stationId' : 'id';
     const items = new Map(left.map(item => [item[key], structuredClone(item)]));
     for (const item of right) {
       if (!items.has(item[key])) { items.set(item[key], structuredClone(item)); added++; continue; }
       const target = items.get(item[key]);
+      const name = target.name ?? target.stationName;
+      const where = [owner || (name && `${group} ${name}`), group === 'planets' || group === 'moons' ? `${group.slice(0, -1)} position ${target.position ?? item.position}` : '']
+        .filter(Boolean).join(', ');
       for (const [field, value] of Object.entries(item)) {
         if (group === 'systems' && ['planets', 'moons'].includes(field) && target[field]) {
-          target[field] = mergeList(target[field], value, field, `${path}/${item[key]}/${field}`);
+          target[field] = mergeList(target[field], value, field, `${path}/${item[key]}/${field}`, `system ${target.name ?? item[key]}`);
         } else if (!Object.hasOwn(target, field)) { target[field] = structuredClone(value); filled++; }
-        else if (target[field] !== value) conflicts.push(`${path}/${item[key]}/${field}: ${JSON.stringify(target[field])} != ${JSON.stringify(value)}`);
+        else if (target[field] !== value) conflicts.push(`${path}/${item[key]}/${field}: ${JSON.stringify(target[field])} != ${JSON.stringify(value)}${where ? ` (${where})` : ''}`);
       }
     }
     return [...items.values()];
