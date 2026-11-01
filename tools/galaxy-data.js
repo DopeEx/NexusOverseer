@@ -7,6 +7,8 @@ import { emptyPublicGalaxy, validatePublicGalaxy, validatePublicManifest, mergeP
 
 const root = fileURLToPath(new URL('../data/galaxy/', import.meta.url));
 const bytes = data => `${JSON.stringify(data, null, 2)}\n`;
+// Galaxy files are published compact: pretty-printing roughly doubles their size.
+const compactBytes = data => `${JSON.stringify(data)}\n`;
 
 export async function mergeContribution(input, directory = root, dryRun = false) {
   let content;
@@ -26,7 +28,7 @@ export async function mergeContribution(input, directory = root, dryRun = false)
   if (result.conflicts.length || dryRun) return result;
   const manifestPath = resolve(directory, 'manifest.json');
   const manifest = validatePublicManifest(JSON.parse(await readFile(manifestPath, 'utf8')));
-  const published = bytes(result.data);
+  const published = compactBytes(result.data);
   if (Buffer.byteLength(published) > PUBLIC_MAX_BYTES) throw new Error('Published galaxy file exceeds the addon download limit of 25 MB.');
   const sha256 = createHash('sha256').update(published).digest('hex');
   manifest.servers[incoming.serverKey] = { file: `${incoming.serverKey}.json`, sha256 };

@@ -72,7 +72,7 @@ No player account, actual coordinates or real economy data is shown.
 - **Fleet Templates**: reusable fleet compositions, including escort templates for mining.
 - **Market**: browse and track trades.
 - **Tech Tree and upgrades**: research overview plus building, ship and tech upgrade queues.
-- **Logistics (Quartermaster)**: resource transfers and outpost collections with selectable transport ships.
+- **Logistics (Quartermaster)**: resource and ship transfers between colonies, including Deliver or Transfer for moon-to-planet cargo, plus outpost collections with selectable transport ships.
 - **Combat Simulator**: integrated directly into the dashboard, using the game's official combat calculator. Fleet inputs, intel imports, and battle results stay in the same tab.
 - **Multiple universes**: data is kept separately for each universe.
 - **API traffic status**: shared request scheduling respects endpoint budgets

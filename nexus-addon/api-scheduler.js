@@ -187,12 +187,11 @@ export function createApiScheduler({ storage, key = 'nexus_api_scheduler_v1', re
       if (Number.isFinite(remaining) && remaining >= 0) {
         budget.reportedRemaining = remaining;
         budget.observedAt = now;
-        budget.remaining = now >= budget.resetAt || budget.remaining == null
-          ? remaining : Math.min(budget.remaining, remaining);
+        // The newest server value wins: keeping the minimum until resetAt let a
+        // stale low value (re-armed by every response) cause endless pauses.
+        budget.remaining = remaining;
       }
-      if (Number.isFinite(reset) && reset >= 0) {
-        budget.resetAt = Math.max(budget.resetAt, now + reset * 1000);
-      }
+      if (Number.isFinite(reset) && reset >= 0) budget.resetAt = now + reset * 1000;
     }
     if (Number(response.status) !== 429) return;
     const wait = retryDelay(response.retryAfter, fallback);

@@ -990,8 +990,119 @@ Top-level `productionBreakdown.breakdown` supplies per-resource `base`,
 while `planet.oreRate` is 8883.511. Thus the table base, truncated breakdown
 final and precise net planet rate are not interchangeable.
 Top-level `productionMultiplier` is 1 and `starterProductionMultiplier` is
-1.5034587499842322; their presence alone does not establish the full stacking
-formula.
+1.5034587499842322 in that capture.
+
+**Starter multiplier (analysis of 1 November 2026, homeworld capture).** The planet
+rates (`planet.<resource>Rate`, `resourceSnapshot.productionRates`) are
+*without* `starterProductionMultiplier`; the game tooltip includes it
+("Entwicklungsbonus ×1,34"). Ore capture: `starterProductionMultiplier`
+1.3435070373665132, `base` 5033, workers ×1.2, research +0.55, race +0.1,
+artifact ×1.08, `effectiveConsumption` 1160.
+
+- `gross = base * workers * (1 + research + race) * artifact`
+  = 5033 * 1.2 * 1.65 * 1.08 = 10762.567 (matches the API).
+- API net `oreRate` = gross - consumption = 9602.567 (Dashboard showed 9.603/h).
+- Tooltip = API values * starter multiplier: production 10762.567 * 1.3435 =
+  14460, consumption 1160 * 1.3435 = 1558, net 9602.567 * 1.3435 = 12901
+  (all three match the tooltip exactly).
+
+The Dashboard previously showed the unscaled API rates, 1/1.34 of the in-game
+values. It now multiplies every resource rate by `starterProductionMultiplier`
+(see "Moon production" below). The earlier statement that the displayed hourly
+rates were confirmed correct only covered the unit (/h), not this multiplier.
+
+Second capture (same day, multiplier 1.3435070373665132) checked against the
+resource, energy and population tooltips:
+
+| Resource | API gross / consumption / net | Tooltip production / consumption / net | Result |
+|---|---|---|---|
+| Ore | 10762.6 / 1160 / 9602.6 | 14460 / 1558 / 12901 | API * multiplier |
+| Silicates | 6826.5 / 386 / 6440.5 | 9171 / 519 / 8653 | API * multiplier |
+| Hydrogen | 3178.4 / 360 / 2818.4 | 4270 / 484 / 3787 | API * multiplier |
+| Alloys | 1577.8 (no consumption) | 2120/h | API * multiplier |
+| Bio Extract | 120.7 / 83.8 / 36.8 | 162 / 112 / 50 | API * multiplier |
+
+- The multiplier applies to every produced resource, including the rare
+  Bio Extract, and to the consumption of resources that have any.
+  `resourceSnapshot.productionRates` equals the planet's `<resource>Rate` fields.
+- Tooltip "Grundproduktion" is `breakdown.<resource>.base`; "Arbeiter ×1.20" is
+  `workers`; "Forschung +47%" is `research`; "Anführer (explorer) +10%" is
+  `race`; "Artefakt" is `artifact`. Stacking is
+  `base * workers * (1 + research + race) * artifact`, then minus
+  `effectiveConsumption`, then times `starterProductionMultiplier` (alloys
+  confirm this: 773 * 1.2 * 1.5 * 1.134 = 1577.85). Bio Extract's `gross`
+  (120.68) is about 0.7% above `111 * 1.08`, so it has a small extra term.
+- The `breakdown.<resource>.final` values are truncated nets of the API rate.
+- Energy is not affected: tooltip 15458 produced, 10654 consumed (+4.80K/h)
+  equals `energy.produced` and `energy.consumed`. `productionBreakdown.energyProducers`
+  is keyed by building id with `rawBase`, `base`, `final`, `energyResearch`,
+  `solarResearch`, `research`, `artifact`.
+- Population: `populationGrowthRate` 45.26 corresponds to the tooltip's
+  "Wachstumspotenzial +45/Std." (`productionBreakdown.population`: `base` 5,
+  `buildings` 23.5, `research` 0.5125, `temperature` 0.05; (5 + 23.5) *
+  (1 + 0.5125 + 0.05) = 44.5, close to 45.26). The tooltip's headline
+  growth "+321/h" is that value times a "Bevölkerungsfaktor ×7.09"
+  (45.26 * 7.09 = 321) which is not part of the response. The player
+  confirmed that the real growth rate changes dynamically: the closer the
+  population gets to the maximum (`maxPopulation`), the more the growth slows
+  down. The factor is therefore a fill-level-dependent term, not a constant.
+  At 8374 / 9142 (91.6% full, 768 free) it was 7.09; the formula is not yet
+  derived (one data point only). `populationGrowthRate` is the undamped
+  potential, so a linear population-full estimate based on it would be
+  inaccurate. The Dashboard computes the damped rate and a logistic full-time
+  estimate itself (`nexus-addon/production-rates.js`).
+- Potential formula (verified on two planets): `populationGrowthRate` =
+  `(base + buildings) * (1 + research) * (1 + temperature)` from
+  `productionBreakdown.population`. Planet 1: 28.5 * 1.5125 * 1.05 = 45.26;
+  planet 2: (5 + 9.3) * 1.5125 * 0.95 = 20.547 (both match the API exactly).
+  Temperature is a separate multiplier, not added to research.
+- Full planet (4600 / 4600, crystalline): the API still returns the potential
+  `populationGrowthRate` 20.547 (tooltip "Wachstumspotenzial +21/Std."), while
+  the tooltip shows "Wachstumsrate 0/h" and the note that the population has
+  reached its housing capacity. The API value is therefore not the effective
+  rate at the cap, and the Dashboard must treat `population >= maxPopulation`
+  as zero growth. The tooltip's "Biomasseverbrauch -46/Std." equals
+  `breakdown.bioExtract.effectiveConsumption` (46; first planet 83.85 shown
+  as -83).
+- Factor (two data points): the tooltip's "Bevölkerungsfaktor" is close to
+  `population * (1 - population / maxPopulation) / 100`, a logistic term that
+  vanishes at the cap. Effective growth = potential * factor.
+  - 2749 / 2760: formula 0.1035, tooltip ×0.10, potential 14.80 gives
+    +1.5/h (tooltip +1.5/h, API `populationGrowthRate` 14.80 is the
+    potential again).
+  - 8374 / 9142: formula 7.03, tooltip ×7.09 (about 1% off).
+  - 4600 / 4600: factor 0, tooltip 0/h.
+  The small deviation at the first point is unexplained (tooltip and API
+  population were captured at slightly different times; the exact divisor or
+  formula may differ). The factor and the effective rate are not in the API
+  response, so the Dashboard would have to compute them itself. A point at
+  low fill (30-50%) would confirm the shape.
+- The in-game description of the "Entwicklungsbonus" (the starter multiplier)
+  says it speeds up resource production, construction, research and
+  shipbuilding. It depends on the development of the empire and its combat
+  fleet, can only stay equal or decrease at the daily recalculation, and is
+  recalculated on return after at least 7 days of absence. It therefore
+  changes over time and should be read from each response, not cached. Its
+  effect on build, research and shipbuilding times was checked on
+  1 November 2026: the Dashboard's
+  construction, research and shipyard countdowns, which come from the absolute
+  end timestamps (`upgradeEndsAt`, `endsAt`), match the in-game overview to the
+  second (for example Research Lab Lv.14 at 168h 36m, a 100-ship Missile
+  Cruiser order at 6h 46m). The bonus is therefore already contained in those
+  timestamps and no scaling is applied to them. This does not establish how it
+  enters `buildSpeedMult`, `previewBuildTimeSeconds` or the planners' own
+  duration estimates.
+
+**Moon production.** `GET /api/moons/{moonId}` returns `moon.<resource>Rate`
+(unscaled, like planets) and a `resourceSnapshot` that includes
+`productionRates` and `starterProductionMultiplier`, but no top-level
+`productionBreakdown` or multiplier. Capture of 1 November 2026: API ore,
+silicates and hydrogen rates 1677.72, 1652.868 and 378.7 against in-game
++2254, +2220.6 and +508.8 per hour, ratio 1.3435 each, identical to the
+account's planet multiplier. The development bonus is therefore account-wide
+(confirmed by the player) and applies to moons as well. The Dashboard reads
+the multiplier from each planet/moon response and falls back to the last value
+seen.
 
 #### Storage Complex observations
 
@@ -1744,6 +1855,13 @@ The following POST routes are used by interactive features:
 | `POST /api/research/{researchId}/start` | Start research on a planet |
 | `POST /api/fleet/dispatch` and outpost/moon routes | Send fleets or resources through logistics |
 | `POST /api/fleet/fuel-estimate` | Calculate dispatch fuel and travel values; does not itself launch a fleet |
+
+Observed moon-to-planet resource requests use
+`POST /api/moons/{moonId}/dispatch` with `targetPlanetId`, `ships`, `cargo` and
+`missionType`. A captured successful request used `missionType: "deliver"`; the
+Quartermaster supports both `"deliver"` and `"transfer"`, defaulting to
+`"deliver"` just like planet-to-planet resource dispatches. Deliver drops the
+cargo and returns the haulers; transfer keeps them at the destination.
 
 The game validates action requirements and remains authoritative for resulting
 state. A successful request should not be treated as proof that every displayed

@@ -6,6 +6,7 @@ const uniqueImport = (spec) => import(`${spec}?ts=${crypto.randomUUID()}`);
 
 test('scrape visits every catalog universe with an open game tab', async () => {
   makeBrowserStub();
+  globalThis.browser.alarms.get = async () => null;
   globalThis.location = { hostname: 'example.com', href: 'https://example.com/' };
   await uniqueImport('../nexus-addon/server-storage.js');
 

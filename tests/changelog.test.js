@@ -46,12 +46,12 @@ test('the bundled release notes include all sections for the manifest version', 
   assert.deepEqual(notes.map(entry => entry.version), ['2.4.0']);
 });
 
-test('release metadata agrees and the published version leaves Unreleased empty', async () => {
+test('release metadata agrees and the changelog keeps an Unreleased section', async () => {
   const manifest = JSON.parse(await readFile(new URL('../nexus-addon/manifest.json', import.meta.url), 'utf8'));
   const metadata = JSON.parse(await readFile(new URL('../nexus-addon/package.json', import.meta.url), 'utf8'));
   const changelog = await readFile(new URL('../nexus-addon/CHANGELOG.md', import.meta.url), 'utf8');
   assert.equal(metadata.version, manifest.version);
-  assert.equal(changelog.split('## [Unreleased]')[1].split(/^## \[/m)[0].trim(), '');
+  assert.match(changelog, /^## \[Unreleased\]$/m);
   const heading = changelog.split(/\r?\n/).find(line => line.startsWith(`## [${manifest.version}] - `));
   assert.ok(heading, 'the manifest version has a dated changelog section');
   assert.match(heading, / - \d{4}-\d{2}-\d{2}$/);

@@ -81,8 +81,8 @@ function syncControls() {
   }
 }
 
-function download(name, payload) {
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+function download(name, payload, indent = 2) {
+  const blob = new Blob([JSON.stringify(payload, null, indent)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -138,7 +138,7 @@ function bind() {
       if (!await confirmDialog(`Export public galaxy structure for ${server.name || server.key} (${server.key})?\n\n${summary}\n\nOnly approved non-personal base fields are included. No owners, colony names, resources or upgraded building slots. This only downloads a local file; nothing is uploaded.`)) return;
       const current = await globalThis.nexusStorage.getActiveServer();
       if (current.key !== server.key) throw new Error('The selected server changed. Export again for the selected universe.');
-      download(`nexus-galaxy-public-${server.key}.json`, data);
+      download(`nexus-galaxy-public-${server.key}.json`, data, 0);
       issue.href = `https://github.com/DopeEx/NexusOverseer/issues/new?template=galaxy_data.md&title=${encodeURIComponent(`[Galaxy data] ${server.key}`)}`;
       issue.hidden = false;
       setStatusText(status, `Export downloaded: ${summary}. Review the file, open a contribution issue and attach it manually. Nothing was uploaded.`);

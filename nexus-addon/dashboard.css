@@ -1065,6 +1065,36 @@ th.sortable .arrow { margin-left: 4px; color: var(--accent); }
 .finder-directory-extra-fields input[type="number"] { width: 110px; }
 .finder-directory-extra-fields #f-directory-sector { width: 150px; }
 .finder-filter-type-field { flex: 1 1 100%; }
+.finder-scope-notice:not([hidden]) {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-bottom: 8px;
+  padding: 7px 10px;
+  border: 1px solid #e3b34133;
+  border-radius: var(--radius-control);
+  background: #e3b3410a;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+.finder-scope-notice::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warning);
+  content: '';
+}
+.finder-scope-notice button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--warning);
+  font: inherit;
+  cursor: pointer;
+}
+.finder-scope-notice button:hover { text-decoration: underline; }
+.finder-scope-notice button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (max-width: 600px) {
   .finder-directory-types-field { flex-basis: 100%; }
   .finder-directory-extra-fields .toolbar-select { max-width: 100%; }

@@ -137,6 +137,7 @@ export function resetFinderTab() {
   directoryFilterKey = '';
   for (const key of Object.keys(directoryStates)) delete directoryStates[key];
   document.getElementById('f-directory-scope').value = 'all';
+  document.getElementById('f-directory-scope-notice').hidden = true;
   document.getElementById('f-directory-filter').value = '';
   for (const id of ['head', 'body', 'summary', 'page']) document.getElementById(`f-directory-${id}`).textContent = '';
   void selectFinderView('map');
@@ -465,6 +466,11 @@ document.getElementById('f-directory-scope').addEventListener('change', () => {
   for (const state of Object.values(directoryStates)) state.page = 0;
   renderFinderDirectory();
 });
+document.getElementById('f-directory-show-all').addEventListener('click', () => {
+  document.getElementById('f-directory-scope').value = 'all';
+  for (const state of Object.values(directoryStates)) state.page = 0;
+  renderFinderDirectory();
+});
 document.getElementById('f-directory-ownership').addEventListener('change', event => {
   if (finderView === 'systems') return;
   directoryState().ownership = event.target.value;
@@ -667,6 +673,7 @@ function drawDirectoryFilters(rows, state) {
 function renderFinderDirectory() {
   if (!isDirectoryView()) return;
   const scope = document.getElementById('f-directory-scope').value || (searchSummary ? 'matches' : 'all');
+  document.getElementById('f-directory-scope-notice').hidden = scope !== 'matches' || !searchSummary;
   const hits = visibleFinderHits();
   const state = directoryState();
   const rows = buildGalaxyDirectory({

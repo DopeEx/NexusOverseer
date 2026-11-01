@@ -6,6 +6,24 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- Dashboard production rates for planets and moons include the account development
+  bonus, and population cards show damped growth toward housing capacity.
+- Quartermaster supports Deliver or Transfer for moon-to-planet resource dispatches,
+  defaulting to Deliver. Galaxy Scout also offers a clear way to show all known
+  data after narrowing a directory to search results.
+
+### Changed
+- Public galaxy exports and published datasets use compact JSON to reduce file
+  size while retaining dataset validation and checksum checks.
+
+### Fixed
+- API budget tracking now follows the latest server-reported values, and
+  successful POST actions no longer trigger realtime GET follow-ups.
+- Public galaxy merges remove an entity's former placement when an incoming
+  observation assigns its globally unique ID elsewhere, and conflict messages
+  include location context.
+
 ## [2.4.0] - 2026-10-21
 
 ### Added
