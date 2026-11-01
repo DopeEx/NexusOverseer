@@ -847,22 +847,28 @@ async function renderBuilder() {
     box.append(fuelLine);
     updateSend();
   } else if (b.mode === 'resource') {
-    const rVerb = b.src.kind === 'Moon' ? 'Transfer resources' : b.target.kind === 'Moon' ? 'Send resources' : toOutpost ? 'Supply outpost' : 'Deliver resources';
+    const selectableMission = b.target.kind === 'Planet' && (b.src.kind === 'Planet' || b.src.kind === 'Moon');
+    if (selectableMission && !b.deliverMode) b.deliverMode = 'deliver';
+    const rVerb = selectableMission
+      ? (b.deliverMode === 'deliver' ? 'Deliver resources' : 'Transfer resources')
+      : b.src.kind === 'Moon' ? 'Transfer resources' : b.target.kind === 'Moon' ? 'Send resources' : toOutpost ? 'Supply outpost' : 'Deliver resources';
     head.innerHTML = `<span class="nx-qm-builder-title">${rVerb}</span>` +
       `<span class="nx-qm-route">${esc(b.src.name)} → ${esc(b.target.name)}</span>` +
       `<span class="nx-qm-hint">drag more onto ${esc(b.target.name)} to add</span>`;
-    // Mission switch (planet → planet only): deliver = haulers drop cargo and
-    // return; transfer = haulers stay at the destination. Other endpoints (moon/
-    // outpost) don't take this choice.
-    if (b.src.kind === 'Planet' && b.target.kind === 'Planet') {
-      if (!b.deliverMode) b.deliverMode = 'deliver';
+    // Deliver drops the cargo and returns the haulers; transfer keeps them at
+    // the destination. Moon → planet uses the moon dispatch endpoint.
+    if (selectableMission) {
       const seg = document.createElement('div');
       seg.className = 'nx-qm-seg';
       const mk = (mode, label, title) => {
         const btn = document.createElement('button'); btn.type = 'button'; btn.textContent = label; btn.title = title;
         btn.__paint = () => { btn.setAttribute('aria-pressed', String(b.deliverMode === mode)); };
         btn.__paint();
-        btn.onclick = () => { b.deliverMode = mode; seg.querySelectorAll('button').forEach(x => x.__paint()); };
+        btn.onclick = () => {
+          b.deliverMode = mode;
+          head.querySelector('.nx-qm-builder-title').textContent = `${mode === 'deliver' ? 'Deliver' : 'Transfer'} resources`;
+          seg.querySelectorAll('button').forEach(x => x.__paint());
+        };
         return btn;
       };
       seg.append(mk('deliver', 'Deliver', 'Haulers drop the cargo and return'),
@@ -1020,7 +1026,7 @@ async function renderBuilder() {
       : {};
     if (src.kind === 'Moon')   // moon → planet
       return b.mode === 'resource'
-        ? { path: `/api/moons/${src.id}/dispatch`, body: { missionType: 'transfer', targetPlanetId: tgt.id, ships, cargo: resources } }
+        ? { path: `/api/moons/${src.id}/dispatch`, body: { missionType: b.deliverMode || 'deliver', targetPlanetId: tgt.id, ships, cargo: resources } }
         : { path: `/api/moons/${src.id}/recall`, body: { targetPlanetId: tgt.id, ships } };
     if (tgt.kind === 'Moon')   // planet → moon (send handles resources + ships)
       return { path: `/api/moons/${tgt.id}/send`, body: { sourcePlanetId: src.id, ships, cargo: resources } };

@@ -1856,6 +1856,13 @@ The following POST routes are used by interactive features:
 | `POST /api/fleet/dispatch` and outpost/moon routes | Send fleets or resources through logistics |
 | `POST /api/fleet/fuel-estimate` | Calculate dispatch fuel and travel values; does not itself launch a fleet |
 
+Observed moon-to-planet resource requests use
+`POST /api/moons/{moonId}/dispatch` with `targetPlanetId`, `ships`, `cargo` and
+`missionType`. A captured successful request used `missionType: "deliver"`; the
+Quartermaster supports both `"deliver"` and `"transfer"`, defaulting to
+`"deliver"` just like planet-to-planet resource dispatches. Deliver drops the
+cargo and returns the haulers; transfer keeps them at the destination.
+
 The game validates action requirements and remains authoritative for resulting
 state. A successful request should not be treated as proof that every displayed
 or cached view has already refreshed.
