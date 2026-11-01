@@ -7,6 +7,7 @@
 import { fmt, missionProgress, usedFleetSlots, usesFleetSlot } from '../common.js';
 import { getSetting, onSettingsChange } from '../settings.js';
 import { AUTOMATIONS } from '../human-verification.js';
+import { populationFullMs } from '../production-rates.js';
 
 const CLASS_COLORS = { combat: '#ff6b7a', utility: '#7ed4ff', civilian: '#ffc070', recon: '#7ed957', special: '#bc8cff', other: '#8daabe' };
 const RES_KEYS = [
@@ -321,7 +322,10 @@ function planetCard(p, research) {
     const row = kv('Population', `${fmt(p.population)} / ${fmt(p.maxPopulation)}`);
     const rate = p.populationRate;
     if (p.population >= p.maxPopulation) row.title = 'Population is full';
-    else if (rate > 0) row.title = `+${fmt(rate)}/h · full in ${fmtCountdown((p.maxPopulation - p.population) / rate * 3600000)}`;
+    else if (rate > 0) {
+      const fullMs = populationFullMs(p.population, p.maxPopulation, p.populationPotential);
+      row.title = `+${fmt(rate)}/h (slows down towards the limit)${fullMs != null ? ` · full in ~${fmtCountdown(fullMs)}` : ''}`;
+    }
     stats.appendChild(row);
   }
   if (stats.childElementCount) card.appendChild(stats);

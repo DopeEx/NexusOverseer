@@ -4,6 +4,7 @@
 // this file directly with a stubbed `browser`, skipping the polyfill entirely.
 
 import { missionProgress } from './mission-state.js';
+import { starterMultiplier, scaledRates, effectivePopulationRate } from './production-rates.js';
 import { appendDiagnostics, migrateDiagnostics } from './diagnostics.js';
 import { clearDiagnosticLogs } from './diagnostics-store.js';
 import { loadSettings, getSetting } from './settings.js';
@@ -908,11 +909,14 @@ async function getResources(options = {}) {
       'oreRate', 'silicatesRate', 'hydrogenRate', 'alloysRate'];
     const tot = Object.fromEntries(keys.map(k => [k, 0]));
     let labLevel = 0, labDef = null, buildSpeedMult = 1, labUpgradeEndsAt = null;
+    let developmentBonus = null;
     const researchPlanets = [];   // { id, name, mult } — one research slot each
     for (const p of planets) {
       const d = await apiFetch(`/api/planets/${p.id}`, options);
       const pl = d.planet || d;
-      for (const k of keys) tot[k] += pl[k] || 0;
+      developmentBonus = starterMultiplier(d) ?? developmentBonus;
+      const scaled = scaledRates(pl, developmentBonus);
+      for (const k of keys) tot[k] += k.endsWith('Rate') ? scaled[k] : (pl[k] || 0);
       const lab = findResearchLab(d);
       if (lab && (lab.level || 0) > labLevel) {
         labLevel = lab.level || 0;
@@ -1320,6 +1324,8 @@ async function getDashboardOverview({ polite = true, ...options } = {}) {
     const future = t => t && new Date(t).getTime() > now;
 
     const planets = [];
+    // The development bonus is account-wide; the last value seen covers responses without it.
+    let developmentBonus = null;
     for (const p of (planetsData.planets || [])) {
       const [detail, fleetData, yard] = await Promise.all([
         apiFetch(`/api/planets/${p.id}`, opts).catch(() => null),
@@ -1327,6 +1333,8 @@ async function getDashboardOverview({ polite = true, ...options } = {}) {
         apiFetch(`/api/planets/${p.id}/shipyard`, opts).catch(() => null),
       ]);
       const pl = detail?.planet || p;
+      developmentBonus = starterMultiplier(detail, fleetData) ?? developmentBonus;
+      const rates = scaledRates(pl, developmentBonus);
       const construction = (detail?.buildings || [])
         .filter(b => b.queueId != null || (b.isUpgrading && future(b.upgradeEndsAt)))
         .map(b => ({
@@ -1362,17 +1370,15 @@ async function getDashboardOverview({ polite = true, ...options } = {}) {
         planetType: pl.planetType || null,
         population: pl.population ?? null,
         maxPopulation: pl.maxPopulation ?? null,
-        populationRate: pl.populationGrowthRate ?? null,
+        populationRate: effectivePopulationRate(pl.population, pl.maxPopulation, pl.populationGrowthRate),
+        populationPotential: pl.populationGrowthRate ?? null,
         buildSlots: { used: pl.usedBuildingSlots ?? null, max: pl.maxBuildingSlots ?? null },
         resources: {
           ore: pl.ore || 0, silicates: pl.silicates || 0, hydrogen: pl.hydrogen || 0, alloys: pl.alloys || 0,
           oreStorage: pl.oreStorage || 0, silicatesStorage: pl.silicatesStorage || 0, hydrogenStorage: pl.hydrogenStorage || 0, alloysStorage: pl.alloysStorage || 0,
-          oreRate: pl.oreRate || 0, silicatesRate: pl.silicatesRate || 0,
-          hydrogenRate: pl.hydrogenRate || 0, alloysRate: pl.alloysRate || 0,
           cryoIce: pl.cryoIce || 0, quantumDust: pl.quantumDust || 0, plasmaCore: pl.plasmaCore || 0,
           bioExtract: pl.bioExtract || 0, darkMatter: pl.darkMatter || 0, antimatter: pl.antimatter || 0,
-          cryoIceRate: pl.cryoIceRate || 0, quantumDustRate: pl.quantumDustRate || 0, plasmaCoreRate: pl.plasmaCoreRate || 0,
-          bioExtractRate: pl.bioExtractRate || 0, darkMatterRate: pl.darkMatterRate || 0, antimatterRate: pl.antimatterRate || 0,
+          ...rates,
           rareStorage: pl.rareResourceStorage || 0,
         },
         construction,
@@ -1392,6 +1398,8 @@ async function getDashboardOverview({ polite = true, ...options } = {}) {
       ]);
       const mo = det?.moon;
       if (!mo) continue;
+      developmentBonus = starterMultiplier(det) ?? developmentBonus;
+      const moonRates = scaledRates(mo, developmentBonus);
       const classes = {};
       let totalShips = 0;
       for (const f of (fl?.fleet || [])) {
@@ -1414,12 +1422,9 @@ async function getDashboardOverview({ polite = true, ...options } = {}) {
         resources: {
           ore: mo.ore || 0, silicates: mo.silicates || 0, hydrogen: mo.hydrogen || 0, alloys: mo.alloys || 0,
           oreStorage: mo.storage || 0, silicatesStorage: mo.storage || 0, hydrogenStorage: mo.storage || 0, alloysStorage: mo.storage || 0,
-          oreRate: mo.oreRate || 0, silicatesRate: mo.silicatesRate || 0,
-          hydrogenRate: mo.hydrogenRate || 0, alloysRate: mo.alloysRate || 0,
           cryoIce: mo.cryoIce || 0, quantumDust: mo.quantumDust || 0, plasmaCore: mo.plasmaCore || 0,
           bioExtract: mo.bioExtract || 0, darkMatter: mo.darkMatter || 0, antimatter: mo.antimatter || 0,
-          cryoIceRate: mo.cryoIceRate || 0, quantumDustRate: mo.quantumDustRate || 0, plasmaCoreRate: mo.plasmaCoreRate || 0,
-          bioExtractRate: mo.bioExtractRate || 0, darkMatterRate: mo.darkMatterRate || 0, antimatterRate: mo.antimatterRate || 0,
+          ...moonRates,
         },
         construction: (det.buildings || [])
           .filter(b => b.isUpgrading && future(b.upgradeEndsAt))
