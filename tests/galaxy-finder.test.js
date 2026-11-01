@@ -1474,15 +1474,25 @@ test('without a search directory views default to all data; a search selects res
   for (const [view, count] of [['systems', 4], ['planets', 5], ['moons', 6]]) {
     await h.finder.selectFinderView(view);
     assert.equal(h.el('f-directory-scope').value, 'all');
+    assert.equal(h.el('f-directory-scope-notice').hidden, true);
     assert.equal(h.el('f-directory-body').children.length, count);
   }
   await h.finder.selectFinderView('map');
   await h.el('f-search').fire();
   assert.equal(h.el('f-directory-scope').value, 'matches');
-  await h.finder.selectFinderView('planets');
-  assert.equal(h.el('f-directory-body').children.length, 2);
+  for (const [view, allCount] of [['systems', 4], ['planets', 5], ['moons', 6]]) {
+    await h.finder.selectFinderView(view);
+    assert.equal(h.el('f-directory-scope-notice').hidden, false);
+    await h.el('f-directory-show-all').fire();
+    assert.equal(h.el('f-directory-scope').value, 'all');
+    assert.equal(h.el('f-directory-scope-notice').hidden, true);
+    assert.equal(h.el('f-directory-body').children.length, allCount);
+    h.el('f-directory-scope').value = 'matches';
+    await h.el('f-directory-scope').fire('change');
+  }
   h.finder.resetFinderTab();
   assert.equal(h.el('f-directory-scope').value, 'all');
+  assert.equal(h.el('f-directory-scope-notice').hidden, true);
 });
 
 test('all known data bypasses the search without discarding it and local load failures are visible', async () => {
