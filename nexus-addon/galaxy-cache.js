@@ -9,10 +9,16 @@ let connection;
 
 function database() {
   if (!connection) connection = new Promise((resolve, reject) => {
-    const request = indexedDB.open('nexus-galaxy', 1);
-    request.onupgradeneeded = () => {
-      const store = request.result.createObjectStore('entries', { keyPath: ['serverKey', 'key'] });
-      store.createIndex('server', 'serverKey');
+    const request = indexedDB.open('nexus-galaxy', 2);
+    request.onupgradeneeded = ({ oldVersion }) => {
+      if (oldVersion < 1) {
+        const store = request.result.createObjectStore('entries', { keyPath: ['serverKey', 'key'] });
+        store.createIndex('server', 'serverKey');
+      }
+      if (oldVersion < 2) {
+        request.result.createObjectStore('backup-storage', { keyPath: 'key' });
+        request.result.createObjectStore('backup-import', { keyPath: ['serverKey', 'key'] });
+      }
     };
     request.onerror = () => { connection = undefined; reject(request.error); };
     request.onblocked = () => {
@@ -32,16 +38,20 @@ function validateServer(serverKey) {
   if (typeof serverKey !== 'string' || !/^[a-z0-9-]{1,63}$/.test(serverKey)) throw new Error('Invalid galaxy server.');
 }
 
-async function transaction(serverKey, mode, work) {
+function transaction(serverKey, mode, work) {
   validateServer(serverKey);
+  return storesTransaction('entries', mode, (tx, done, fail) => work(tx.objectStore('entries'), done, fail));
+}
+
+async function storesTransaction(stores, mode, work) {
   const db = await database();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction('entries', mode);
+    const tx = db.transaction(stores, mode);
     let result;
     tx.oncomplete = () => resolve(result);
     tx.onabort = () => reject(tx.error || new Error('Galaxy database transaction aborted.'));
     tx.onerror = () => reject(tx.error || new Error('Galaxy database transaction failed.'));
-    try { work(tx.objectStore('entries'), value => { result = value; }, error => { tx.abort(); reject(error); }); }
+    try { work(tx, value => { result = value; }, error => { tx.abort(); reject(error); }); }
     catch (error) { tx.abort(); reject(error); }
   });
 }
@@ -80,7 +90,7 @@ function resolved(data, group) {
   return true;
 }
 
-function mergeSystem(previous, data, at) {
+function mergeSystem(previous, data, at, bodyOwnership) {
   if (!data || typeof data !== 'object' || data.error ||
       !['planets', 'moons', 'asteroidFields'].some(group => Array.isArray(data[group]))) {
     throw new Error('Invalid galaxy system response.');
@@ -103,7 +113,8 @@ function mergeSystem(previous, data, at) {
       if (imagePath) properties.imagePath = imagePath;
       base.push(properties);
       const known = Object.hasOwn(item, 'userId') && item.ownershipKnown !== false;
-      const statusAt = Math.min(groupAt, data._galaxyCache?.ownership?.[group] ?? groupAt);
+      const observedAt = bodyOwnership?.[group]?.[item.id] ?? data._galaxyCache?.ownership?.[group] ?? groupAt;
+      const statusAt = Math.min(groupAt, observedAt);
       if (!Number.isFinite(statusAt) || statusAt < 0) throw new Error('Invalid galaxy ownership time.');
       const state = known ? { id: item.id, at: statusAt } : { ...priorStatus.get(item.id), id: item.id };
       for (const [key, value] of Object.entries(item)) {
@@ -376,11 +387,16 @@ async function applyGalaxyDeltas(serverKey, data, catalogAt) {
   }) };
 }
 
-function exportRow(row) {
+function exportRow(row, preciseOwnership = false) {
+  const data = row.key.startsWith('system:') ? unpack(row).data : catalogData(row);
+  if (preciseOwnership && row.key.startsWith('system:')) {
+    data._galaxyCache.bodyOwnership = Object.fromEntries(Object.entries(row.status).map(([group, bodies]) =>
+      [group, Object.fromEntries(bodies.filter(body => body.at).map(body => [body.id, body.at]))]));
+  }
   return {
     serverKey: row.serverKey, key: row.key, at: row.at,
     ...(row.key === 'public:galaxy' ? { sha256: row.sha256 } : {}),
-    data: row.key.startsWith('system:') ? unpack(row).data : catalogData(row),
+    data,
   };
 }
 
@@ -396,33 +412,102 @@ export function exportGalaxyCache() {
 
 function backupRows(snapshot) {
   if (snapshot?.version !== 1 || !Array.isArray(snapshot.entries)) throw new Error('Invalid galaxy backup.');
-  return snapshot.entries.map(entry => {
-    validateServer(entry.serverKey);
-    if (!Number.isFinite(entry.at) || entry.at <= 0 || entry.at > Date.now() + 60000) throw new Error('Invalid galaxy backup time.');
-    if (entry.key === 'public:galaxy') {
-      validatePublicGalaxy(entry.data, entry.serverKey);
-      if (!/^[a-f0-9]{64}$/.test(entry.sha256)) throw new Error('Invalid public galaxy backup checksum.');
-      return { serverKey: entry.serverKey, key: entry.key, at: entry.at, sha256: entry.sha256, data: entry.data };
+  return snapshot.entries.map(entry => prepareGalaxyBackupEntry(entry));
+}
+
+export function prepareGalaxyBackupEntry(entry, preciseOwnership = false) {
+  validateServer(entry?.serverKey);
+  if (!Number.isFinite(entry.at) || entry.at <= 0 || entry.at > Date.now() + 60000) throw new Error('Invalid galaxy backup time.');
+  if (entry.key === 'public:galaxy') {
+    validatePublicGalaxy(entry.data, entry.serverKey);
+    if (!/^[a-f0-9]{64}$/.test(entry.sha256)) throw new Error('Invalid public galaxy backup checksum.');
+    return { serverKey: entry.serverKey, key: entry.key, at: entry.at, sha256: entry.sha256, data: entry.data };
+  }
+  if (typeof entry.key === 'string' && entry.key.startsWith('system:')) {
+    if (systemKey(Number(entry.key.slice(7))) !== entry.key) throw new Error('Invalid galaxy system key.');
+    return { ...mergeSystem(null, entry.data, entry.at, preciseOwnership ? entry.data?._galaxyCache?.bodyOwnership : undefined),
+      serverKey: entry.serverKey, key: entry.key };
+  }
+  if (typeof entry.key === 'string' && entry.key.startsWith('delta:')) {
+    validateDelta(entry.data, entry.at);
+    if (entry.key !== `delta:${entry.data.systemId}`) throw new Error('Invalid galaxy delta key.');
+    return { serverKey: entry.serverKey, key: entry.key, at: entry.at, data: {
+      type: 'colonized', systemId: entry.data.systemId, hasColonies: true,
+    } };
+  }
+  if (!catalogPath(entry.key)) throw new Error('Invalid galaxy backup key.');
+  const group = catalogGroup(entry.key);
+  if (!Array.isArray(entry.data?.[group])) throw new Error('Invalid galaxy backup catalog.');
+  if (group === 'stations') {
+    validateStations(entry.data, entry.at);
+    return stationCatalogRow(entry.serverKey, entry.key, entry.data, entry.at);
+  }
+  return entry;
+}
+
+async function* backupStorePages(name, keyOf) {
+  let after;
+  for (;;) {
+    const page = await storesTransaction(name, 'readonly', (tx, done) => {
+      const request = tx.objectStore(name).getAll(after === undefined ? undefined : IDBKeyRange.lowerBound(after, true), 16);
+      request.onsuccess = () => done(request.result);
+    });
+    if (!page.length) return;
+    after = keyOf(page.at(-1));
+    yield* page;
+  }
+}
+
+export async function* backupGalaxyEntries() {
+  for await (const row of backupStorePages('entries', row => [row.serverKey, row.key])) {
+    yield exportRow(row, true);
+  }
+}
+
+export function backupStorageEntries() {
+  return backupStorePages('backup-storage', row => row.key);
+}
+
+export function stageBackupStorage(data) {
+  return storesTransaction('backup-storage', 'readwrite', tx => {
+    const store = tx.objectStore('backup-storage');
+    store.clear();
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== undefined) store.add({ key, value: key === 'records_cap' && value === Infinity ? 0 : value });
     }
-    if (typeof entry.key === 'string' && entry.key.startsWith('system:')) {
-      systemKey(Number(entry.key.slice(7)));
-      return { ...mergeSystem(null, entry.data, entry.at), serverKey: entry.serverKey, key: entry.key };
+  });
+}
+
+export function clearBackupStorageStage() {
+  return storesTransaction('backup-storage', 'readwrite', tx => tx.objectStore('backup-storage').clear());
+}
+
+export function clearBackupImportStage() {
+  return storesTransaction('backup-import', 'readwrite', tx => tx.objectStore('backup-import').clear());
+}
+
+export function addBackupImportRows(rows, legacy = false) {
+  return storesTransaction('backup-import', 'readwrite', tx => {
+    const store = tx.objectStore('backup-import');
+    for (const row of rows) {
+      if (legacy) store.put(row);
+      else store.add(row);
     }
-    if (typeof entry.key === 'string' && entry.key.startsWith('delta:')) {
-      validateDelta(entry.data, entry.at);
-      if (entry.key !== `delta:${entry.data.systemId}`) throw new Error('Invalid galaxy delta key.');
-      return { serverKey: entry.serverKey, key: entry.key, at: entry.at, data: {
-        type: 'colonized', systemId: entry.data.systemId, hasColonies: true,
-      } };
-    }
-    if (!catalogPath(entry.key)) throw new Error('Invalid galaxy backup key.');
-    const group = catalogGroup(entry.key);
-    if (!Array.isArray(entry.data?.[group])) throw new Error('Invalid galaxy backup catalog.');
-    if (group === 'stations') {
-      validateStations(entry.data, entry.at);
-      return stationCatalogRow(entry.serverKey, entry.key, entry.data, entry.at);
-    }
-    return entry;
+  });
+}
+
+export function commitBackupImportRows() {
+  return storesTransaction(['entries', 'backup-import'], 'readwrite', tx => {
+    const target = tx.objectStore('entries');
+    const source = tx.objectStore('backup-import');
+    target.clear();
+    const request = source.openCursor();
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) { source.clear(); return; }
+      target.add(cursor.value);
+      cursor.continue();
+    };
   });
 }
 

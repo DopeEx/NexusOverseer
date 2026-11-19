@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { makeBrowserStub } from './helpers.js';
 import 'fake-indexeddb/auto';
 import { IDBObjectStore } from 'fake-indexeddb';
+import { gunzipSync } from 'node:zlib';
+import { createBackupArchive } from '../nexus-addon/backup-archive.js';
 import { saveCatalog } from '../nexus-addon/galaxy-cache.js';
 
 const uniqueImport = (spec) => import(`${spec}?ts=${crypto.randomUUID()}`);
@@ -27,9 +29,9 @@ test('a version change backs up extension storage before syncing without reading
   const path = '/api/galaxy/map';
   await saveCatalog('beta', path, { systems: [{ id: 42 }] });
   const getAll = IDBObjectStore.prototype.getAll;
-  let galaxyExports = 0;
+  const galaxyReads = [];
   t.mock.method(IDBObjectStore.prototype, 'getAll', function (...args) {
-    if (!args.length) galaxyExports++;
+    if (this.name === 'entries') galaxyReads.push(args);
     return getAll.apply(this, args);
   });
 
@@ -38,27 +40,61 @@ test('a version change backs up extension storage before syncing without reading
   assert.equal(downloads.length, 1);
   assert.match(downloads[0].filename, /nexus-overseer-pre-update-2\.4\.0-/);
   const payload = readBackup(downloads[0]);
-  assert.equal(payload.nexus_overseer_backup, 2);
-  assert.ok(!Object.hasOwn(payload, 'galaxyCache'));
+  assert.equal(payload.header.includeGalaxy, false);
+  assert.deepEqual(payload.entries, []);
   assert.deepEqual(payload.data['nexus_server:beta:archived_reports'], [{ id: 1 }]);
   assert.equal(payload.data.last_scrape, undefined);
   assert.equal(store.last_backup, undefined, 'a partial snapshot does not count as a full backup');
-  assert.equal(galaxyExports, 0);
+  assert.deepEqual(galaxyReads, []);
   assert.ok(store.last_scrape);
 
   assert.deepEqual(await onMessage({ type: 'BACKUP_NOW', reason: 'pre-import', preserveGalaxy: true }), { ok: true });
-  assert.ok(!Object.hasOwn(readBackup(downloads[1]), 'galaxyCache'));
-  assert.equal(galaxyExports, 0);
+  assert.deepEqual(readBackup(downloads[1]).entries, []);
+  assert.deepEqual(galaxyReads, []);
 
   assert.deepEqual(await onMessage({ type: 'BACKUP_NOW', reason: 'manual' }), { ok: true });
   const full = readBackup(downloads[2]);
-  assert.equal(full.nexus_overseer_backup, 1);
-  assert.ok(full.galaxyCache.entries.some(entry => entry.serverKey === 'beta' && entry.key === path));
+  assert.equal(full.header.includeGalaxy, true);
+  assert.ok(full.entries.some(entry => entry.serverKey === 'beta' && entry.key === path));
+  assert.ok(galaxyReads.length && galaxyReads.every(([, limit]) => limit > 0));
   assert.ok(store.last_backup);
 });
 
-function readBackup({ url }) {
-  return JSON.parse(decodeURIComponent(url.slice(url.indexOf(',') + 1)));
+test('an interrupted download does not count as a successful backup', async t => {
+  const { store, downloads, onMessage, downloadState } = await setupBackupScrape(t);
+  downloadState.state = 'interrupted';
+  downloadState.error = 'FILE_FAILED';
+  const result = await onMessage({ type: 'BACKUP_NOW', reason: 'pre-reset' });
+  assert.match(result.error, /FILE_FAILED/);
+  assert.equal(store.last_backup, undefined);
+  downloadState.state = 'complete';
+  assert.deepEqual(await onMessage({ type: 'BACKUP_NOW', reason: 'manual' }), { ok: true });
+  assert.equal(downloads.length, 2);
+  assert.ok(store.last_backup);
+});
+
+test('cancelling an active backup stops the download and releases the temporary file', async t => {
+  const { store, onMessage, downloadState, cancelledDownloads, writerActions, startedDownload } = await setupBackupScrape(t);
+  downloadState.state = 'in_progress';
+  const id = 'cancel-test';
+  const job = onMessage({ type: 'BACKUP_NOW', reason: 'export', id });
+  await startedDownload;
+  assert.deepEqual(await onMessage({ type: 'BACKUP_CANCEL', id }, { url: 'chrome-extension://test/dashboard.html' }),
+    { cancelled: true });
+  const result = await job;
+  assert.equal(result.cancelled, true);
+  assert.deepEqual(cancelledDownloads, [1]);
+  assert.deepEqual(writerActions, ['prepare', 'release', 'close']);
+  assert.equal(store.last_backup, undefined);
+});
+
+function readBackup({ bytes }) {
+  const [header, ...records] = gunzipSync(bytes).toString().trimEnd().split('\n').map(line => JSON.parse(line));
+  return {
+    header,
+    data: Object.fromEntries(records.filter(record => record.type === 'storage').map(({ key, value }) => [key, value])),
+    entries: records.filter(record => record.type === 'galaxy').map(({ entry }) => entry),
+  };
 }
 
 async function setupBackupScrape(t) {
@@ -73,14 +109,46 @@ async function setupBackupScrape(t) {
   browser.alarms.get = async () => ({ name: 'nexus-scrape' });
   browser.tabs.query = async () => [{ id: 1, url: 'https://s0.nexuslegacy.space/' }];
   browser.tabs.sendMessage = async () => ({ ok: true, data: {} });
-  browser.downloads.download = async options => downloads.push(options);
+  const downloadState = { state: 'complete' };
+  const cancelledDownloads = [];
+  const writerActions = [];
+  let downloaded;
+  const startedDownload = new Promise(resolve => { downloaded = resolve; });
+  let open = false;
+  let bytes;
+  const oldChrome = globalThis.chrome;
+  globalThis.chrome = { offscreen: {
+    hasDocument: async () => open,
+    createDocument: async () => { open = true; },
+    closeDocument: async () => { open = false; writerActions.push('close'); },
+  } };
+  t.after(() => { globalThis.chrome = oldChrome; });
+  browser.runtime.sendMessage = async ({ target, action, options }) => {
+    if (target === 'backup-offscreen') writerActions.push(action);
+    if (target === 'backup-offscreen' && action === 'prepare') {
+      assert.equal(open, true);
+      bytes = Buffer.from(await new Response(createBackupArchive(options)).arrayBuffer());
+      return { url: 'blob:chrome-extension://test/backup' };
+    }
+  };
+  browser.downloads.download = async options => {
+    assert.equal(open, true);
+    assert.match(options.url, /^blob:/);
+    assert.match(options.filename, /\.nexus-backup\.gz$/);
+    const id = downloads.push({ ...options, bytes });
+    downloaded();
+    return id;
+  };
+  browser.downloads.cancel = async id => { cancelledDownloads.push(id); };
+  browser.downloads.onChanged = { addListener() {}, removeListener() {} };
+  browser.downloads.search = async () => [downloadState];
   t.mock.method(globalThis, 'fetch', async () => ({
     ok: true,
     json: async () => [{ key: 's0', name: 'S0' }],
   }));
   await uniqueImport('../nexus-addon/background.js');
   return {
-    store, downloads,
+    store, downloads, downloadState, cancelledDownloads, writerActions, startedDownload,
     onInstalled: browser.runtime.onInstalled.listeners[0],
     onAlarm: browser.alarms.onAlarm.listeners[0],
     onMessage: browser.runtime.onMessage.listeners[0],

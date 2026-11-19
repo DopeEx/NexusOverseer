@@ -13,6 +13,7 @@
     "scripting",
     "alarms",
     "downloads",
+    "offscreen",
     "webRequest",
     "notifications"
   ],

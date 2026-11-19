@@ -323,10 +323,11 @@
       </label>
       <div class="opt-data-caption">All data</div>
       <div class="opt-actions">
-        <button id="btn-backup-now" type="button">Back up now</button>
-        <button id="btn-export">Export JSON</button>
-        <button id="btn-import">Import JSON</button>
-        <input id="import-file" type="file" accept=".json,application/json" style="display:none;" />
+        <button id="btn-backup-now" type="button">Create full backup</button>
+        <button id="btn-import">Import backup</button>
+        <input id="import-file" type="file" accept=".gz,.json,application/gzip,application/json" style="display:none;" />
+        <button id="btn-cancel-backup" type="button" hidden>Cancel</button>
+        <p id="backup-status" class="opt-note" role="status"></p>
       </div>
       <div class="opt-data-caption">Options only</div>
       <div class="opt-actions">
@@ -337,7 +338,7 @@
       <details class="opt-data-details">
         <summary>What does a backup include?</summary>
         <p class="opt-note">Full backups contain saved game data from every server and addon options. Options-only files contain settings, not game data. Developer diagnostic logs are separate JSONL exports and are not included in backups.</p>
-        <p class="opt-note">Automatic backups before a version update omit the galaxy database. Use Export JSON to save a full copy, including your private galaxy observations.</p>
+        <p class="opt-note">Full backups are compressed and keep private galaxy observations. Older JSON backups can still be imported. Automatic backups before a version update omit the galaxy database.</p>
       </details>
       </div>
       <div class="opt-danger">

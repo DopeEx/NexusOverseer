@@ -7,6 +7,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Changed
+- Full backups keep all saved galaxy data and now stream into a compressed
+  `.nexus-backup.gz` file. Manual export shows progress and can be cancelled.
+  Import checks the archive before changing existing data and still accepts
+  older JSON backups.
 - Pre-update backups skip the galaxy database to avoid loading large saved
   galaxies during version upgrades. Restoring one keeps the current galaxy
   database. Full exports still include it.
