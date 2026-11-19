@@ -1,6 +1,6 @@
 // Guard for upgrade-queue.js chain(): from→target must derive from list order,
 // so reordering recomputes labels. Mirror of the shipped chain().
-//   node test_queue_chain.js
+// Run with: node --test tests/queue-chain.test.js
 import assert from 'assert';
 
 function chainId(it) {

@@ -28,7 +28,7 @@ import { renderGlobalTab } from './tabs/global.js';
 import { renderMiningTab, setMiningPage } from './tabs/mining.js';
 import { initPiratesTab, renderPirateStatsTab, renderPiratesTab, runPirateAutomations, setPirateCurrentPage } from './tabs/pirates.js';
 import { getEventBreakdownForMode, getResourcesLostForMode, getSeriesForMode, getTotalsForMode, populateEventOptions, renderByEventChart, renderCollected, renderEventsChart, renderLost, renderResourceChart, renderTable, setCurrentPage } from './tabs/surveys.js';
-import { renderTechTreeTab } from './tabs/techtree.js';
+import { renderTechTreeTab } from './tabs/tech-tree.js';
 import { initDashboardTab } from './tabs/dashboard.js';
 import { initOptionsTab, checkPublicGalaxyUpdates } from './tabs/options.js';
 import { initGuideTab } from './tabs/guide.js';
