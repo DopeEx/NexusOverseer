@@ -8,12 +8,13 @@ import { starterMultiplier, scaledRates, effectivePopulationRate } from './produ
 import { appendDiagnostics, migrateDiagnostics } from './diagnostics.js';
 import { clearDiagnosticLogs } from './diagnostics-store.js';
 import { loadSettings, getSetting } from './settings.js';
-import { createGalaxyCache, saveSystem, saveCatalog, saveGalaxyDelta, readGalaxyDeltas, catalogPath, exportGalaxyCache, STORAGE_ONLY_BACKUP_VERSION,
+import { createGalaxyCache, saveSystem, saveCatalog, saveGalaxyDelta, readGalaxyDeltas, catalogPath,
   readPublicGalaxy, savePublicGalaxy } from './galaxy-cache.js';
 import { createGalaxySharing } from './galaxy-sharing.js';
 import { createApiScheduler, retryDelay } from './api-scheduler.js';
 import { createTrafficRecorder, trafficSource } from './api-telemetry.js';
 import { asteroidRow, asteroidMatches, retainMiningFields, visibleAsteroidFields, sameAsteroidSearch } from './galaxy-client.js';
+import { backupToDownloads, cancelBackupDownload } from './backup-download.js';
 
 const recordTraffic = createTrafficRecorder({ enabled: () => getSetting('developer.apiWaitRecording') === true });
 const apiScheduler = createApiScheduler({ storage: browser.storage.session, record: recordTraffic });
@@ -649,7 +650,8 @@ const handleRuntimeMessage = async (msg, context = null, options = {}) => {
   if (msg.type === 'PURGE_OLD') return enqueue(() => purgeOldData(msg.days ?? 3)).then(() => ({ ok: true }));
   if (msg.type === 'BACKUP_NOW') {
     const includeGalaxy = !(msg.reason === 'pre-import' && msg.preserveGalaxy === true);
-    return backupToDownloads(msg.reason || 'manual', { includeGalaxy }).then(() => ({ ok: true })).catch(e => ({ error: e.message }));
+    return backupToDownloads(msg.reason || 'manual', { includeGalaxy, requestId: msg.id })
+      .then(() => ({ ok: true })).catch(e => ({ error: e.message, cancelled: e.name === 'AbortError' }));
   }
   if (['GET_PUBLIC_GALAXY_STATUS', 'UPDATE_PUBLIC_GALAXY', 'EXPORT_PUBLIC_GALAXY'].includes(msg.type)) {
     try {
@@ -742,6 +744,10 @@ const NETWORK_MESSAGES = new Set([
 const cancelledRequests = new Map();
 
 browser.runtime.onMessage.addListener(async (msg, sender) => {
+  if (msg?.target === 'backup-offscreen' || msg?.type === 'BACKUP_PROGRESS') return;
+  if (msg?.type === 'BACKUP_CANCEL') {
+    return { cancelled: sender?.url?.split(/[?#]/)[0] === browser.runtime.getURL('dashboard.html') && cancelBackupDownload(msg.id) };
+  }
   await settingsReady;
   if (msg?.type === 'DIAGNOSTICS_APPEND' || msg?.type === 'DIAGNOSTICS_CLEAR') {
     const server = sender?.tab?.url ? globalThis.nexusStorage?.serverFromUrl(sender.tab.url) : null;
@@ -3316,29 +3322,6 @@ async function rebuildAggregates() {
 
 const BACKUP_INTERVALS_MS = { daily: 24 * 3600 * 1000, weekly: 7 * 24 * 3600 * 1000 };
 
-async function backupToDownloads(reason, { includeGalaxy = true } = {}) {
-  const data = globalThis.nexusStorage?.exportFullStorage ? await globalThis.nexusStorage.exportFullStorage() : await browser.storage.local.get(null);
-  if (data.records_cap === Infinity) data.records_cap = 0;
-  const payload = {
-    nexus_overseer_backup: includeGalaxy ? 1 : STORAGE_ONLY_BACKUP_VERSION,
-    ...(includeGalaxy ? { galaxyCache: await exportGalaxyCache() } : {}),
-    exported_at: new Date().toISOString(),
-    reason,
-    data,
-  };
-  // MV3 service workers have no URL.createObjectURL, so download from a data
-  // URL instead of a blob URL.
-  const url = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(payload));
-  await browser.downloads.download({
-    url,
-    filename: `NexusOverseer/nexus-overseer-${reason}-${new Date().toISOString().slice(0, 10)}.json`,
-    conflictAction: 'uniquify',
-    saveAs: false,
-  });
-  if (includeGalaxy) await browser.storage.local.set({ last_backup: new Date().toISOString() });
-  console.log(`[NexusOverseer] Backup written (${reason}).`);
-}
-
 async function maybeAutoBackup() {
   const settings = await globalThis.nexusStorage?.getSettings?.() || {};
   const interval = BACKUP_INTERVALS_MS[settings['data.autoBackup'] || 'weekly'];
@@ -3491,11 +3474,7 @@ async function ensureSchema() {
     } else if (from !== 0) {
       // No migration path from this version — snapshot, then wipe and re-scrape.
       console.log(`[NexusOverseer] No migration to schema ${v}, resetting storage.`);
-      try {
-        await backupToDownloads('pre-schema-wipe');
-      } catch (err) {
-        console.warn('[NexusOverseer] Pre-wipe backup failed:', err);
-      }
+      await backupToDownloads('pre-schema-wipe');
       const { records_cap } = await browser.storage.local.get('records_cap');
       await browser.storage.local.clear();
       if (records_cap !== undefined) await browser.storage.local.set({ records_cap });

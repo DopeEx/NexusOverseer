@@ -84,14 +84,17 @@ universe. It also learns from successful galaxy responses the game loads while
 you play, independently of optional diagnostic recording. Physical properties
 do not expire automatically. **Options > Data > Danger zone > Clear galaxy
 cache** removes the selected universe's saved galaxy knowledge after a warning
-and confirmation. Regular JSON backups include this database and installed
+and confirmation. Full backups include this database and installed
 public base data. Public datasets are stored separately from personal game
 observations and never create ownership, visibility or observation timestamps.
 
-The extension also writes automatic backup files to your `Downloads/NexusOverseer/` folder before destructive operations (reset, import, schema migrations) and as a weekly auto-backup. These files are plain JSON and remain on your device under your control.
+The extension writes compressed `.nexus-backup.gz` files to `Downloads/NexusOverseer/`
+for manual and scheduled backups and before destructive operations such as reset
+or import. Backups and temporary files remain on your device. Compression is not
+encryption; treat backups as private. Older JSON backups can still be imported.
 Pre-update backups and safety snapshots taken before importing a storage-only
 backup omit the galaxy database. Importing these files leaves that database
-untouched. To save the galaxy database manually, use **Options > Data > Export JSON**.
+untouched. To save the galaxy database manually, use **Options > Data > Create full backup**.
 
 ---
 

@@ -6,8 +6,8 @@
 
 import { activeTab, appendStatusText, confirmDialog, dayKey, fuelForMode, getLabelKey, getMode, infoDialog, periodLabelFor, renderMarkdown, renderNetCards, setActiveTab, setStore, store } from './common.js';
 import { bindServerSelector } from './server-switch.js';
-import { exportGalaxyCache, restoreGalaxyCache, validateGalaxyBackup, restoreBackupGalaxyCache,
-  STORAGE_ONLY_BACKUP_VERSION } from './galaxy-cache.js';
+import { restoreGalaxyCache, clearBackupImportStage } from './galaxy-cache.js';
+import { runBackupWorker } from './backup-host.js';
 import { initReleaseStatus } from './release-status.js';
 import { initApiStatus } from './api-status.js';
 import { changelogForVersion } from './common.js';
@@ -491,8 +491,7 @@ document.getElementById('event-select').addEventListener('change', () => { setCu
 document.getElementById('btn-reset').addEventListener('click', async function () {
   if (!confirm('Delete all recorded stats, reports and saved galaxy data? Your options are kept. A backup is written to Downloads/NexusOverseer first.')) return;
   try {
-    const backup = await browser.runtime.sendMessage({ type: 'BACKUP_NOW', reason: 'pre-reset' });
-    if (!backup?.ok) throw new Error(backup?.error || 'Backup failed; no data was cleared.');
+    await requestBackup('pre-reset');
     await restoreGalaxyCache();
     const recordsCap = globalThis.nexusStorage?.get ? (await globalThis.nexusStorage.get('records_cap')).records_cap : undefined;
     const settings = await globalThis.nexusStorage?.getSettings?.();
@@ -535,29 +534,16 @@ document.getElementById('btn-save-cap').addEventListener('click', async function
 
 // ── Rebuild aggregates ─────────────────────────────────────────────────────
 
-document.getElementById('btn-backup-now').addEventListener('click', async function () {
-  this.disabled = true;
-  try {
-    const res = await browser.runtime.sendMessage({ type: 'BACKUP_NOW', reason: 'manual' });
-    if (res?.error) throw new Error(res.error);
-    this.textContent = 'Saved ✓';
-    void updateStorageFooter();
-  } catch {
-    this.textContent = 'Error';
-  } finally {
-    setTimeout(() => { this.disabled = false; this.textContent = 'Back up now'; }, 2000);
-  }
-});
-
 document.getElementById('btn-purge').addEventListener('click', async function () {
   if (!await confirmDialog('Delete archived reports older than 3 days?\n\nTotals are kept. A backup is written to Downloads/NexusOverseer first.')) return;
   this.disabled = true;
   try {
-    await browser.runtime.sendMessage({ type: 'BACKUP_NOW', reason: 'pre-purge' });
+    await requestBackup('pre-purge');
     await browser.runtime.sendMessage({ type: 'PURGE_OLD', days: 3 });
     await loadAll();
     this.textContent = 'Purged ✓';
-  } catch {
+  } catch (error) {
+    alert(`Purge failed: ${error.message}`);
     this.textContent = 'Error';
   } finally {
     setTimeout(() => { this.disabled = false; this.textContent = 'Purge old reports'; }, 2000);
@@ -595,25 +581,63 @@ document.getElementById('btn-rebuild').addEventListener('click', async function 
 
 // ── Export / Import ────────────────────────────────────────────────────────
 
-document.getElementById('btn-export').addEventListener('click', async function () {
-  const data = globalThis.nexusStorage?.exportFullStorage ? await globalThis.nexusStorage.exportFullStorage() : await browser.storage.local.get(null);
-  // JSON cannot represent Infinity (unlimited records cap) — store as 0.
-  if (data.records_cap === Infinity) data.records_cap = 0;
-  const payload = {
-    nexus_overseer_backup: 1,
-    galaxyCache: await exportGalaxyCache(),
-    exported_at: new Date().toISOString(),
-    data,
+const backupStatus = document.getElementById('backup-status');
+const backupCancel = document.getElementById('btn-cancel-backup');
+const backupButtons = ['btn-import', 'btn-backup-now', 'btn-reset', 'btn-purge'].map(id => document.getElementById(id));
+let backupCancelAction;
+backupCancel.addEventListener('click', () => {
+  backupCancel.disabled = true;
+  backupCancelAction?.();
+});
+
+function setBackupCancel(action) {
+  backupCancelAction = action;
+  backupCancel.hidden = !action;
+  backupCancel.disabled = false;
+}
+
+async function requestBackup(reason, preserveGalaxy = false, cancellable = false) {
+  const id = crypto.randomUUID();
+  const listener = msg => {
+    if (msg?.type !== 'BACKUP_PROGRESS' || msg.id !== id || backupCancel.disabled) return;
+    backupStatus.textContent = msg.phase === 'downloading' ? 'Saving backup to Downloads…'
+      : msg.phase === 'writing' && msg.rows ? `Preparing backup: ${msg.rows.toLocaleString()} galaxy entries…`
+        : 'Preparing backup…';
   };
-  const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `nexus-overseer-backup-${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-  this.textContent = 'Exported ✓';
-  setTimeout(() => { this.textContent = 'Export JSON'; }, 2000);
+  backupStatus.textContent = 'Waiting for backup…';
+  browser.runtime.onMessage.addListener(listener);
+  if (cancellable) setBackupCancel(() => {
+    backupStatus.textContent = 'Cancelling backup…';
+    void browser.runtime.sendMessage({ type: 'BACKUP_CANCEL', id }).catch(error => {
+      backupStatus.textContent = `Could not cancel backup: ${error.message}`;
+    });
+  });
+  try {
+    const result = await browser.runtime.sendMessage({ type: 'BACKUP_NOW', reason, preserveGalaxy, id });
+    if (!result?.ok) {
+      if (result?.cancelled) throw new DOMException(result.error, 'AbortError');
+      throw new Error(result?.error || 'No backup completion was reported.');
+    }
+    backupStatus.textContent = 'Backup saved to Downloads/NexusOverseer.';
+  } catch (error) {
+    backupStatus.textContent = error.name === 'AbortError' ? 'Backup cancelled.' : `Backup failed: ${error.message}`;
+    throw error;
+  } finally {
+    browser.runtime.onMessage.removeListener(listener);
+    setBackupCancel();
+  }
+}
+
+document.getElementById('btn-backup-now').addEventListener('click', async () => {
+  backupButtons.forEach(button => { button.disabled = true; });
+  try {
+    await requestBackup('manual', false, true);
+    void updateStorageFooter();
+  } catch (error) {
+    if (error.name !== 'AbortError') console.warn('[NexusOverseer] Manual backup failed:', error.message);
+  } finally {
+    backupButtons.forEach(button => { button.disabled = false; });
+  }
 });
 
 document.getElementById('btn-import').addEventListener('click', () => {
@@ -640,14 +664,14 @@ export function validateBackupData(data) {
     'pirate_debris_total', 'archive_index',
   ];
   for (const k of arrays) {
-    if (k in data && !Array.isArray(data[k])) throw new Error(`backup field "${k}" should be a list`);
+    if (Object.hasOwn(data, k) && !Array.isArray(data[k])) throw new Error(`backup field "${k}" should be a list`);
   }
   for (const k of objects) {
-    if (k in data && (typeof data[k] !== 'object' || data[k] === null || Array.isArray(data[k]))) {
+    if (Object.hasOwn(data, k) && (typeof data[k] !== 'object' || data[k] === null || Array.isArray(data[k]))) {
       throw new Error(`backup field "${k}" should be an object`);
     }
   }
-  if ('records_cap' in data && typeof data.records_cap !== 'number') {
+  if (Object.hasOwn(data, 'records_cap') && typeof data.records_cap !== 'number') {
     throw new Error('backup field "records_cap" should be a number');
   }
 }
@@ -657,43 +681,54 @@ document.getElementById('import-file').addEventListener('change', async function
   this.value = '';                    // allow re-selecting the same file
   if (!file) return;
 
-  const btn = document.getElementById('btn-import');
+  backupButtons.forEach(button => { button.disabled = true; });
   try {
-    const payload = JSON.parse(await file.text());
-    // `nexus_accounting_backup` is the marker written before the rename.
-    const preserveGalaxy = payload?.nexus_overseer_backup === STORAGE_ONLY_BACKUP_VERSION;
-    const isBackup = payload && (preserveGalaxy || payload.nexus_overseer_backup === 1 || payload.nexus_accounting_backup === 1);
-    if (!isBackup || !payload.data || Array.isArray(payload.data) || typeof payload.data !== 'object') {
-      throw new Error('not a Nexus Overseer backup file');
-    }
-    validateBackupData(payload.data);
-    if (preserveGalaxy && Object.hasOwn(payload, 'galaxyCache')) {
-      throw new Error('storage-only backups must not contain a galaxy database');
-    }
-    if (payload.galaxyCache) validateGalaxyBackup(payload.galaxyCache);
-    const exportedAt = payload.exported_at ? new Date(payload.exported_at).toLocaleString() : 'unknown date';
-    const changes = preserveGalaxy
-      ? 'Replace settings, reports and other non-galaxy data? The current galaxy database will be kept.'
-      : 'Replace ALL current data?';
-    if (!confirm(`Import backup from ${exportedAt}?\n\n${changes}\n\nA snapshot of the data to be replaced is written to Downloads/NexusOverseer first.`)) return;
-
-    const backup = await browser.runtime.sendMessage({ type: 'BACKUP_NOW', reason: 'pre-import', preserveGalaxy });
-    if (!backup?.ok) throw new Error(backup?.error || 'Backup failed; no data was replaced.');
-    await restoreBackupGalaxyCache(payload);
-    const data = payload.data;
-    if (globalThis.nexusStorage?.restoreFullStorage) {
-      await globalThis.nexusStorage.restoreFullStorage(data);
-    } else {
-      await browser.storage.local.clear();
-      await browser.storage.local.set(data);
-    }
-    await loadAll();
-    btn.textContent = 'Imported ✓';
-  } catch (e) {
-    alert(`Import failed: ${e.message}`);
-    btn.textContent = 'Error';
+    await navigator.locks.request('nexus-backup-import', { ifAvailable: true }, async lock => {
+      if (!lock) throw new Error('Another dashboard is already importing a backup.');
+      const controller = new AbortController();
+      backupStatus.textContent = 'Checking backup…';
+      setBackupCancel(() => controller.abort(new DOMException('Import cancelled.', 'AbortError')));
+      try {
+        const { data, preserveGalaxy, exportedAt } = await runBackupWorker('stage', file, {
+          signal: controller.signal,
+          progress: rows => { backupStatus.textContent = `Checking backup: ${rows.toLocaleString()} galaxy entries…`; },
+        });
+        setBackupCancel();
+        validateBackupData(data);
+        const date = exportedAt ? new Date(exportedAt).toLocaleString() : 'unknown date';
+        const changes = preserveGalaxy
+          ? 'Replace settings, reports and other non-galaxy data? The current galaxy database will be kept.'
+          : 'Replace ALL current data?';
+        if (!confirm(`Import backup from ${date}?\n\n${changes}\n\nA snapshot of the data to be replaced is written to Downloads/NexusOverseer first.`)) {
+          backupStatus.textContent = 'Import cancelled.';
+          return;
+        }
+        await requestBackup('pre-import', preserveGalaxy, true);
+        backupStatus.textContent = 'Restoring backup…';
+        const storage = globalThis.nexusStorage;
+        const previous = await storage.exportFullStorage();
+        try {
+          await storage.restoreFullStorage(data);
+          if (!preserveGalaxy) await runBackupWorker('commit');
+        } catch (error) {
+          try { await storage.restoreFullStorage(previous); }
+          catch (rollback) {
+            throw new Error(`${error.message} Rollback failed: ${rollback.message}. Recover using the pre-import backup.`, { cause: rollback });
+          }
+          throw error;
+        }
+        backupStatus.textContent = 'Backup restored.';
+        try { await loadAll(); }
+        catch (error) { backupStatus.textContent = `Backup restored. Reload the dashboard: ${error.message}`; }
+      } finally {
+        await clearBackupImportStage();
+      }
+    });
+  } catch (error) {
+    backupStatus.textContent = error.name === 'AbortError' ? 'Import cancelled.' : `Import failed: ${error.message}`;
   } finally {
-    setTimeout(() => { btn.textContent = 'Import JSON'; }, 2000);
+    setBackupCancel();
+    backupButtons.forEach(button => { button.disabled = false; });
   }
 });
 

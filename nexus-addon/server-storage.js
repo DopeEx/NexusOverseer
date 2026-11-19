@@ -350,8 +350,10 @@
     }
     await ensureMigrated();
     const local = baseLocal || rawStorage();
-    await local.clear();
+    const keys = typeof local.getKeys === 'function' ? await local.getKeys() : Object.keys(await local.get(null));
     if (Object.keys(data).length) await local.set(data);
+    const obsolete = keys.filter(key => !Object.hasOwn(data, key));
+    if (obsolete.length) await local.remove(obsolete);
   }
 
   async function clearAllStorage() {

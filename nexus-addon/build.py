@@ -80,6 +80,7 @@ def firefox_manifest():
     with open(os.path.join(HERE, 'manifest.json'), encoding='utf-8') as f:
         manifest = json.load(f)
     manifest['background']['scripts'] = [manifest['background']['service_worker']]
+    manifest['permissions'].remove('offscreen')
     return json.dumps(manifest, indent=2, ensure_ascii=False) + '\n'
 
 

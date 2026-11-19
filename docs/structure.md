@@ -54,6 +54,17 @@ an application `src/` tree. Keep that layout unless a clear ownership or reuse
 boundary justifies creating a directory; do not move files just to make the
 tree look more layered.
 
+## Testing large backups
+
+Load the add-on in a separate profile. Import a legacy full backup,
+use **Options > Data > Create full backup**, then import the
+resulting `.nexus-backup.gz` and check for the same reports and galaxy entries
+across universes. Also try importing a truncated copy: validation should
+reject it without replacing anything. Keep the original backup unchanged.
+If an earlier build saved the compressed backup as `.nexus-backup.txt`,
+rename it to `.nexus-backup.gz` before selecting it in the import picker.
+Do not decompress it first.
+
 ## Conventions and boundaries
 
 - **File and folder names:** Use lowercase `kebab-case` for JavaScript,
