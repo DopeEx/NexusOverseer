@@ -267,23 +267,20 @@
 
     migrationPromise = (async () => {
       const local = rawStorage();
-      const all = await local.get(null);
-      const legacyKeys = Object.keys(all).filter(key => !isInternalKey(key));
+      const all = typeof local.getKeys === 'function' ? null : await local.get(null);
+      const keys = new Set(all ? Object.keys(all) : await local.getKeys());
+      const legacyKeys = [...keys].filter(key => !isInternalKey(key));
+      const moveKeys = legacyKeys.filter(key => !keys.has(scopedKey('s0', key)) && !keys.has(scopedKey('nf', key)));
+      const values = all || await local.get([MIGRATION_KEY, ...moveKeys]);
       if (legacyKeys.length) {
         const migrated = {};
-        for (const key of legacyKeys) {
-          const s0Key = scopedKey('s0', key);
-          const nfKey = scopedKey('nf', key);
-          // Keep existing scoped values untouched. If both are missing, preserve
-          // the legacy value under s0 (historic default universe).
-          if (!Object.hasOwn(all, s0Key) && !Object.hasOwn(all, nfKey)) {
-            migrated[s0Key] = all[key];
-          }
+        for (const key of moveKeys) {
+          if (Object.hasOwn(values, key)) migrated[scopedKey('s0', key)] = values[key];
         }
         if (Object.keys(migrated).length) await local.set(migrated);
         await local.remove(legacyKeys);
       }
-      if (!all[MIGRATION_KEY]) await local.set({ [MIGRATION_KEY]: 1 });
+      if (!values[MIGRATION_KEY]) await local.set({ [MIGRATION_KEY]: 1 });
     })();
 
     return migrationPromise;

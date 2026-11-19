@@ -89,6 +89,9 @@ public base data. Public datasets are stored separately from personal game
 observations and never create ownership, visibility or observation timestamps.
 
 The extension also writes automatic backup files to your `Downloads/NexusOverseer/` folder before destructive operations (reset, import, schema migrations) and as a weekly auto-backup. These files are plain JSON and remain on your device under your control.
+Pre-update backups and safety snapshots taken before importing a storage-only
+backup omit the galaxy database. Importing these files leaves that database
+untouched. To save the galaxy database manually, use **Options > Data > Export JSON**.
 
 ---
 

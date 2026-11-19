@@ -6,6 +6,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- Pre-update backups skip the galaxy database to avoid loading large saved
+  galaxies during version upgrades. Restoring one keeps the current galaxy
+  database. Full exports still include it.
+
+### Fixed
+- Reloading the same unpacked extension version in Chrome no longer starts a
+  full backup. Startup also avoids fetching all stored data just to check for
+  legacy storage keys on browsers that can list keys directly.
+
 ## [2.5.0] - 2026-11-01
 
 ### Added
