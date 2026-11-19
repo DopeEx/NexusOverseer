@@ -1,7 +1,7 @@
 // Calibration guard for tech-upgrade.js upgradeCost().
 // Mirrors the shipped formula (base × costFactor^(L-1) per researched level,
 // plus rareCosts scaled the same way). Fails if the formula drifts.
-//   node test_tech_cost.js
+// Run with: node --test tests/tech-cost.test.js
 import assert from 'assert';
 
 const BASE_RES = [

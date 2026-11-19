@@ -110,6 +110,11 @@ Automatic data backups are configured under **Options > Data**: weekly
 (default), daily or off, with **Back up now** for an immediate backup. They are
 saved under `Downloads/NexusOverseer` and include galaxy knowledge, but not
 diagnostic logs. They are separate from the Windows updater's file backups.
+Reloading the same extension version does not run a backup. Scheduled backups
+remain due on a subsequent regular sync, and version changes still trigger a
+pre-update backup. These smaller pre-update backups omit the galaxy database
+and leave it in place on import. They require a version of Nexus Overseer that
+supports storage-only backups. Use **Export JSON** to manually save a full copy.
 
 ### Local galaxy knowledge
 

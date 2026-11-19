@@ -1,7 +1,7 @@
 // Calibration guard for building-upgrade.js upgradeCost().
 // Anchors the cost formula to two real in-game costs. If the exponent split or
 // factors in building-upgrade.js drift, update both — and re-verify in game.
-//   node test_building_cost.js
+// Run with: node --test tests/building-cost.test.js
 import assert from 'assert';
 
 // Mirror of upgradeCost() in building-upgrade.js (kept in sync by hand — this

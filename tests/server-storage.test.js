@@ -26,6 +26,30 @@ test('manifest uses MV3 service worker background without legacy scripts key', (
   assert.equal(Object.hasOwn(manifest.background || {}, 'scripts'), false, 'background.scripts is added only to the Firefox package by build.py');
 });
 
+test('startup checks legacy keys without reading scoped archives even when a legacy key remains', async () => {
+  const store = makeBrowserStub({
+    nexus_server_storage_v1: 1,
+    'nexus_server:s0:survey_archive': [{ id: 1 }],
+    survey_archive: [{ id: 2 }],
+    legacy_totals: { ore: 5 },
+  });
+  const local = globalThis.browser.storage.local;
+  local.getKeys = async () => Object.keys(store);
+  const get = local.get;
+  local.get = async keys => {
+    assert.notEqual(keys, null, 'startup must not read the full store');
+    assert.ok(![].concat(keys).includes('nexus_server:s0:survey_archive'));
+    return get(keys);
+  };
+
+  await uniqueImport('../nexus-addon/server-storage.js');
+  await globalThis.nexusStorage.getSettings();
+  assert.deepEqual(store['nexus_server:s0:survey_archive'], [{ id: 1 }]);
+  assert.deepEqual(store['nexus_server:s0:legacy_totals'], { ore: 5 });
+  assert.ok(!Object.hasOwn(store, 'survey_archive'));
+  assert.ok(!Object.hasOwn(store, 'legacy_totals'));
+});
+
 test('server storage isolates NX-S0 from NX-NF', async () => {
   const store = makeBrowserStub();
 

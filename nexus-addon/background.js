@@ -8,7 +8,7 @@ import { starterMultiplier, scaledRates, effectivePopulationRate } from './produ
 import { appendDiagnostics, migrateDiagnostics } from './diagnostics.js';
 import { clearDiagnosticLogs } from './diagnostics-store.js';
 import { loadSettings, getSetting } from './settings.js';
-import { createGalaxyCache, saveSystem, saveCatalog, saveGalaxyDelta, readGalaxyDeltas, catalogPath, exportGalaxyCache,
+import { createGalaxyCache, saveSystem, saveCatalog, saveGalaxyDelta, readGalaxyDeltas, catalogPath, exportGalaxyCache, STORAGE_ONLY_BACKUP_VERSION,
   readPublicGalaxy, savePublicGalaxy } from './galaxy-cache.js';
 import { createGalaxySharing } from './galaxy-sharing.js';
 import { createApiScheduler, retryDelay } from './api-scheduler.js';
@@ -256,18 +256,18 @@ browser.runtime.onInstalled.addListener(async details => {
   // Re-arm the asteroid live-search alarm if it was left enabled.
   const { live_search } = await browser.storage.local.get('live_search');
   if (live_search && live_search.enabled) browser.alarms.create(LS_ALARM, { periodInMinutes: LS_INTERVAL_MIN });
-  // Snapshot existing data before the new version touches it.
-  if (details.reason === 'update') {
+  // Chrome reports unpacked reloads as updates even when the version is unchanged.
+  const version = browser.runtime.getManifest().version;
+  if (details.reason === 'update' && details.previousVersion && details.previousVersion !== version) {
     const { whatsnew_read_version } = await browser.storage.local.get('whatsnew_read_version');
-    const version = browser.runtime.getManifest().version;
     if (version !== whatsnew_read_version) await browser.storage.local.set({ whatsnew_pending: version });
     try {
-      await backupToDownloads(`pre-update-${details.previousVersion || 'unknown'}`);
+      await backupToDownloads(`pre-update-${details.previousVersion}`, { includeGalaxy: false });
     } catch (err) {
       console.warn('[NexusOverseer] Pre-update backup failed:', err);
     }
   }
-  await scrape();
+  await scrape(null, { allowAutoBackup: false });
 });
 
 browser.runtime.onStartup?.addListener(() => {
@@ -647,7 +647,10 @@ const handleRuntimeMessage = async (msg, context = null, options = {}) => {
   if (msg.type === 'SIM_RUN') return simulateCombat(msg.attacker, msg.defender);
   if (msg.type === 'REBUILD_AGGREGATES') return enqueue(rebuildAggregates).then(() => ({ ok: true }));
   if (msg.type === 'PURGE_OLD') return enqueue(() => purgeOldData(msg.days ?? 3)).then(() => ({ ok: true }));
-  if (msg.type === 'BACKUP_NOW') return backupToDownloads(msg.reason || 'manual').then(() => ({ ok: true })).catch(e => ({ error: e.message }));
+  if (msg.type === 'BACKUP_NOW') {
+    const includeGalaxy = !(msg.reason === 'pre-import' && msg.preserveGalaxy === true);
+    return backupToDownloads(msg.reason || 'manual', { includeGalaxy }).then(() => ({ ok: true })).catch(e => ({ error: e.message }));
+  }
   if (['GET_PUBLIC_GALAXY_STATUS', 'UPDATE_PUBLIC_GALAXY', 'EXPORT_PUBLIC_GALAXY'].includes(msg.type)) {
     try {
       const serverKey = options.serverKey || await galaxyServerKey();
@@ -3309,16 +3312,16 @@ async function rebuildAggregates() {
 // ── Backups ─────────────────────────────────────────────────────────────────
 // Full storage snapshots written to Downloads/NexusOverseer/: weekly while
 // scraping runs, and before every destructive operation (reset, import,
-// schema-fallback wipe). Same format as the manual dashboard export.
+// schema-fallback wipe). Version updates only snapshot extension storage.
 
 const BACKUP_INTERVALS_MS = { daily: 24 * 3600 * 1000, weekly: 7 * 24 * 3600 * 1000 };
 
-async function backupToDownloads(reason) {
+async function backupToDownloads(reason, { includeGalaxy = true } = {}) {
   const data = globalThis.nexusStorage?.exportFullStorage ? await globalThis.nexusStorage.exportFullStorage() : await browser.storage.local.get(null);
   if (data.records_cap === Infinity) data.records_cap = 0;
   const payload = {
-    nexus_overseer_backup: 1,
-    galaxyCache: await exportGalaxyCache(),
+    nexus_overseer_backup: includeGalaxy ? 1 : STORAGE_ONLY_BACKUP_VERSION,
+    ...(includeGalaxy ? { galaxyCache: await exportGalaxyCache() } : {}),
     exported_at: new Date().toISOString(),
     reason,
     data,
@@ -3332,7 +3335,7 @@ async function backupToDownloads(reason) {
     conflictAction: 'uniquify',
     saveAs: false,
   });
-  await browser.storage.local.set({ last_backup: new Date().toISOString() });
+  if (includeGalaxy) await browser.storage.local.set({ last_backup: new Date().toISOString() });
   console.log(`[NexusOverseer] Backup written (${reason}).`);
 }
 
@@ -3504,7 +3507,7 @@ async function ensureSchema() {
 
 // ── Full scrape (15-min alarm fallback + manual button) ────────────────────
 
-async function scrape(context = null) {
+async function scrape(context = null, { allowAutoBackup = true } = {}) {
   const listedUniverses = await getUniverses({ refresh: true });
   // Authenticated API requests must go through a same-origin game tab.
   const tabs = await browser.tabs.query({ url: '*://*.nexuslegacy.space/*' });
@@ -3531,7 +3534,7 @@ async function scrape(context = null) {
   for (const universeKey of universesToScrape) {
     const run = async () => {
       await syncGameServer();
-      return scrapeCurrentUniverse();
+      return scrapeCurrentUniverse({ allowAutoBackup });
     };
     const result = globalThis.nexusStorage?.withServer
       ? await globalThis.nexusStorage.withServer(universeKey, run, context)
@@ -3544,7 +3547,7 @@ async function scrape(context = null) {
     : { ok: true };
 }
 
-async function scrapeCurrentUniverse() {
+async function scrapeCurrentUniverse({ allowAutoBackup }) {
   try {
     await ensureSchema();
     const planetId = await getHomePlanetId();
@@ -3602,7 +3605,7 @@ async function scrapeCurrentUniverse() {
       await checkDrift();
       console.log(`[NexusOverseer] Scraped ${nSurveys} surveys, ${nPirates} pirate, ${nMining} mining reports.`);
     });
-    await maybeAutoBackup();
+    if (allowAutoBackup) await maybeAutoBackup();
     await browser.storage.local.set({
       last_scrape: new Date().toISOString(),
       last_error: null,

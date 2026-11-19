@@ -6,7 +6,8 @@
 
 import { activeTab, appendStatusText, confirmDialog, dayKey, fuelForMode, getLabelKey, getMode, infoDialog, periodLabelFor, renderMarkdown, renderNetCards, setActiveTab, setStore, store } from './common.js';
 import { bindServerSelector } from './server-switch.js';
-import { exportGalaxyCache, restoreGalaxyCache, validateGalaxyBackup } from './galaxy-cache.js';
+import { exportGalaxyCache, restoreGalaxyCache, validateGalaxyBackup, restoreBackupGalaxyCache,
+  STORAGE_ONLY_BACKUP_VERSION } from './galaxy-cache.js';
 import { initReleaseStatus } from './release-status.js';
 import { initApiStatus } from './api-status.js';
 import { changelogForVersion } from './common.js';
@@ -27,7 +28,7 @@ import { renderGlobalTab } from './tabs/global.js';
 import { renderMiningTab, setMiningPage } from './tabs/mining.js';
 import { initPiratesTab, renderPirateStatsTab, renderPiratesTab, runPirateAutomations, setPirateCurrentPage } from './tabs/pirates.js';
 import { getEventBreakdownForMode, getResourcesLostForMode, getSeriesForMode, getTotalsForMode, populateEventOptions, renderByEventChart, renderCollected, renderEventsChart, renderLost, renderResourceChart, renderTable, setCurrentPage } from './tabs/surveys.js';
-import { renderTechTreeTab } from './tabs/techtree.js';
+import { renderTechTreeTab } from './tabs/tech-tree.js';
 import { initDashboardTab } from './tabs/dashboard.js';
 import { initOptionsTab, checkPublicGalaxyUpdates } from './tabs/options.js';
 import { initGuideTab } from './tabs/guide.js';
@@ -660,18 +661,25 @@ document.getElementById('import-file').addEventListener('change', async function
   try {
     const payload = JSON.parse(await file.text());
     // `nexus_accounting_backup` is the marker written before the rename.
-    const isBackup = payload && (payload.nexus_overseer_backup === 1 || payload.nexus_accounting_backup === 1);
+    const preserveGalaxy = payload?.nexus_overseer_backup === STORAGE_ONLY_BACKUP_VERSION;
+    const isBackup = payload && (preserveGalaxy || payload.nexus_overseer_backup === 1 || payload.nexus_accounting_backup === 1);
     if (!isBackup || !payload.data || Array.isArray(payload.data) || typeof payload.data !== 'object') {
       throw new Error('not a Nexus Overseer backup file');
     }
     validateBackupData(payload.data);
+    if (preserveGalaxy && Object.hasOwn(payload, 'galaxyCache')) {
+      throw new Error('storage-only backups must not contain a galaxy database');
+    }
     if (payload.galaxyCache) validateGalaxyBackup(payload.galaxyCache);
     const exportedAt = payload.exported_at ? new Date(payload.exported_at).toLocaleString() : 'unknown date';
-    if (!confirm(`Replace ALL current data with backup from ${exportedAt}?\n\nA snapshot of the current data is written to Downloads/NexusOverseer first.`)) return;
+    const changes = preserveGalaxy
+      ? 'Replace settings, reports and other non-galaxy data? The current galaxy database will be kept.'
+      : 'Replace ALL current data?';
+    if (!confirm(`Import backup from ${exportedAt}?\n\n${changes}\n\nA snapshot of the data to be replaced is written to Downloads/NexusOverseer first.`)) return;
 
-    const backup = await browser.runtime.sendMessage({ type: 'BACKUP_NOW', reason: 'pre-import' });
+    const backup = await browser.runtime.sendMessage({ type: 'BACKUP_NOW', reason: 'pre-import', preserveGalaxy });
     if (!backup?.ok) throw new Error(backup?.error || 'Backup failed; no data was replaced.');
-    await restoreGalaxyCache(payload.galaxyCache);
+    await restoreBackupGalaxyCache(payload);
     const data = payload.data;
     if (globalThis.nexusStorage?.restoreFullStorage) {
       await globalThis.nexusStorage.restoreFullStorage(data);

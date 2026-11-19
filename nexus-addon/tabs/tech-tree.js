@@ -1,4 +1,4 @@
-// Tech Tree tab — research from /api/research, laid out as a dependency graph.
+// Tech tree tab — research from /api/research, laid out as a dependency graph.
 
 import { fmt, store, confirmDialog, escapeHtml } from '../common.js';
 import { loadAll } from '../dashboard.js';

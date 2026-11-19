@@ -438,6 +438,15 @@ export function restoreGalaxyCache(snapshot = { version: 1, entries: [] }) {
   });
 }
 
+// Older importers must reject storage-only files rather than clear the omitted database.
+export const STORAGE_ONLY_BACKUP_VERSION = 2;
+
+export async function restoreBackupGalaxyCache(payload) {
+  if (payload.nexus_overseer_backup !== STORAGE_ONLY_BACKUP_VERSION) {
+    await restoreGalaxyCache(payload.galaxyCache);
+  }
+}
+
 // The service owns request coalescing and legacy migration; the database remains
 // the source of truth across dashboards and MV3 worker restarts.
 export function createGalaxyCache({ fetcher, storage, promote }) {

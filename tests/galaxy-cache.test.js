@@ -7,7 +7,7 @@ import 'fake-indexeddb/auto';
 import {
   createGalaxyCache, saveSystem, readSystem, readScans, restoreGalaxyCache,
   exportGalaxyCache, saveCatalog, systemCacheFresh, OWNERSHIP_TTL, DYNAMIC_TTL,
-  saveGalaxyDelta, readGalaxyDeltas,
+  saveGalaxyDelta, readGalaxyDeltas, restoreBackupGalaxyCache,
 } from '../nexus-addon/galaxy-cache.js';
 import { getSystemPlanets } from '../nexus-addon/galaxy-client.js';
 import { makeBrowserStub, loadBackground } from './helpers.js';
@@ -522,6 +522,17 @@ test('regular backups preserve universes, catalogs and independent timestamps', 
   assert.equal((await cache.catalog('s0', '/api/galaxy/map')).systems.length, 1);
   assert.throws(() => restoreGalaxyCache({ version: 1, entries: [{ key: 'invalid' }] }), /Invalid/);
   assert.equal(Object.keys(await readScans('s0')).length, 1);
+});
+
+test('importing a storage-only backup keeps known galaxy data, unlike a legacy backup with no galaxy data', async () => {
+  await saveSystem('s0', 1, contents());
+  const before = await exportGalaxyCache();
+
+  await restoreBackupGalaxyCache({ nexus_overseer_backup: 2, data: {} });
+  assert.deepEqual(await exportGalaxyCache(), before);
+
+  await restoreBackupGalaxyCache({ nexus_overseer_backup: 1, data: {} });
+  assert.deepEqual((await exportGalaxyCache()).entries, []);
 });
 
 test('800 cached client lookups need zero runtime/API calls and finish without per-system waits', async () => {

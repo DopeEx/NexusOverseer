@@ -9,9 +9,9 @@
 // the planner needs a destination planet (where you'll research) to diff the
 // cost against, instead of the building tool's "planet in view".
 //
-// Cost model (same shape techtree.js uses): each level L costs
+// Cost model (same shape tech-tree.js uses): each level L costs
 //     costOre/…/costAlloys · costFactor^(L-1)   (L 1-indexed), plus rareCosts
-// scaled by the same factor. Guarded by test_tech_cost.js.
+// scaled by the same factor. Guarded by tests/tech-cost.test.js.
 //
 // IIFE + re-run guard: Firefox can inject a content script twice into one
 // isolated world; top-level consts would then throw "redeclaration of const".
