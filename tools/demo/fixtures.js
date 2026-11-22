@@ -1,4 +1,5 @@
 import { publicGalaxyFromRows } from '../../nexus-addon/galaxy-public.js';
+import { normalizeXenoReport, xenoTotals } from '../../nexus-addon/xeno-reports.js';
 
 export const DEMO_NOW = Date.parse('2030-04-12T12:00:00Z');
 const at = minutes => new Date(DEMO_NOW + minutes * 60000).toISOString();
@@ -26,7 +27,7 @@ export function createDemoData() {
     ['colony_ship', 'Colony Ship', 'special', 200, 50, 0, null],
   ].map(([key, name, shipClass, hp, shieldHp, attack, weaponType], i) => ({
     id: i + 1, shipDefId: i + 1, key, reportKey: key, name, shipClass,
-    hp, shieldHp, attack, weaponType, armorType: 'light', shipSize: 'medium',
+    hp, shieldHp, attack, weaponType, armorType: 'light', shipSize: key === 'dreadnought' ? 'capital' : 'medium',
     sortOrder: i, isNpc: false, miningCargo: shipClass === 'utility' ? 500 : 0,
     cargoCapacity: 1500, fuelRate: 1, speed: 100,
     costOre: (i + 1) * 200, costSilicates: (i + 1) * 100,
@@ -107,11 +108,77 @@ export function createDemoData() {
   ].map(([type, count, eta], i) => ({
     id: i + 1, type, missionType: type, ships: count,
     sourcePlanetId: 1, sourcePlanetName: 'Aurora',
-    targetSystemId: systems[i + 3].id, targetSystemName: systems[i + 3].name,
+    targetSystemId: type === 'mine' ? systems[3].id : systems[i + 3].id,
+    targetSystemName: type === 'mine' ? systems[3].name : systems[i + 3].name,
+    targetFieldId: type === 'mine' ? 2 : null,
+    departsAt: at(-15),
     departedAt: at(-15), arrivesAt: at(eta), returnDepartsAt: at(eta + 10),
-    returnArrivesAt: at(eta * 2 + 25), status: 'outbound',
+    returnArrivesAt: at(eta * 2 + 25), status: type === 'mine' ? 'mining' : 'outbound',
+    cargo: type === 'mine' ? { _cycleStartedAt: at(-6), _nextCycleAt: at(12) } : {},
     fleet: [{ shipDefId: 1, quantity: count }],
   }));
+  const xenoTargetSystemId = systems[41].id;
+  const xenoTargetMoonId = 10000 + xenoTargetSystemId * 10;
+  const xenoClues = systems.filter(s => s.securityZone === 'sentinel' && s.id !== xenoTargetSystemId)
+    .slice(0, 5).map((system, i) => ({
+      index: i + 1, moonId: 10000 + system.id * 10, moonName: `Demo Archive Moon ${i + 1}`,
+      systemId: system.id, systemName: system.name, x: system.x, y: system.y, at: at(-360 + i * 60),
+    }));
+  const activityMissions = [
+    {
+      id: 4, type: 'investigate', missionType: 'investigate', ships: 4, status: 'outbound',
+      sourcePlanetId: planets[0].id, sourcePlanetName: planets[0].name,
+      sourceSystemId: planets[0].systemId, sourceSystemName: planets[0].systemName,
+      targetSystemId: systems[17].id, targetSystemName: systems[17].name,
+      departsAt: at(-18), arrivesAt: at(8), returnDepartsAt: at(28), returnArrivesAt: at(42),
+      fleetComposition: [{ quantity: 4, shipDefId: 1, shipKey: 'scout', shipName: 'Scout' }],
+    },
+    {
+      id: 5, type: 'collect_debris', missionType: 'collect_debris', ships: 6, status: 'collecting',
+      sourcePlanetId: planets[0].id, sourcePlanetName: planets[0].name,
+      sourceSystemId: planets[0].systemId, sourceSystemName: planets[0].systemName,
+      targetSystemId: systems[27].id, targetSystemName: systems[27].name,
+      departsAt: at(-40), arrivesAt: at(-20), returnDepartsAt: at(20),
+      cargo: { _cargoCapacity: 8000, _cycleStartedAt: at(-3), _nextCycleAt: at(7) },
+      fleetComposition: [{ quantity: 6, shipDefId: 10, shipKey: 'freighter', shipName: 'Freighter' }],
+    },
+    {
+      id: 6, type: 'collect_salvage', missionType: 'collect_salvage', ships: 4, status: 'collecting',
+      sourcePlanetId: planets[0].id, sourcePlanetName: planets[0].name,
+      sourceSystemId: planets[0].systemId, sourceSystemName: planets[0].systemName,
+      targetSystemId: systems[37].id, targetSystemName: systems[37].name,
+      departsAt: at(-34), arrivesAt: at(-14), returnDepartsAt: at(18),
+      cargo: { _cargoCapacity: 5000, _cycleStartedAt: at(-2), _nextCycleAt: at(8) },
+      fleetComposition: [{ quantity: 4, shipDefId: 10, shipKey: 'freighter', shipName: 'Freighter' }],
+    },
+    {
+      id: 7, type: 'expedition', missionType: 'expedition', ships: 13, status: 'exploring',
+      sourcePlanetId: planets[0].id, sourcePlanetName: planets[0].name,
+      sourceSystemId: planets[0].systemId, sourceSystemName: planets[0].systemName,
+      targetSectorId: systems[36].sectorId,
+      departsAt: at(-60), arrivesAt: at(60), returnDepartsAt: at(60),
+      travelTime: 1200, raidParams: { expedition: { zone: 'dead', depth: 2, version: 1 } },
+      cargo: { _cargoCapacity: 8000 },
+      fleetComposition: [
+        { quantity: 2, shipDefId: 1, shipKey: 'scout', shipName: 'Scout' },
+        { quantity: 10, shipDefId: 10, shipKey: 'freighter', shipName: 'Freighter' },
+        { quantity: 1, shipDefId: 15, shipKey: 'spy_probe', shipName: 'Spy Probe' },
+      ],
+    },
+    {
+      id: 8, type: 'xeno_survey', missionType: 'xeno_survey', ships: 2, status: 'surveying',
+      sourcePlanetId: planets[0].id, sourcePlanetName: planets[0].name,
+      sourceSystemId: planets[0].systemId, sourceSystemName: planets[0].systemName,
+      targetSystemId: xenoTargetSystemId, targetSystemName: systems[41].name,
+      departsAt: at(-65), arrivesAt: at(-25), returnDepartsAt: at(215), returnArrivesAt: at(255),
+      cargo: { _targetMoonId: xenoTargetMoonId },
+      fleetComposition: [
+        { quantity: 1, shipDefId: 15, shipKey: 'spy_probe', shipName: 'Spy Probe' },
+        { quantity: 1, shipDefId: 17, shipKey: 'hacker_ship', shipName: 'Hacker Ship' },
+      ],
+    },
+  ];
+  missions.push(...activityMissions);
   const hubs = Array.from({ length: 6 }, (_, i) => {
     const angle = i * Math.PI / 3 + 0.3;
     return {
@@ -157,7 +224,10 @@ export function createDemoData() {
     }
     return out;
   }, {});
-  const survey = reports(1, 'survey');
+  const survey = reports(1, 'survey').map((r, i) => ({
+    ...r, system_name: systems[i + 2].name,
+    event_type: ['resource_cache', 'ancient_signal', 'rogue_drone'][i % 3],
+  }));
   const pirate = reports(0.7, 'pirate');
   const mining = reports(1.8, 'mining');
   const expedition = reports(0.4, 'expedition').map(r => ({ ...r, kind: 'expedition', loot: { ...r } }));
@@ -169,6 +239,44 @@ export function createDemoData() {
     total: 100000, zone: systems[i + 2].securityZone, sx: systems[i + 2].x, sy: systems[i + 2].y,
     minerPresent: i === 1 ? 'Demo Explorer' : null, ownerName: null,
   }));
+  const missingMiningFieldId = missions.find(mission => mission.missionType === 'mine').targetFieldId;
+  const availableFields = fields.filter(field => field.fieldId !== missingMiningFieldId);
+  const surveyReports = [
+    {
+      id: 101, systemId: systems[17].id, systemName: systems[17].name,
+      securityZone: systems[17].securityZone, createdAt: at(-12),
+      investigated: false, eventType: 'quantum_storm', eventTitle: 'Quantum Storm',
+      anomalyExpiresAt: at(80),
+    },
+    {
+      id: 102, systemId: systems[37].id, systemName: systems[37].name,
+      securityZone: systems[37].securityZone, createdAt: at(-90),
+      investigated: true, eventType: 'ancient_cache', eventTitle: 'Ancient Cache',
+      uncollectedLoot: { ore: 18500, silicates: 9400, quantum_dust: 42 },
+      salvageExpiresAt: at(150),
+    },
+    {
+      id: 103, systemId: systems[56].id, systemName: systems[56].name,
+      securityZone: systems[56].securityZone, createdAt: at(-150),
+      investigated: true, eventType: 'derelict_station', eventTitle: 'Derelict Station',
+      uncollectedLoot: { ore: 9200, hydrogen: 3600, alloys: 740 },
+      salvageExpiresAt: at(110),
+    },
+  ];
+  const debrisFields = [
+    {
+      id: 'demo-debris-1', debrisId: 5101, systemId: systems[27].id,
+      system: systems[27].name, zone: systems[27].securityZone,
+      ore: 8200, silicates: 5100, alloys: 900, expires: at(180),
+      first_seen: at(-35), updated_at: at(-5),
+    },
+    {
+      id: 'demo-debris-2', debrisId: 5102, systemId: systems[43].id,
+      system: systems[43].name, zone: systems[43].securityZone,
+      ore: 4600, silicates: 2600, alloys: 450, expires: at(240),
+      first_seen: at(-50), updated_at: at(-8),
+    },
+  ];
   const storage = {
     nexus_settings: { 'general.numberFormat': 'en' },
     records_cap: 5000, last_scrape: at(-2), last_backup: at(-1440),
@@ -180,6 +288,7 @@ export function createDemoData() {
     recent_reports: survey, pirate_recent_reports: pirate, mining_recent_reports: mining,
     exp_recent_reports: expedition, research, active_research: activeResearch,
     ships: Object.fromEntries(ships.map(s => [s.id, s])),
+    template_selections: { 'af-near': '25', 'sc-cargo-ships': [10] },
     fleet_templates: [
       { id: 1, name: 'Demo - Balanced Mining', ships: { 11: 80, 12: 40, 13: 30, 14: 1 } },
       { id: 2, name: 'Demo - Patrol Escort', ships: { 2: 60, 3: 40, 5: 20 }, escortZones: ['open'] },
@@ -188,8 +297,11 @@ export function createDemoData() {
     tt_queue_targets: [{ key: 'impulse', level: 4 }, { key: 'logistics', level: 5 }],
     asteroid_scan_results: {
       at: DEMO_NOW, planetId: 1, near: 25, types: [], zones: [],
-      referenceSystem: { x: planets[0].systemX, y: planets[0].systemY }, fields,
+      referenceSystem: { x: planets[0].systemX, y: planets[0].systemY },
+      fields: fields.map(field => field.fieldId === missingMiningFieldId
+        ? { ...field, missing: true, mult: null, remaining: null, total: null, minerPresent: null } : field),
     },
+    debris_fields: debrisFields,
     spy_reports: [{
       id: 1, target_name: 'Demo Frontier', target_user: 'Demo Rival',
       target_system_id: 5, target_system_name: systems[4].name, created_at: at(-30),
@@ -233,9 +345,57 @@ export function createDemoData() {
       loot: { ore: 18000, silicates: 9000, hydrogen: 4500 }, debris: { ore: 1200 },
     })) },
     GET_MISSIONS: { missions, maxFleetSlots: 12 },
-    GET_SURVEY_REPORTS: { reports: [] },
+    GET_XENO_OVERVIEW: {
+      hasResearch: true,
+      config: {
+        surveySeconds: 14400, surveyCooldownSeconds: 172800, chainTtlSeconds: 604800,
+        siteClues: 3, maxClues: 5,
+        modes: { careful: { seconds: 27648, collapseChance: 0.03 }, fast: { seconds: 13824, collapseChance: 0.1 } },
+        zones: {
+          sentinel: { excavators: 3, massLimit: 45000, hall: false },
+          open: { excavators: 6, massLimit: 100000, hall: false },
+          dead: { excavators: 10, massLimit: 250000, hall: true },
+        },
+      },
+      codexTrack: { buildTimeMultiplier: 1, surveyTimeMultiplier: 1, digTimeMultiplier: 0.96, storageMultiplier: 1 },
+      codex: { stone: [1], voice: [], gaze: [1, 2], memory: [] },
+      blueprints: [{ key: 'demo_moon_archive' }],
+      buildings: [],
+      monuments: [{ key: 'celestial_chronometer', copies: 1, untouched: false }],
+      placements: [],
+      accountModifiers: { collapseChanceMultiplier: 1, rareArtifactBonus: 0, surveyCooldownMultiplier: 1, excavatorRecoveryChance: 0 },
+      stats: { successfulDigs: 2, totalDigs: 3 },
+      chain: {
+        id: 1, trace: 'observatory', zone: 'sentinel', startedAt: xenoClues[0].at,
+        expiresAt: at(7 * 24 * 60 - 180), paused: false, clues: xenoClues,
+        site: { moonId: 10050, moonName: 'Demo Dig Moon', systemId: 5, systemName: 'Demo Site' },
+        garrison: [{ key: 'xeno_golem', quantity: 21 }],
+        sideEntrances: [
+          { trace: 'ruins', garrison: [{ key: 'xeno_lens', quantity: 11 }, { key: 'xeno_golem', quantity: 10 }] },
+          { trace: 'spire', garrison: [{ key: 'xeno_chorus', quantity: 43 }, { key: 'xeno_golem', quantity: 9 }] },
+        ],
+        siteClues: 3, maxClues: 5,
+      },
+      nextChain: null,
+      liveDig: null,
+      reports: [{
+        id: 2, missionId: 2, createdAt: at(-180), zone: 'sentinel',
+        trace: 'observatory', entranceTrace: 'spire', mode: 'careful',
+        hall: false, outcome: 'success', excavatorsSent: 3, excavatorsLost: 0, battleReportId: 2002,
+        report: {
+          rounds: 7, garrison: [{ key: 'xeno_chorus', quantity: 43 }],
+          delivered: { fragments: 0, resources: { silicates: 7767 }, artifactTier: null },
+          overflow: { fragments: 0, resources: { silicates: 2400 }, artifactTier: null },
+          shipsLost: [{ shipDefId: 5, key: 'cruiser', name: 'Cruiser', destroyed: 1, damaged: 2 }],
+          guardianLosses: [], moonName: 'Demo Archive Moon',
+          systemName: 'DEMO-A1-017', hallRequested: false, fleetLost: false, excavatorsRecovered: 0,
+          codex: { set: 'gaze', entry: 2 }, monument: { key: 'celestial_chronometer', copies: 1 },
+        },
+      }],
+    },
+    GET_SURVEY_REPORTS: { reports: surveyReports },
     GET_SURVEY_COOLDOWNS: { cooldowns: [] },
-    REFRESH_DEBRIS: { fields: [] },
+    REFRESH_DEBRIS: { ok: true },
     GET_DASHBOARD_OVERVIEW: {
       fetchedAt: at(-2), planets, moons: [], missions, research: activeResearch,
       maxFleetSlots: 12, slots: { colonies: 5, moons: 3 },
@@ -245,10 +405,13 @@ export function createDemoData() {
       researchPlanets: planets.map((p, i) => ({ id: p.id, name: p.name, mult: 0.8 + i * 0.2 })),
     },
     SIM_BOOTSTRAP: {
-      playerShips: ships, npcShips: [{
-        id: 100, key: 'pirate_fighter', name: 'Pirate Fighter', isNpc: true,
-        hp: 180, shieldHp: 30, attack: 20, weaponType: 'laser',
-      }],
+      playerShips: ships, npcShips: [
+        { id: 100, key: 'pirate_fighter', name: 'Pirate Fighter', isNpc: true,
+          hp: 180, shieldHp: 30, attack: 20, weaponType: 'laser' },
+        { id: -20007, key: 'xeno_golem', name: 'Golem', isNpc: true },
+        { id: -20008, key: 'xeno_chorus', name: 'Chorus', isNpc: true },
+        { id: -20009, key: 'xeno_lens', name: 'Lens', isNpc: true },
+      ],
       pirateShipIds: [100], pirateZones: zones,
       planetaryDefense: ['Missile Defense', 'Laser Defense', 'Railgun Defense', 'Plasma Defense'].map(name => ({
         key: name.toLowerCase().replaceAll(' ', '_'), name,
@@ -256,7 +419,48 @@ export function createDemoData() {
       ownProfile: { bonusesAvailable: true, leadership: { available: false } },
     },
   };
-  const data = { storage, responses, systems, planets, fields };
+  const demoDig = responses.GET_XENO_OVERVIEW.reports[0];
+  responses.GET_XENO_OVERVIEW.reports.push({
+    ...demoDig, id: 3, missionId: 3, battleReportId: 2003, createdAt: at(-1440),
+    trace: 'necropolis', mode: 'fast', zone: 'open', excavatorsSent: 6,
+    report: {
+      ...demoDig.report, rounds: 5, moonName: 'Demo Reliquary Moon',
+      delivered: { resources: { alloys: 5200 }, fragments: 24, artifactTier: 'rare' },
+      overflow: { resources: { alloys: 1500 }, fragments: 0, artifactTier: null },
+      codex: null, monument: null, shipsLost: [],
+    },
+  }, {
+    ...demoDig, id: 4, missionId: 4, battleReportId: null, createdAt: at(-2880),
+    outcome: 'collapse', excavatorsLost: 3,
+    report: {
+      ...demoDig.report, rounds: 0, moonName: 'Demo Collapsed Moon', fleetLost: true,
+      delivered: { resources: {}, fragments: 0, artifactTier: null },
+      overflow: { resources: {}, fragments: 0, artifactTier: null },
+      codex: null, monument: null,
+      shipsLost: [{ shipDefId: 14, key: 'excavator', name: 'Excavator', destroyed: 3, damaged: 0 }],
+    },
+  });
+  const xenoRecords = responses.GET_XENO_OVERVIEW.reports.map(normalizeXenoReport);
+  storage.xeno_recent_reports = xenoRecords;
+  storage.xeno_totals = xenoTotals(xenoRecords);
+  storage.xeno_resources_lost = {};
+  for (const [kind, field, factor] of [
+    ['destroyed', 'ships_destroyed_raw', 1], ['repair', 'ships_damaged_raw', 0.5],
+  ]) {
+    const cost = { ore: 0, silicates: 0, hydrogen: 0, alloys: 0, rare: {} };
+    for (const record of xenoRecords) {
+      for (const loss of record[field]) {
+        const ship = storage.ships[loss.shipDefId];
+        for (const key of ['ore', 'silicates', 'hydrogen', 'alloys']) {
+          cost[key] += loss.quantity * factor * ship[`cost${key[0].toUpperCase()}${key.slice(1)}`];
+        }
+      }
+    }
+    storage.xeno_resources_lost[kind] = cost;
+  }
+  storage.archive_index = { xeno: { months: ['2030-04'], count: xenoRecords.length } };
+  storage['xeno_archive_2030-04'] = xenoRecords;
+  const data = { storage, responses, systems, planets, fields: availableFields };
   for (const systemId of [17, 34, 51, 68, 85, 102, 19, 38, 57]) {
     demoResponse(data, { type: 'GET_SYSTEM_PLANETS', systemId });
   }
@@ -294,17 +498,35 @@ export function demoResponse(data, message) {
   if (message.type === 'GET_SECTOR_SYSTEMS') {
     return { systems: data.systems.filter(s => s.sectorId === message.sectorId) };
   }
+  if (message.type === 'GET_XENO_MOON') {
+    const mission = data.responses.GET_MISSIONS.missions.find(m => m.missionType === 'xeno_survey');
+    const moonId = Number(message.moonId);
+    const clue = data.responses.GET_XENO_OVERVIEW.chain.clues.find(item => item.moonId === moonId);
+    if (!clue && moonId !== mission?.cargo?._targetMoonId) return { error: 'Unknown demo moon.' };
+    return {
+      moonId, ancient: true, trace: 'observatory', zone: 'sentinel',
+      cooldownSeconds: 172800, cooldownRemainingSeconds: 168900,
+    };
+  }
   if (message.type === 'GET_SYSTEM_PLANETS') {
     const s = data.systems.find(s => s.id === message.systemId);
     if (!s) return { error: 'Unknown demo system.' };
+    const xenoMission = data.responses.GET_MISSIONS.missions.find(m => m.missionType === 'xeno_survey');
+    const xenoMoonId = xenoMission?.cargo?._targetMoonId;
     const response = {
-      moons: Array.from({ length: 1 + (s.id + 2) % 3 }, (_, index) => ({
-        id: 10000 + s.id * 10 + index, systemId: s.id, planetId: 1000 + s.id,
-        name: `Demo Moon ${s.id}-${index + 1}`, moonType: ['metallic', 'icy', 'barren'][index],
-        size: 30 + index * 10, buildingSlots: 4 + (s.id + index) % 6,
-        userId: index === 2 ? 9100 + s.id : null,
-        ownerName: index === 2 ? `Demo Pilot ${s.id}` : null,
-      })),
+      moons: Array.from({ length: 1 + (s.id + 2) % 3 }, (_, index) => {
+        const id = 10000 + s.id * 10 + index;
+        const clue = data.responses.GET_XENO_OVERVIEW.chain.clues.find(item => item.moonId === id);
+        const xenoName = clue?.moonName ?? (id === xenoMoonId ? 'Demo Archive Moon' : null);
+        return {
+          id, systemId: s.id, planetId: 1000 + s.id,
+          name: xenoName ?? `Demo Moon ${s.id}-${index + 1}`,
+          moonType: xenoName ? 'ancient' : ['metallic', 'icy', 'barren'][index],
+          size: 30 + index * 10, buildingSlots: 4 + (s.id + index) % 6,
+          userId: index === 2 ? 9100 + s.id : null,
+          ownerName: index === 2 ? `Demo Pilot ${s.id}` : null,
+        };
+      }),
       planets: [{
         id: 1000 + s.id, name: `Demo Colony ${s.id}`, systemId: s.id,
         userId: s.id % 17 === 0 ? 9100 : s.id % 3 ? null : 9100 + s.id,
