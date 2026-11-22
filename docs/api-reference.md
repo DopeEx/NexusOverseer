@@ -6,6 +6,11 @@ official specification of the Nexus Legacy API. Routes and response fields can
 change without notice. Gameplay rules, reference values and calculations belong
 in the [game reference](./game-reference.md).
 
+Account-specific identifiers, names, locations and timestamps in illustrative
+payloads are fictional or anonymized. Definition IDs and game values retain
+their documented meanings. Observed behavior and measured durations are
+described separately; example identifiers are not live targets.
+
 The add-on sends requests to the currently selected game server, for example
 `https://s0.nexuslegacy.space`, using paths under `/api`.
 
@@ -125,9 +130,9 @@ Supplied response-header screenshots from `https://s0.nexuslegacy.space` show:
 
 | Request | Status | `RateLimit-Limit` | `RateLimit-Policy` | `RateLimit-Remaining` | `RateLimit-Reset` |
 |---|---:|---:|---|---:|---:|
-| `GET /api/galaxy/systems/2877/planets` | 304 | 400 | `400;w=60` | 271 | 40 |
-| `GET /api/planets/4699` | 200 | 400 | `400;w=60` | 266 | 35 |
-| `GET /api/galaxy/systems/786/planets?include=planets,moons,fields` | 200 | 400 | `400;w=60` | 328 | 20 |
+| `GET /api/galaxy/systems/{systemId}/planets` | 304 | 400 | `400;w=60` | 271 | 40 |
+| `GET /api/planets/{planetId}` | 200 | 400 | `400;w=60` | 266 | 35 |
+| `GET /api/galaxy/systems/{systemId}/planets?include=planets,moons,fields` | 200 | 400 | `400;w=60` | 328 | 20 |
 | `POST /api/fleet/fuel-estimate` | 200 | 400 | `400;w=60` | 357 | 50 |
 
 These responses establish an advertised 400-request/60-second policy, including
@@ -136,10 +141,9 @@ advertise the smaller scope budgets. Plan conservatively for the general budget
 and the applicable scope limits together; do not interpret a large general
 remaining value as permission to exceed a scope limit.
 
-The first two responses have server `Date` values of `20:57:25 GMT` and
-`20:57:30 GMT` on 20 October 2026. Reset falls from 40 to 35 over those five
-seconds, supporting the current interpretation as seconds until reset, not an
-epoch timestamp. This does not prove fixed versus sliding windows.
+The first two responses were five seconds apart; reset fell from 40 to 35,
+supporting interpretation as seconds until reset, not an epoch timestamp.
+This does not prove fixed versus sliding windows.
 
 The screenshots list
 `Access-Control-Expose-Headers: X-Server-Time,X-RateLimit-Scope,Retry-After`.
@@ -148,8 +152,7 @@ headers are present. No actual `X-RateLimit-Scope` or `Retry-After` field appear
 in these successful/304 samples.
 
 A subsequent Galaxy Search screenshot captured an actual 429 for
-`GET /api/galaxy/systems/3493/planets`, with server date
-`20 October 2026 21:43:37 GMT`. It reports `X-RateLimit-Scope: system-details`,
+`GET /api/galaxy/systems/{systemId}/planets`. It reports `X-RateLimit-Scope: system-details`,
 `RateLimit-Limit: 30`, `RateLimit-Policy: 30;w=10`,
 `RateLimit-Remaining: 0`, `RateLimit-Reset: 1` and `Retry-After: 1`.
 The JSON body reports `code: RATE_LIMITED` and
@@ -211,78 +214,53 @@ profile. Timer intervals are triggers, not guaranteed request frequencies.
 | Background scrape | 15-minute alarm, installation/update and manual triggers; loads multiple endpoints in parallel and visits open universes | Classify periodic versus explicit work; do not let an entire scrape inherit action-level priority |
 | Asteroid live search | Five-minute alarm plus an immediate run when enabled/changed; shares manual filters and results, with up to 500 candidate detail checks | Per-server run versions invalidate stopped/superseded passes; all reads use central budgets |
 | Dashboard overview | Manual/automatic distinction via `polite`; automatic refresh depends on settings and displayed completions | Existing distinction is not a full priority model |
-| Dashboard automations | Scouting, pirates and expeditions run sequentially in a shared 15-second cycle, gated by expert mode and feature readiness/switches | Long tasks delay later tasks; no overlapping cycle starts |
+| Dashboard automations | Scouting, pirates and expeditions run sequentially in a shared 15-second cycle, controlled by feature readiness and switches | Long tasks delay later tasks; no overlapping cycle starts |
 | Visible Scouting view | One-second UI timer calls ship availability every ten ticks while the subview is open; mission refresh has a separate due check | Display polling is distinct from executing an automation |
 | Realtime report/status observer | Observes successful watched requests and actively re-fetches their pathname at background priority | Additional traffic, not passive response reuse; query parameters are not retained; active add-on transport is excluded |
 | Galaxy response observer/cache | Passively relays selected fetch/XHR responses; cache coalesces matching pending system/catalog reads | Reuse existing mechanisms rather than duplicating requests or cache logic |
 | Universe catalog | Scheduled request to `https://nexuslegacy.space/api/universes` | Separate origin, conservatively included in the shared local ceiling; its quota relationship is unknown |
 
-Asteroid scans resolve sector metadata only as each nearby candidate is needed,
-rather than preparing all explored sectors before fetching fields. Manual scans
-show and save collected fields immediately, without waiting for optional owner
-alliance tags. Target systems defaults to 10 without overwriting saved values.
-With a resource-type selection, the target counts systems containing any selected
-type (at most 500 detail checks), not individual field rows; without it, the target
-limits nearby systems in the selected zones. Other field filters apply to the
-displayed results. Scan status separates target progress (for example, 10/10
-systems with selected types), systems checked, fields matching all filters and
-own-mission exceptions. A completed pass explicitly reports whether the system
-target was reached (a shortfall is marked `not reached`); routine status uses
-compact `Target 10/10 · Checked 83 · Fields 16` counters, with explanations and
-cache timing in the tooltip rather than repeated sentences. The table also counts the distinct systems represented by
-its displayed fields. Both manual and live scans reuse dynamic field observations for
-15 minutes and use central scheduler status for inline waits, like Galaxy Scout.
-Exhausted 429 retries and authentication failures stop further scan requests;
-collected results remain saved. All network attempts still use central admission.
+**Asteroid scan integration.** Sector metadata is resolved on demand; manual
+results are saved and displayed without waiting for optional alliance tags.
+The target defaults to 10 systems without overwriting saved settings. With
+resource types selected it counts systems containing any selected type, up to
+500 detail checks; otherwise it limits nearby systems in selected zones. Other
+filters apply to displayed fields. Status separates target progress, checked
+systems, matching fields and own-mission exceptions; a shortfall is marked
+`not reached`. Compact counters have explanatory/cache-timing tooltips; the
+table also counts distinct displayed systems.
 
-Scan and Auto Scan share one filter toolbar and one dashboard result table.
-Auto Scan evaluates the same criteria immediately and on five-minute triggers,
-not necessarily with new network data: field observations remain reusable for
-15 minutes. The UI distinguishes the latest run time from each row's field-data
-check time. Scan during Auto Scan requests another background pass rather than
-starting a second competing dashboard loop. Filter changes supersede the old
-pass; Stop prevents further systems and publication from the old pass once its
-current read returns. Origin and storage keys are captured for each pass.
+Scan and Auto Scan share filters and results. Auto Scan runs immediately and on
+five-minute triggers; both reuse dynamic field data for 15 minutes and display
+central scheduler waits. The UI distinguishes run time from each field's check
+time. Scan during Auto Scan requests another pass, not a competing loop. Filter
+changes supersede a pass; Stop prevents further systems and publication after
+the current read. Origin and storage keys are pinned per pass. Exhausted 429
+retries or authentication failures stop further requests but retain results;
+all attempts pass central admission.
 
-Each pass replaces ordinary results, so previously matching fields disappear
-when they no longer meet the filters or are absent in a resolved system response.
-Known own mining missions are the only filter exception, labelled in the same
-table. Previously listed mission fields outside the candidate range are also
-checked through the shared dynamic cache. An absent field retains only a mission
-marker with null resource values and no launch action; an unperformed/failed check
-is labelled unconfirmed instead. Those exceptions end with the mission. Incomplete
-passes publish their checked subset and labelled own mission markers, not a union
-of stale ordinary hits. The game-page results window consumes the same live result
-set and removes mission exceptions when its mission refresh reports their end.
-The game-page Auto Scan Belts panel is currently disabled, including its sidebar
-entry and notification/runtime opening paths; Auto Scan remains available in the
-dashboard's Asteroids tab.
-The game-page window also applies the current filters locally to saved matches
-on opening and on configuration changes, using the same pure filter module as
-the dashboard/background. Tightening a threshold therefore hides obsolete matches
-immediately, without waiting for a completed pass or making extra game requests.
-Own-mission exception labels are recalculated against the current filters.
-Dashboard updates reconcile rows by field ID instead of clearing the table.
-Galaxy Scout and Asteroids share the `dashboard-list-panel` presentation:
-common heading/count typography and table spacing, with `dashboard-table-scroll`
-for table-only horizontal scrolling and keyboard-operable sort headings.
-Asteroids keeps its own columns, uses a separate compact status row, and places
-pagination below the table so neither status nor navigation scrolls offscreen.
-Zone and alliance badges share the same builders and styles as Galaxy Scout;
-asteroid resource types use the same badge frame with resource-specific colors.
-Outpost owners use a neutral badge, without claiming planet-colonization status.
-Badge nodes are updated in place alongside the retained result rows.
-Absent outposts show only a dash, with no visible owner/alliance badge. Known
-multipliers use a warning-tone outline badge with a transparent background and
-the same font size, weight and padding as the other Scout-style badges;
-unknown values remain plain dashes.
-Field IDs are keyboard-accessible copy buttons. Clipboard success and failures
-are reported inline; the ID itself remains visible and unchanged.
-These classes are the reusable baseline for further list migrations; other tabs
-are not automatically restyled.
-Unchanged rows and controls remain attached; values and mission badges update
-in place. During a pass, prior ordinary hits remain until their system is checked;
-the final snapshot removes any remaining old hits outside the completed search.
+Completed passes replace ordinary hits; prior hits remain until checked, then
+disappear if absent or no longer matching. Incomplete passes publish only
+checked hits and labelled own mining-mission exceptions, not stale ordinary
+hits. Mission fields outside the candidate range also use the shared cache.
+An absent field retains a mission marker with null resources and no launch
+action; a failed or unperformed check is unconfirmed. Exceptions end with the
+mission. Markers use a pickaxe beside the system and a status with tooltip.
+The game-page result window uses the same results and locally reapplies
+filters and exception labels when opened or changed, without network requests.
+Its Auto Scan Belts panel and opening paths are disabled; dashboard Auto Scan
+remains available.
+
+Dashboard rows reconcile by field ID, retaining unchanged controls and updating
+badges in place. Distance and estimated fuel precede field ID and outpost;
+IDs are keyboard-accessible copy buttons with inline clipboard feedback.
+Zone/alliance badges use Galaxy Scout's styles, resource types have their own
+colors, outpost owners are neutral, absent outposts and unknown multipliers
+are dashes, and known multipliers use an outlined warning badge. Explore and
+Military result tables show counts and, only when needed, pagination outside the
+keyboard-accessible horizontal scroll region. Rows per page defaults to 25 and
+follows the General setting; controls stay in their associated panels. Fleet
+status cards retain their progress presentation.
 
 Source entry points:
 [background request handling and observers](../nexus-addon/background.js),
@@ -467,10 +445,10 @@ specification. HTTP responses and WebSocket events are separate data sources.
 
 ### Galaxy delta: `galaxy:delta`
 
-Observed Socket.IO text frame:
+Illustrative Socket.IO text frame:
 
 ```text
-42["galaxy:delta",{"type":"colonized","systemId":5047,"hasColonies":true}]
+42["galaxy:delta",{"type":"colonized","systemId":900001,"hasColonies":true}]
 ```
 
 The decoded event is an array containing the event name and its payload:
@@ -482,7 +460,7 @@ The decoded event is an array containing the event name and its payload:
 | `hasColonies` | `true` in the available samples; reports that the system contains colonies |
 
 An inspected reference-addon export contains nine delta entries for six systems
-between 3 and 20 October 2026. Four identical payloads for one system occurred
+in October 2026. Four identical payloads for one system occurred
 within about 41 seconds. These are repeated state notifications, not sufficient
 evidence of four separate colonizations. The payload does not identify a planet,
 owner or colony count, and contains no action timestamp or unique event ID.
@@ -568,7 +546,7 @@ This index includes observed endpoints not yet requested by the addon.
 | Fleets | `GET /api/planets/{planetId}/fleet` | Ships stationed at a planet. Top level: `fleet[]`, `cargoBonus`, `shuttleCargoBonus`, `miningCargoBonus` (research bonuses as fractions), `resources` (the planet's stock incl. rare goods as snake_case keys such as `cryo_ice`) and `resourceSnapshot` (`locationType`, `locationId`, `revision`, `serverNow`, `resourcesUpdatedAt`, `resources`, `productionRates`, `storage`, `energy`, `productionRateVersion`, `productionMultiplier`, `starterProductionMultiplier`). Each `fleet[]` entry: `id`, `planetId`, `shipDefId`, `quantity` (all hangar ships), `damagedQuantity` (the damaged part of `quantity`; for mining vessels this is the broken drills; undamaged = `quantity - damagedQuantity`) and `definition` (`key`, `name`, `description`, `shipClass` such as `recon`/`utility`, costs `costOre`/`costSilicates`/`costHydrogen`/`costAlloys`/`rareCosts`, `buildTime`, `hp`, `shieldHp`, `attack`, `speed`, `cargoCapacity`, `miningCargoCapacity`, `hangarCapacity`, `requiredShipyardLevel`, `requirements[]`, `fuelRate`, `shipSize`, `weaponType`, `armorType`, `sortOrder`, `populationCost`, `populationCargoCapacity`, `allowedCargo`, and research-adjusted values `effectiveHp`/`effectiveShieldHp`/`effectiveAttack`/`effectiveDamageReduction`/`effectiveCargoCapacity`/`effectiveMiningCargoCapacity`/`displaySpeed`/`effectiveFuelRate`, plus `baseMiningRates`/`effectiveMiningRates` per resource per cycle, e.g. `{"ore":40,"plasma":15}`). The Dashboard lists `damagedQuantity` > 0 under "Needs attention" |
 | Shipyard | `GET /api/planets/{planetId}/shipyard` | Ship definitions and planet availability, plus the build queues (`planetaryQueueAll`, `orbitalQueueAll`: `shipName`, `quantity`, `completed`, `isRepair`, `status`, `endsAt`; waiting jobs have `status: "pending"` and `endsAt: null`). Queue capacity is returned as `maxQueueSize`; see [construction rules](./game-reference.md#construction-and-research) |
 | Research | `GET /api/research?planetId={planetId}` | Research catalogue (`research[]` with current `level`) and `activeResearches[]` across all planets (`name`, `planetId`, `planetName`, `endsAt`; no level, the target level is `level + 1`). Each `research[]` entry has `effects[]`, including `{"type":"colony_slots","value":n}` and `{"type":"moon_slots","slots":n}`; the catalogue returns no base colony/moon limit. Other effect types seen: `fleet_slots`, `storage_bonus`, `rare_storage_bonus`, `production_bonus`, `unlock_ship`, `unlock_building`. Top-level extras: `researchSpeedMult`, `s0RiftClosed`, `precursorFragmentEffectBonus`, `activeResearch`. See [colony and moon rules](./game-reference.md#colony-and-moon-limits) |
-| Missions | `GET /api/fleet/missions` | Active and returning fleets |
+| Missions | `GET /api/fleet/missions` | Active and returning fleets; Xeno missions include `targetMoonId`, `status`, `fleetComposition`, `cargo._targetMoonId`, and phase timestamps |
 | Reports | `GET /api/fleet/survey-reports` | Survey results used by accounting and follow-up tools |
 | Reports | `GET /api/fleet/survey-cooldowns` | Survey availability |
 | Reports | `GET /api/fleet/pirate-reports` | Pirate combat reports |
@@ -586,6 +564,9 @@ This index includes observed endpoints not yet requested by the addon.
 | Galaxy | `GET /api/galaxy/map` | Known systems and coordinates |
 | Galaxy stations | `GET /api/galaxy/station-index` | `stations[]`: station identity, system identity/coordinates, viewer-alliance ownership and owner/capturing alliance tags; observed response documented below |
 | Galaxy | `GET /api/galaxy/systems/{systemId}/planets` | `planets[]` (with `userId`, `ownerName`, `isHomeworld`, `planetType`, `size`, `temperature`; no `sortOrder`), `asteroidFields[]`, and `moons[]` (`planetId`, `moonType`, `size`, `buildingSlots`, `userId`, `ownerName`; a moon with your `userId` is a colonized own moon), plus `visibility` and `included` |
+| Xenoarchaeology | `GET /api/xeno/moons/{moonId}` | One moon's trace (`trace`), zone, survey timing, cooldown, and clue/chain state. Confirmed for an uncolonized ancient moon. |
+| Xenoarchaeology | `GET /api/xeno` | Account overview, research flag, configuration, progress, and dig reports. The observed response contains no bulk moon-to-trace index. |
+| Xenoarchaeology | `POST /api/xeno/dig` | Launch a dig fleet for the active channel's site; see the observed request and outbound mission below. |
 | Trade | `GET /api/market/hubs`, `GET /api/market/orders` | Market hubs and public orders |
 | Trade | `GET /api/market/my-trades`, `GET /api/alliance-trade/orders` | Player trades and alliance orders |
 | Logistics | `GET /api/outposts`, `GET /api/moons/{moonId}`, `GET /api/moons/{moonId}/shipyard` (`fleet[]` with `quantity` and `definition.shipClass`, build queue in `queueAll[]` like the planet shipyard) and related fleet routes | Logistics destinations and their state. `/api/moons/{id}` returns `moon` (same resource and `<resource>Rate` fields as planets, plus `moonType`, `buildingSlots`, `planetId`), `buildings[]` (flat: `key`, `name`, `level`, `isUpgrading`, `upgradeEndsAt`) and `queue[]`; the Dashboard also reads own moons' resources and fleets |
@@ -602,7 +583,7 @@ empty collections, and fields available to a player can vary.
 
 ### Game configuration
 
-`GET /api/game-config` was captured on `s0` on 20 October 2026 with
+`GET /api/game-config` was captured on `s0` in October 2026 with
 `rulesetId: "s0-2026-10-station-operations-v1"`. This is a per-universe,
 versioned configuration snapshot, not a universal set of constants.
 
@@ -674,8 +655,8 @@ tiered scan data in `intel` rather than the legacy `fleetData`, `buildingData`,
 {
   "reports": [
     {
-      "id": 3129005,
-      "systemId": 6905,
+      "id": 900101,
+      "systemId": 900001,
       "eventType": "pirate_fleet",
       "loot": {
         "ore": 2078,
@@ -683,7 +664,7 @@ tiered scan data in `intel` rather than the legacy `fleetData`, `buildingData`,
         "silicates": 1094
       },
       "shipsLost": [],
-      "createdAt": "2026-08-26T07:39:20.640Z"
+      "createdAt": "2030-01-01T12:00:00.000Z"
     }
   ],
   "unreadCount": 0
@@ -698,9 +679,9 @@ description. Example, an evaded pirate patrol:
 
 ```json
 {
-  "id": 374340,
-  "missionId": 16701267,
-  "sectorId": 238,
+  "id": 900102,
+  "missionId": 900201,
+  "sectorId": 900301,
   "eventType": "pirate_patrol_evaded",
   "eventTitle": "Costly Evasion",
   "loot": {},
@@ -713,7 +694,7 @@ description. Example, an evaded pirate patrol:
     "evasionChance": 0.25,
     "compositionBand": "dominant"
   },
-  "createdAt": "2026-10-15T21:16:53.708Z"
+  "createdAt": "2030-01-02T12:00:00.000Z"
 }
 ```
 
@@ -735,6 +716,16 @@ and survivors are arrays keyed by `shipDefId`, and losses distinguish destroyed
 from damaged ships. The report may include extra negative-id entries for
 planetary defenses and the leadership vessel, and debris may contain resource
 keys beyond ore, silicates, and alloys.
+
+The Xeno overview's embedded simulator instead submits
+`POST /api/combat-simulator/jobs` with `civilianScreen: true`, an attacker
+with player bonuses, and a defender of type `npc` with `npcZone: "rift"`.
+The observed job returns a ticket and `status: "pending"`; a subsequent
+`GET /api/combat-simulator/jobs/{ticket}` returned `status: "complete"` and
+the normal combat result under `result`. Both requests use the simulator
+scheduler scope. The Xeno comparison shares the existing serialized simulator
+queue, polls pending jobs, and fails explicitly for an unknown status or
+incomplete report. It does not submit a dig mission.
 
 ### Missions and fuel estimates
 
@@ -768,7 +759,7 @@ For the gameplay rules behind phases, slot usage and mining options, see
 
 #### Observed phase payloads
 
-Observed in the 2026-10-19 feed (15 missions, `maxFleetSlots: 18`):
+Observed in an October 2026 feed (15 missions, `maxFleetSlots: 18`):
 
 | `missionType` | `status` | Relevant next timestamp |
 |---|---|---|
@@ -778,7 +769,7 @@ Observed in the 2026-10-19 feed (15 missions, `maxFleetSlots: 18`):
 | `patrol` | `patrolling` | `arrivesAt`: patrol ends, not outbound arrival; observed with `patrolMode: "hunt"` |
 | `market_pickup`, `expedition` | `returning` | `returnArrivesAt`: home arrival |
 
-A second 2026-10-19 feed (16 missions, `maxFleetSlots: 18`) added no new
+A second feed (16 missions, `maxFleetSlots: 18`) added no new
 status values, but included `missionType: "market_deliver"` with
 `status: "outbound"`. Its `arrivesAt` is arrival at the market hub; the observed
 flight had `travelTime: 2125` seconds, `cargo: { hydrogen: 500000 }` and
@@ -880,8 +871,8 @@ as `fuelCost`, `distance`, `travelTime`, `sufficient`, and `inRange`.
 
 ```json
 {
-  "sourcePlanetId": 74062,
-  "targetSystemId": 5752,
+  "sourcePlanetId": 900401,
+  "targetSystemId": 900001,
   "ships": [
     {
       "shipDefId": 21,
@@ -915,10 +906,10 @@ population, energy, shields and buildings. See the endpoint index above for the
 |---|---|
 | `ore`, `silicates`, `hydrogen`, `alloys` | Basic resource stock |
 | `cryoIce`, `quantumDust`, `plasmaCore`, `bioExtract`, `darkMatter`, `antimatter` | Rare resource stock; note camelCase naming |
-| `<resource>Rate` | Resource production per hour, passed directly to the Dashboard without a minute/hour conversion |
+| `<resource>Rate` | API resource production per hour, before the starter multiplier |
 | `<resource>Storage`, `rareResourceStorage` | Returned storage limits; do not hardcode the historical reference capacities |
 | `energyProduced`, `energyConsumed` | Energy supply and demand relevant to production |
-| `population`, `maxPopulation`, `populationGrowthRate` | Population, limit and population growth per hour |
+| `population`, `maxPopulation`, `populationGrowthRate` | Population, limit and hourly growth potential before population damping |
 | `shieldHp`, `shieldMaxHp`, `shieldRegenRate` | Shield state and regeneration |
 | `usedBuildingSlots`, `maxBuildingSlots` | Occupied and available building slots |
 | `resourceRevision` | Resource-state revision counter |
@@ -927,22 +918,16 @@ The official resource guide describes level- and research-dependent storage,
 not universal fixed capacities. Its building-production "per tick" descriptions
 must not be used to reinterpret these API rate units.
 
-Resource-rate units were confirmed on 20 October 2026: the background copies
-planet and moon resource-rate fields unchanged, and the Dashboard formats them
-as `/h` (or sums them for totals), without multiplying or dividing by 60.
-The player confirmed that these displayed hourly resource rates are correct.
-The older per-minute description for these resource fields is superseded.
-
-`populationGrowthRate` is also hourly: on 20 October 2026 the player confirmed
-that the game displays population growth as `/h`. The Dashboard uses the API
-value unchanged for its `/h` display and population-full estimate. The legacy
-per-minute population note is superseded.
+Resource and population rates use hourly units, not the legacy per-minute
+interpretation. The Dashboard applies the starter multiplier to resource rates
+and estimates effective population growth from the API potential and housing
+fill; see the [production analysis](#building-definitions-and-upgrade-previews).
 Historical capacities and resource sources remain in the
 [game resource reference](./game-reference.md#resources).
 
 ### Building definitions and upgrade previews
 
-A supplied `GET /api/planets/{planetId}` capture on 20 October 2026 includes
+A supplied `GET /api/planets/{planetId}` capture from October 2026 includes
 `buildings[].definition`, `previewUpgradeCost`, `previewBuildTimeSeconds` and
 `demolishPreview` (`oneLevel` and `allLevels`, each with `targetLevel`,
 `timeSeconds` and resource `refund`). This provides inputs for a level table
@@ -992,7 +977,7 @@ final and precise net planet rate are not interchangeable.
 Top-level `productionMultiplier` is 1 and `starterProductionMultiplier` is
 1.5034587499842322 in that capture.
 
-**Starter multiplier (analysis of 1 November 2026, homeworld capture).** The planet
+**Starter multiplier (November 2026 analysis).** The planet
 rates (`planet.<resource>Rate`, `resourceSnapshot.productionRates`) are
 *without* `starterProductionMultiplier`; the game tooltip includes it
 ("Entwicklungsbonus ×1,34"). Ore capture: `starterProductionMultiplier`
@@ -1037,46 +1022,25 @@ resource, energy and population tooltips:
   equals `energy.produced` and `energy.consumed`. `productionBreakdown.energyProducers`
   is keyed by building id with `rawBase`, `base`, `final`, `energyResearch`,
   `solarResearch`, `research`, `artifact`.
-- Population: `populationGrowthRate` 45.26 corresponds to the tooltip's
-  "Wachstumspotenzial +45/Std." (`productionBreakdown.population`: `base` 5,
-  `buildings` 23.5, `research` 0.5125, `temperature` 0.05; (5 + 23.5) *
-  (1 + 0.5125 + 0.05) = 44.5, close to 45.26). The tooltip's headline
-  growth "+321/h" is that value times a "Bevölkerungsfaktor ×7.09"
-  (45.26 * 7.09 = 321) which is not part of the response. The player
-  confirmed that the real growth rate changes dynamically: the closer the
-  population gets to the maximum (`maxPopulation`), the more the growth slows
-  down. The factor is therefore a fill-level-dependent term, not a constant.
-  At 8374 / 9142 (91.6% full, 768 free) it was 7.09; the formula is not yet
-  derived (one data point only). `populationGrowthRate` is the undamped
-  potential, so a linear population-full estimate based on it would be
-  inaccurate. The Dashboard computes the damped rate and a logistic full-time
-  estimate itself (`nexus-addon/production-rates.js`).
-- Potential formula (verified on two planets): `populationGrowthRate` =
-  `(base + buildings) * (1 + research) * (1 + temperature)` from
-  `productionBreakdown.population`. Planet 1: 28.5 * 1.5125 * 1.05 = 45.26;
-  planet 2: (5 + 9.3) * 1.5125 * 0.95 = 20.547 (both match the API exactly).
-  Temperature is a separate multiplier, not added to research.
-- Full planet (4600 / 4600, crystalline): the API still returns the potential
-  `populationGrowthRate` 20.547 (tooltip "Wachstumspotenzial +21/Std."), while
-  the tooltip shows "Wachstumsrate 0/h" and the note that the population has
-  reached its housing capacity. The API value is therefore not the effective
-  rate at the cap, and the Dashboard must treat `population >= maxPopulation`
-  as zero growth. The tooltip's "Biomasseverbrauch -46/Std." equals
-  `breakdown.bioExtract.effectiveConsumption` (46; first planet 83.85 shown
-  as -83).
-- Factor (two data points): the tooltip's "Bevölkerungsfaktor" is close to
-  `population * (1 - population / maxPopulation) / 100`, a logistic term that
-  vanishes at the cap. Effective growth = potential * factor.
-  - 2749 / 2760: formula 0.1035, tooltip ×0.10, potential 14.80 gives
-    +1.5/h (tooltip +1.5/h, API `populationGrowthRate` 14.80 is the
-    potential again).
-  - 8374 / 9142: formula 7.03, tooltip ×7.09 (about 1% off).
-  - 4600 / 4600: factor 0, tooltip 0/h.
-  The small deviation at the first point is unexplained (tooltip and API
-  population were captured at slightly different times; the exact divisor or
-  formula may differ). The factor and the effective rate are not in the API
-  response, so the Dashboard would have to compute them itself. A point at
-  low fill (30-50%) would confirm the shape.
+- `populationGrowthRate` is hourly undamped potential, not effective growth.
+  Two planets match `(base + buildings) * (1 + research) * (1 + temperature)`
+  using `productionBreakdown.population`: 28.5 * 1.5125 * 1.05 ≈ 45.26 and
+  14.3 * 1.5125 * 0.95 ≈ 20.547. Temperature is a separate multiplier.
+  A full planet still returned potential 20.547 while its tooltip showed 0/h;
+  effective growth must be zero at `population >= maxPopulation`.
+- The tooltip's population factor is not returned by the API and decreases as
+  housing fills. It is approximately `population * (1 - population /
+  maxPopulation) / 100`; effective growth is potential times this factor.
+  At 2749/2760 the calculated 0.1035 matches tooltip x0.10 and 1.5/h for
+  potential 14.80; at 8374/9142 it gives 7.03 versus tooltip x7.09 (45.26
+  potential, about 321/h); at capacity it gives zero. The roughly 1% difference
+  is unexplained: capture times, divisor or formula may differ. Low-fill
+  observations (30-50%) would better verify the shape. The Dashboard estimates
+  damped growth and logistic time-to-full in `nexus-addon/production-rates.js`;
+  a linear estimate from potential would be inaccurate.
+- The full planet's tooltip Bio Extract consumption matched
+  `breakdown.bioExtract.effectiveConsumption` (46; another planet reported
+  83.85 displayed as -83).
 - The in-game description of the "Entwicklungsbonus" (the starter multiplier)
   says it speeds up resource production, construction, research and
   shipbuilding. It depends on the development of the empire and its combat
@@ -1084,7 +1048,7 @@ resource, energy and population tooltips:
   recalculated on return after at least 7 days of absence. It therefore
   changes over time and should be read from each response, not cached. Its
   effect on build, research and shipbuilding times was checked on
-  1 November 2026: the Dashboard's
+  November 2026: the Dashboard's
   construction, research and shipyard countdowns, which come from the absolute
   end timestamps (`upgradeEndsAt`, `endsAt`), match the in-game overview to the
   second (for example Research Lab Lv.14 at 168h 36m, a 100-ship Missile
@@ -1096,7 +1060,7 @@ resource, energy and population tooltips:
 **Moon production.** `GET /api/moons/{moonId}` returns `moon.<resource>Rate`
 (unscaled, like planets) and a `resourceSnapshot` that includes
 `productionRates` and `starterProductionMultiplier`, but no top-level
-`productionBreakdown` or multiplier. Capture of 1 November 2026: API ore,
+`productionBreakdown` or multiplier. In a November 2026 capture, API ore,
 silicates and hydrogen rates 1677.72, 1652.868 and 378.7 against in-game
 +2254, +2220.6 and +508.8 per hour, ratio 1.3435 each, identical to the
 account's planet multiplier. The development bonus is therefore account-wide
@@ -1106,7 +1070,7 @@ seen.
 
 #### Storage Complex observations
 
-The same 20 October 2026 planet response contains a level-15 `storage_complex`.
+The same October 2026 planet response contains a level-15 `storage_complex`.
 Its definition supplies `storagePerLevel: 10000`, `storageResource: "all"`,
 `maxLevel: 20`, `energyPerLevel: -5`, base costs of 150 ore, 100 silicates,
 0 hydrogen and 50 alloys, `costFactor: 1.8`, `highLevelFactor: 1.5`,
@@ -1175,20 +1139,20 @@ fields are `null` until then. Destroyed camps set `destroyedAt` and `respawnsAt`
 {
   "camps": [
     {
-      "id": 2305,
-      "systemId": 10980,
-      "systemName": "E32-30",
-      "systemX": -277.0858,
-      "systemY": 215.12813,
+      "id": 900501,
+      "systemId": 900001,
+      "systemName": "Demo System",
+      "systemX": -100,
+      "systemY": 200,
       "securityZone": "open",
       "requiresDeadPlanetOrigin": false,
       "tier": "raider",
-      "name": "Red Corsair Haven",
+      "name": "Demo Pirate Haven",
       "currentHpPercent": 100,
       "lootTier": "common",
       "destroyedAt": null,
       "respawnsAt": null,
-      "lastSpawnedAt": "2026-10-15T11:35:13.830Z",
+      "lastSpawnedAt": "2030-01-01T10:00:00.000Z",
       "fleetComposition": [],
       "fleetIntel": [],
       "hasFleetIntel": false,
@@ -1224,7 +1188,7 @@ moment, and `scoutTierData` the tier the intel was taken at:
     { "key": "interceptor", "name": "Interceptor", "quantity": 4, "shipDefId": 6 }
   ],
   "hasFleetIntel": true,
-  "lastScoutedAt": "2026-10-15T17:40:38.148Z",
+  "lastScoutedAt": "2030-01-01T12:00:00.000Z",
   "scoutHpPercent": 100,
   "scoutTierData": "raider"
 }
@@ -1237,7 +1201,7 @@ can be outdated once the camp respawns or changes. Scout reports are served by
 ### Pirate camp scout reports
 
 `GET /api/fleet/camp-scout-reports` returned `{ "reports": [...] }` in a
-20 October 2026 capture (HTTP 200, five reports ordered newest first). There was
+October 2026 capture (HTTP 200, five reports ordered newest first). There was
 no `unreadCount` or pagination metadata in this sample; do not assume the
 combat-report envelope applies to this endpoint.
 
@@ -1258,9 +1222,9 @@ Abbreviated report example:
 {
   "reports": [
     {
-      "id": 77763,
-      "missionId": 17220471,
-      "campId": 2281,
+      "id": 900103,
+      "missionId": 900202,
+      "campId": 900501,
       "outcome": "success",
       "fleetData": [
         { "key": "scout", "name": "Scout", "quantity": 9, "shipDefId": 4 },
@@ -1268,12 +1232,12 @@ Abbreviated report example:
       ],
       "tierData": "scavenger",
       "hpPercent": 100,
-      "createdAt": "2026-10-20T01:04:42.673Z",
-      "expiresAt": "2026-10-21T01:04:42.673Z",
-      "campName": "Void Fang Station",
+      "createdAt": "2030-01-01T12:00:00.000Z",
+      "expiresAt": "2030-01-02T12:00:00.000Z",
+      "campName": "Demo Pirate Haven",
       "campTier": "scavenger",
-      "campSystemId": 13062,
-      "systemName": "Z27-12",
+      "campSystemId": 900001,
+      "systemName": "Demo System",
       "isRead": true,
       "isSaved": false
     }
@@ -1316,10 +1280,10 @@ round `attackerHpPercent` is 0 and `defenderHpPercent` 42.
 
 ```json
 {
-  "id": 219144,
-  "missionId": 16665889,
-  "userId": 20747,
-  "campId": 2237,
+  "id": 900104,
+  "missionId": 900203,
+  "userId": 900601,
+  "campId": 900501,
   "attackerFleet": [{ "key": "cruiser", "name": "Cruiser", "quantity": 10, "shipDefId": 8 }],
   "pirateFleet": [
     { "key": "scout", "name": "Scout", "quantity": 9, "shipDefId": 4 },
@@ -1329,14 +1293,10 @@ round `attackerHpPercent` is 0 and `defenderHpPercent` 42.
     {
       "round": 1,
       "events": [
-        {
-          "side": "attacker",
-          "totalDamage": 2150,
-          "shipsDestroyed": [
-            { "key": "scout", "lost": 9, "name": "Scout", "shipDefId": 4 },
-            { "key": "fighter", "lost": 5, "name": "Fighter", "shipDefId": 5 }
-          ]
-        },
+        { "side": "attacker", "totalDamage": 2150, "shipsDestroyed": [
+          { "key": "scout", "lost": 9, "name": "Scout", "shipDefId": 4 },
+          { "key": "fighter", "lost": 5, "name": "Fighter", "shipDefId": 5 }
+        ] },
         { "side": "defender", "totalDamage": 248, "shipsDestroyed": [] }
       ],
       "attackerShieldHp": 2330,
@@ -1357,7 +1317,7 @@ round `attackerHpPercent` is 0 and `defenderHpPercent` 42.
   "loot": { "ore": 320, "hydrogen": 161, "silicates": 219 },
   "debris": { "ore": 578, "alloys": 91, "silicates": 289 },
   "isRead": true,
-  "createdAt": "2026-10-15T15:24:39.142Z",
+  "createdAt": "2030-01-02T12:00:00.000Z",
   "isSaved": false
 }
 ```
@@ -1370,13 +1330,13 @@ round `attackerHpPercent` is 0 and `defenderHpPercent` 42.
 
 ```json
 {
-  "sourcePlanetId": 6332,
-  "campId": 2305,
+  "sourcePlanetId": 900401,
+  "campId": 900501,
   "ships": [{ "shipDefId": 2, "quantity": 1 }]
 }
 ```
 
-Observed response for that request, a single ship (`shipDefId` 2) sent to camp 2305:
+Observed response for a single ship (`shipDefId` 2) sent to a camp:
 
 - `targetSystemId` is the camp's system; the camp itself is identified by
   `raidParams.campId`. `targetPlanetId`, `targetFieldId` and other targets are `null`.
@@ -1396,8 +1356,8 @@ Observed response for that request, a single ship (`shipDefId` 2) sent to camp 2
 
 ```json
 {
-  "sourcePlanetId": 6332,
-  "campId": 2305,
+  "sourcePlanetId": 900401,
+  "campId": 900501,
   "ships": [{ "shipDefId": 8, "quantity": 10 }],
   "hangarAssignments": {}
 }
@@ -1408,10 +1368,432 @@ Unlike `scout-camp`, the response is the mission object itself, not wrapped in
 `missionType: "attack_pirates"`, `status: "outbound"`, `raidParams.campId`,
 `targetSystemId` and the flight values (`distance`, `speed`, `travelTime`,
 `fuelCost`, `departsAt`, `arrivesAt`). Observed for 10 cruisers (`shipDefId` 8)
-against camp 2305: `speed` 13, `travelTime` 219 s, `fuelCost` 202, against 1
+against the same camp: `speed` 13, `travelTime` 219 s, `fuelCost` 202, against 1
 ship, speed 50, 92 s and 3 fuel for the scout mission to the same camp.
 The outcome is delivered later as a pirate report (`GET /api/fleet/pirate-reports`),
 whose `missionId` matches the mission `id`.
+
+### Xenoarchaeology
+
+A successful `GET /api/galaxy/systems/{systemId}/planets?include=planets,moons,fields`
+returned `visibility: "full"` and `included.moons: true`. An unowned ancient
+moon had no `trace` field: the system response identifies candidates, not
+their Xeno traces. A system-name search returned planet and system results
+only, with no moon IDs or traces.
+
+`GET /api/xeno/moons/{moonId}` returned `200 OK` for that moon with
+`ancient: true`, `trace: "necropolis"`, and `zone: "sentinel"`. It also
+returned `surveySeconds` (14400), `cooldownSeconds` (172800),
+`cooldownRemainingSeconds`, `clue` (with `outcome` and `clueIndex` in this
+capture), and `chain` (observed as `null`). This confirms a per-moon lookup
+for an uncolonized moon. No batch lookup has been confirmed. The response
+for a moon without a trace and whether research gates the detail lookup are
+not yet verified.
+
+For a selected or active zone, the launcher reads the scheduler-backed
+`GET /api/galaxy/sectors/{sectorId}/systems` catalog before moon requests.
+Other zones do not count toward the 500-system limit. Missing zone metadata
+or a failed lookup stops the search. It reuses cached static moon data,
+including public data, requests only missing groups, and does not refresh
+ownership to identify candidates. Per-moon details verify trace, zone and
+cooldown; see [survey search](./game-reference.md#xenoarchaeology).
+
+#### Survey launch and mission data
+
+`POST /api/fleet/xeno-survey` accepted `sourcePlanetId`, `targetMoonId` and
+`ships`, returning `missionId` and `arrivesAt`. The dialog requires at least
+one `spy_probe` (`shipDefId: 2`) and one `hacker_ship` (`16`); escorts such as
+`cruiser` (`8`) are optional. The observed request sent 10 of each, not the
+minimum.
+
+Moon ownership does not restrict survey targets: owned and unowned Ancient
+moons can both be surveyed. Candidate selection must not require
+`userId: null`.
+
+`GET /api/fleet/missions` returned `missionType: "xeno_survey"`,
+`status: "exploring"`, matching `targetMoonId` and `cargo._targetMoonId`,
+and the sent ship composition. `returnDepartsAt` was four hours after
+`arrivesAt`; `returnArrivesAt` remained `null` while exploring.
+
+A second survey was accepted while the first was exploring and `chain` was
+still `null`. In separate Sentinel and Open Necropolis observations, five
+surveys to distinct systems contributed to the same channel; the Sentinel
+missions were simultaneously exploring. Outcomes were `chain_opened`,
+`clue_added`, `site_found`, then two `side_entrance` results. A site may be
+in a different system from the surveyed targets and on another player's moon.
+These observations do not establish the maximum concurrent fleet limit or
+guarantee the same outcome under other conditions.
+
+The moon endpoint reported `cooldownSeconds: 172800` and, shortly after launch,
+`cooldownRemainingSeconds: 172713`. This is consistent with cooldown starting
+at launch, not completion. It is shared across players; use the API value
+instead of inferring it from personal mission history. The launcher checks
+encountered candidates individually and skips positive remaining cooldowns;
+no batch lookup is confirmed.
+
+#### Account overview and reports
+
+An observed `GET /api/xeno` returned `hasResearch: true` and
+`config` with `surveySeconds: 14400`, `surveyCooldownSeconds: 172800`,
+`chainTtlSeconds: 604800`, `siteClues: 3`, `maxClues: 5`; careful and fast
+modes (`seconds` 27648 and 13824, `collapseChance` 0.03 and 0.1); and zone
+requirements:
+
+| Zone | `excavators` | `massLimit` | `hall` |
+|---|---:|---:|---|
+| `sentinel` | 3 | 45000 | false |
+| `open` | 6 | 100000 | false |
+| `dead` | 10 | 250000 | true |
+
+An Open/Necropolis channel confirmed the same zone restrictions in the
+live dig dialog: 6 Excavators, a 100,000 tunnel-mass limit and no capital or
+huge ships. Capital/huge rejection is independent of the guardian garrison
+and applies to the complete compared fleet. The server-provided values are
+authoritative; the addon does not infer Open restrictions from the Necropolis
+trace or from the Sentinel configuration.
+
+The [game reference](./game-reference.md#xenoarchaeology) distinguishes
+guide loot rules from locally observed Sentinel payouts. The API's generic
+resource map is retained in archives but does not imply every resource can
+drop; `delivered.fragments` and `overflow.fragments` mean Precursor Fragments.
+
+The same response included `codexTrack`, `codex`, `blueprints`, `buildings`,
+`monuments`, `placements`, `accountModifiers`, `stats`, `chain`,
+`nextChain`, `liveDig`, and `reports[]`. In the pre-completion capture, `chain`,
+`nextChain`, and `liveDig` were `null`.
+
+The captured successful report had `zone: "sentinel"`, `trace:
+"observatory"`, `entranceTrace: "spire"`, `mode: "careful"`, `hall: false`,
+`outcome: "success"`, and `excavatorsSent: 3`. Its nested `report` included
+the guardian `garrison`, combat `rounds`, `shipsLost`, `guardianLosses`,
+`delivered`, `overflow`, `codex`, `monument`, `moonName` and `systemName`.
+Delivered and overflow silicates were reported separately; `trace` and
+`entranceTrace` are distinct fields.
+
+An active `chain` included `id`, `zone`, `trace`, `startedAt`, `expiresAt`,
+`paused`, and `clues[]` with `index`, `moonId`, `moonName`, `systemId`,
+`systemName`, `x`, `y`, and `at`. Use `chain.clues[].systemId` to exclude
+contributing systems. At two clues (`siteClues: 3`, `maxClues: 5`), `site`,
+`garrison`, `nextChain` and `liveDig` were null and `sideEntrances` was empty.
+The third clue populated `site` in a different system, with `moonId`,
+`moonName`, `planetId`, `systemId`, `systemName`, `x`, `y`, `ownerName` and
+`own` (observed null owner and `false`). `chain.garrison` contained
+`{ key, quantity }` entries including `xeno_golem`. The main entrance was
+available; `sideEntrances` was empty and `liveDig` null at that point.
+
+After clues four and five were credited, the overview showed two
+`sideEntrances[]` entries. Illustrative shape:
+
+```json
+[
+  {
+    "trace": "observatory",
+    "garrison": [
+      { "key": "xeno_lens", "quantity": 2 },
+      { "key": "xeno_golem", "quantity": 3 }
+    ]
+  },
+  {
+    "trace": "spire",
+    "garrison": [
+      { "key": "xeno_chorus", "quantity": 4 },
+      { "key": "xeno_golem", "quantity": 5 }
+    ]
+  }
+]
+```
+
+Each `sideEntrances[]` entry exposes its guardian `trace` and `garrison`;
+it does not include a separate site location in this capture. The in-game
+dig overview showed the Observatory and Spire entrances as selectable beside
+the main entrance.
+
+#### Opening the main-entrance dig dialog
+
+Opening the in-game dialog without dispatching a fleet produced three
+successful reads:
+
+| Request | Observed data |
+|---|---|
+| `GET /api/command-center/fleet-templates` | Saved templates with `templateType`, `composition[]` (`shipDefId`, `quantity`), and `hangarAssignments`. Other mission types were present, but the dig dialog showed no saved templates. The dig template type was not observed. |
+| `GET /api/planets/{planetId}/fleet` | Fleet inventory, ship definitions, damage counts, and cargo bonuses for the selected source planet. |
+| `GET /api/leadership` | Leadership vessel state and location. The dialog offered assignment of a vessel shown as ready at the selected source. |
+
+The Sentinel dialog required exactly three excavators, allowed up to 45,000
+tunnel mass, and excluded capital ships. It showed `careful` at 7h 40m 48s
+with a 3% collapse chance and `fast` at 3h 50m 24s with a 10% chance,
+matching the captured account configuration. The dialog also displayed
+selected fleet cargo capacity.
+
+Observed tunnel mass was 41,200 for 40 missile cruisers and three excavators,
+41,900 after adding one cruiser, and 41,930 after also adding one probe.
+These observations match the sum of each ship's base `hp` (1000, 400, 700
+and 30 respectively). Assigning a ready leadership vessel increased that
+total by 2,050, matching its captured `combatStats.maxHull`. Other ship types
+and damaged leadership vessels have not been independently verified. The
+planner treats the result as an estimate and requires an intact ready vessel
+at the selected planet when leadership is requested.
+
+#### Dig launch and outbound mission
+
+The in-game dialog successfully launched a
+careful Sentinel dig through the Spire side entrance with a leadership
+vessel. The request to `POST /api/xeno/dig` had this shape (source ID anonymized):
+
+```json
+{
+  "sourcePlanetId": 900401,
+  "ships": [
+    { "shipDefId": 12, "quantity": 41 },
+    { "shipDefId": 29, "quantity": 3 }
+  ],
+  "attachLeader": true,
+  "hangarAssignments": {},
+  "mode": "careful",
+  "entrance": "spire",
+  "hall": false
+}
+```
+
+The server returned `200 OK` with this response shape (values anonymized):
+
+```json
+{
+  "missionId": 900204,
+  "arrivesAt": "2030-01-01T12:00:00.000Z"
+}
+```
+
+The ship definitions were Missile Cruiser and Excavator. The
+dialog showed tunnel mass `44250 / 45000`, including the commander's `2050`.
+The request did not include a moon or chain ID: the observed launch used
+the current channel's site and selected side-entrance trace. `attachLeader`
+is the dig request field; the combat simulator uses `attachLeadership`
+instead. The main entrance value, launching without leadership, nonempty
+hangar assignments, `fast` mode, and `hall: true` were not verified by
+this launch.
+
+Immediately afterward, `GET /api/xeno` still showed the active channel and
+reported `liveDig` as
+`{ "missionId": 900204, "status": "outbound", "arrivesAt": "2030-01-01T12:00:00.000Z", "digEndsAt": null }`.
+The same mission in `GET /api/fleet/missions` had `missionType: "xeno_dig"`,
+`status: "outbound"`, `targetMoonId`, matching `fleetComposition`,
+and `leadershipVessel`. Its `cargo._xenoDig` held
+`hall: false`, `mode: "careful"`, `zone: "sentinel"`, channel `trace: "ruins"`,
+`moonId`, `chainId`, the selected entrance's garrison,
+`entranceTrace: "spire"`, and `excavatorsSent: 3`. The reported garrison
+matched the Spire side entrance, not the main entrance.
+The mission's `hangarAssignments` was `null` despite
+the request's empty object.
+The Xeno tab lists both `xeno_survey` and `xeno_dig` mission entries in its
+transit view. Dig cards show `cargo._xenoDig.entranceTrace` as the entrance
+instead of the moon name. Dig target moons come from `targetMoonId` or
+`cargo._xenoDig.moonId`; their countdown uses `arrivesAt` to
+`returnDepartsAt` while the reported status is on site.
+
+The addon dispatch uses this endpoint via the central game API
+scheduler, with no automatic POST retry. It permits suitable
+main- and side-entrance comparison results, always sends `hall: false`, and
+requires a fresh preflight and explicit confirmation. Other side entrances
+and sending without leadership have not yet been captured in live observations.
+
+The same mission was later observed with `status: "exploring"` and
+`returnArrivesAt: null`. The interval
+between arrival and scheduled return departure was 27,648.008 seconds,
+approximately the configured careful-mode duration of 27,648 seconds. The
+post-completion account response also reported `codexTrack.digTimeMultiplier:
+0.96`; this single observation does not establish how that modifier is applied.
+
+An addon launch sent
+41 Missile Cruisers and 3 Excavators with a leadership vessel, `mode: "fast"`,
+`entrance: "spire"`, and `hall: false`. `POST /api/xeno/dig` returned
+`200 OK` with `missionId` and `arrivesAt`. Both the fleet mission and
+`liveDig` confirmed the outbound mission. After arrival both reported
+`status: "exploring"`, with `returnDepartsAt` and `digEndsAt` respectively
+set to 13,824.008 seconds after arrival,
+matching the configured fast duration. The completed result is documented
+below. One addon comparison for this fleet predicted victory with all
+three Excavators surviving, one ship destroyed and none damaged; it is a
+single simulation and excludes collapse. Other side entrances and sending
+without leadership remain unverified live.
+
+#### Main-entrance launch and estimate
+
+An in-game careful Sentinel launch with leadership
+confirmed `entrance: "main"` with `200 OK`. It sent 41 Missile Cruisers
+(`shipDefId: 12`) and 3 Excavators (`shipDefId: 29`), `attachLeader: true`,
+`hangarAssignments: {}`, and `hall: false`. The current channel's trace was
+`spire`; its side entrances were Observatory and Ruins.
+
+The outbound fleet mission's `cargo._xenoDig.entranceTrace` was `spire`,
+matching the main entrance's guardian trace, not the request value `main`.
+Do not substitute the channel trace for `main` when dispatching or identifying
+the selected simulation. A side-entrance request instead uses that entrance's
+trace. Both `liveDig` and the fleet list confirmed the outbound dig;
+`liveDig.digEndsAt` was still `null`. A completed result was not yet captured.
+
+The in-game dialog also called `POST /api/xeno/dig/estimate` with the same
+source, ships, leadership, mode, entrance and hall fields, but without
+`hangarAssignments`. Its `200 OK` response reported:
+
+- `mass: 44250`, `massLimit: 45000`, and `commanderMass: 2050`, matching the
+  addon's estimate for this fleet.
+- `excavators: 3`, `excavatorsRequired: 3`, and `hackers: 0`.
+- `blockedShips: []`, `inRange: true`, and `problems: []`.
+- `fuelCost: 374`, `travelTimeSeconds: 269`, and `digSeconds: 27648`.
+- `hydrogenAvailable`, an estimated `arrivesAt`, and the channel's `expiresAt`.
+
+The actual launch arrival was later than the estimate's arrival, reflecting
+the separate request times. The addon still uses its local mass estimate and
+fresh preflight; it does not call this estimate endpoint.
+
+#### Dig completion and battle reports
+
+After the fleet returned, `GET /api/fleet/missions` returned an empty
+`missions` array. The exact return time and returning mission payload were
+not captured. `GET /api/xeno` then showed `chain: null`, `nextChain: null`,
+`liveDig: null`. Its
+new `reports[]` entry linked `missionId` to the report `id` and
+`battleReportId`. The report's `createdAt` was 21 milliseconds after the
+previously observed
+`returnDepartsAt`; this alone does not establish when combat was resolved.
+The report recorded:
+
+- Sentinel zone, Ruins channel trace, Spire entrance, careful mode,
+  `hall: false`, and `outcome: "success"`.
+- All excavators survived (`excavatorsLost: 0`, `fleetLost: false`); some
+  Missile Cruisers were destroyed or damaged. Guardians were listed in
+  `guardianLosses`.
+- `delivered.resources.silicates` and `overflow.resources.silicates` were
+  separate; no fragments or artifact tier were reported. The reward included
+  a `support_pillar` monument and `codex: null`.
+
+The initial overview showed this report with `isRead: false`. A
+`POST /api/xeno/reports/read` returned `{ "ok": true }`; the following
+overview still contained the report with `isRead: true`. The POST body and
+scope of the read operation were not captured.
+
+The addon ingests this `reports[]` list after its scheduler-backed
+`GET_XENO_OVERVIEW`, during scrapes, and on a centrally scheduled re-fetch
+after the game's `GET /api/xeno` (including an observed HTTP 304).
+Import does not mark reports read. The request's original server is retained
+even if the selected universe changes before the response arrives.
+
+Current records use `id: "xeno-dig-{id}"`, separate from legacy notification
+IDs (`xeno-{id}`), in `xeno_archive_YYYY-MM` and `archive_index.xeno`.
+Each record preserves the complete original dig entry under `report` and
+normalizes mission/time/location/zone/channel/entrance/mode/outcome, delivered
+loot, overflow, battle ID, rounds, Excavators and split ship losses.
+`xeno_seen_ids`, capped `xeno_recent_reports`, `xeno_totals`,
+`xeno_daily` and `xeno_resources_lost` are updated with the archive.
+Repeated snapshots replace matching dig entries rather than append duplicates.
+Archive failures are surfaced; no statistics-only successful import is
+reported. The existing backup/restore and aggregate-rebuild paths retain
+this history. The selected simulation remains separately stored in
+`xeno_dig_missions`; this dig archive does not contain the detailed
+`GET /api/fleet/reports/{battleReportId}` payload.
+
+`GET /api/fleet/reports` listed the battle for the same mission, and
+`GET /api/fleet/reports/{battleReportId}` supplied the detailed battle. It reported
+`attacker_won`. Its attacker and defender loss summaries split `lost` into
+`destroyed` and `damaged`; `lost` must not be interpreted as destroyed alone.
+The leadership vessel's recorded hull and shield were unchanged. The dig
+report instead records total guardian losses. The battle payload used
+`shipDefId: -20000` for
+Chorus and `-20001` for Golem; these differ from the simulator bootstrap NPC
+IDs, so the two ID sets must not be assumed interchangeable.
+
+The earlier addon simulation for this fleet was no longer available, so no
+direct comparison of predicted and actual losses is possible for that
+in-game launch.
+
+The subsequent addon-originated fast dig completed
+successfully. It was absent from the captured active mission list, which
+still contained unrelated missions. `GET /api/xeno` reported `chain`,
+`nextChain` and `liveDig` as null.
+The dig report linked to a battle report:
+
+- Sentinel Necropolis channel, Spire entrance, `mode: "fast"`, `hall: false`,
+  and `outcome: "success"`.
+- All three Excavators survived. The saved comparison matched victory, excavator
+  survival and ordinary ship-loss totals in this one run, not a general
+  guarantee of simulation accuracy.
+- `delivered.resources.silicates`, `delivered.artifactTier: "rare"`,
+  and `overflow.resources.silicates` were reported. Both fragment counts were zero;
+  `codex` and `monument` were null.
+- The detailed battle's `leadershipCombat` showed the vessel survived but
+  took hull and shield damage. This damage
+  was not represented in the ordinary `attackerLosses` ship counts. Zero
+  damaged ordinary ships must not be interpreted as an undamaged leader.
+
+The dig and battle reports were created one millisecond apart, shortly after
+the reported dig deadline.
+The actual returning mission and exact return time were not captured.
+Compared with the earlier careful battle, the attacker `hpBonus` and
+leadership starting hull differed. The lower losses therefore cannot be
+attributed to fast mode alone. This capture verifies one successful addon
+launch and completed fast Spire dig with leadership, not other entrances,
+no-leadership launches, collapse behavior or the configured collapse
+probability.
+
+#### Survey report timing
+
+`GET /api/fleet/survey-reports` confirmed `chain_opened` and `clue_added`
+with `eventType: "xeno_survey_return"` and `combatLog.xenoClue`. Both clue
+timestamps match the expected end of on-site exploration (`arrivesAt` plus
+14400 seconds) to within milliseconds. The corresponding survey reports
+were created later. The report entries identify the mission and system,
+but do not include `moonId`; use the account channel for the contributing
+moon IDs rather than assuming a report's system identifies a unique moon.
+
+Two later surveys produced clues 4 and 5 for the same chain. Their mission
+`cargo._xenoClue` included
+`zone: "sentinel"`, `trace: "ruins"`, `moonId`, `chainId`,
+`outcome: "side_entrance"`, and `clueIndex` (4 or 5). Both missions were
+`returning` in the capture; the clue timestamps match their
+`returnDepartsAt` values. Together, the five observations confirm all
+five distinct-system clues and both side entrances in that campaign. The
+separate five-survey observations above do not establish a general fleet cap.
+
+Before completion, several moon-detail lookups returned the same `clue` value
+(`outcome: "chain_opened"`, `clueIndex: 1`) while the account overview showed
+`chain: null`. Do not treat that per-moon field alone as evidence that a
+channel has opened or a clue has been credited.
+
+In the Xeno tab, when the refreshed account overview has no `chain` but a
+survey is still in flight, the add-on uses the target moon's `trace` and
+`zone` to keep that survey's campaign selection visible and locked. Multiple
+in-flight surveys must agree; missing or conflicting details stop a new
+search instead of guessing. This is a fallback based on in-flight mission
+targets, not proof of a persistent archive channel after those missions end.
+
+#### Trace badges in the galaxy system list
+
+The public `s0` frontend checked on 20 November 2026
+(`GalaxyPage-CwI1cfF1.js`, `xeno-C_yHmWzH.js`, `FieldScanModal-DmQmOkN-.js`)
+renders the badge for `moonType: "ancient"` by hashing the string
+`xeno-trace|<moonId>` with 32-bit arithmetic and taking the unsigned result
+modulo four. The order and inline colors in that version are:
+
+| Index | Trace | Color |
+|---|---|---|
+| 0 | `ruins` | `#e0b46c` |
+| 1 | `spire` | `#7dd3fc` |
+| 2 | `observatory` | `#c4b5fd` |
+| 3 | `necropolis` | `#86efac` |
+
+An observed moon's `necropolis` mapping matched both the rendered German badge
+(`Nekropole`) and the detail API response. The badge colors are set by the
+frontend, not by per-trace rules in `GalaxyPage-D2y07iY6.css`. The game calls
+the detail endpoint when the Xeno survey dialog opens, not to render these
+badges. The current mapping does not use account state or require an API
+request; it is an observed frontend algorithm, not a versioned API contract.
+
+Galaxy Scout reproduces this calculation for ancient moons using the
+existing galaxy data, including public datasets. **Moons → More filters →
+Xeno trace** narrows the current list to ancient moons with the selected
+trace. **Any trace** leaves this filter off. Neither the badge nor the
+filter needs trace requests, passive detail capture, or separate storage.
 
 ### Galaxy map and system contents
 
@@ -1454,13 +1836,11 @@ last observed status/timestamp: index omissions are not assumed to mean
 station destruction or unclaimed ownership. Exported stations carry
 `_observedAt` for the latest individual observation.
 
-Station markers are purple hexagons (green for the viewer's alliance), drawn
-above stars independently of zone rings. The layer defaults off and resets
-on universe changes. Station names/owner tags appear when zoomed in or owned
-by the viewer's alliance; clicked systems include last-known station owner
-and capture tags. Index-only system locations remain unknown visibility and
-never grant permission to scan their contents. The station catalog does not
-promote any system to explored/full visibility.
+Station markers are purple hexagons (green for the viewer's alliance) above
+stars, independent of zone rings. The layer defaults off and resets on universe
+changes; names/owner tags appear when zoomed in or allied, and selected systems
+show last-known owner/capture tags. Index-only locations have unknown visibility
+and never grant scan permission or promote a system to full visibility.
 The supplied account-specific payload is not included in the repository.
 
 Marker palette verified against the public game frontend on 2026-10-20
@@ -1472,15 +1852,12 @@ Zones use sentinel `#22c55e`, open `#f59e0b`, dead `#ef4444`, rift `#7c3aed`.
 The Galaxy Scout badges reuse these semantic colors within the addon layout;
 star thumbnails remain tinted placeholders, not verified game star assets.
 
-Galaxy Scout's map uses this zone palette for rings around star-colored points,
-independently of ownership/search overlays. `Zone rings: on/off` toggles all
-zone rings only; the default is on, retained during tab changes and reset for
-a universe reset. The navigation-marker colors (own cyan `#38bdf8`, saved
-alliance green `#7ee787`, search orange `#f0883e`) are addon conventions, not a
-claim of exact game-map styling. A fresh CSS check on 2026-10-20 confirmed
-sentinel/open/dead breadcrumb colors in `GalaxyPage-CFo_cWpP.css`; its rift
-breadcrumb uses `#a855f7`, distinct from the previously verified map palette
-and this addon's shared zone token `#7c3aed`.
+Galaxy Scout uses these zone colors for optional rings (on by default, retained
+across tabs, reset on universe reset), independently of ownership/search.
+Navigation markers use addon colors: own `#38bdf8`, alliance `#7ee787`,
+search `#f0883e`. The inspected CSS uses `#a855f7` for the Rift breadcrumb,
+distinct from the map and addon zone color `#7c3aed`; sentinel/open/dead
+breadcrumbs match their map palette.
 
 Star point colors verified in the public
 `GalaxyPage-IYSDV7EB.js` renderer and its shared palette imported from
@@ -1489,77 +1866,46 @@ Star point colors verified in the public
 Unknown types use a neutral grey. These verified flat marker colors do not
 change the provisional thumbnail artwork described above.
 
-Own chevrons, saved-alliance brackets, search rings and hub diamonds render
-after the full star/zone layer, so subsequent stars cannot obscure them.
-Own systems also use green brackets and the current `GET_AUTH_ME.user.username`
-as their green label, followed by saved allied owners when present; the cyan
-chevron additionally identifies personal colonies. Unknown usernames retain
-an explicit player-ID label. Player/alliance labels start below the system
-(below the selection ring when selected); collision alternatives move downward,
-never above the chevron. Names that cannot fit remain hidden rather than detached
-above their marker. Home uses an accessible house-icon button; the Zone rings
-button reuses `zone-toggle zone-sentinel` with `is-selected` and `aria-pressed`
-kept in sync, filled when enabled and hollow when disabled.
-Zoom/reset controls overlay the top-right map edge;
-the legend follows the map surface below it.
-Dark outlines and backed labels provide contrast; labels use collision-aware
-placement. Star/ring size grows with zoom; navigation symbols use
-CSS-pixel coordinates independent of backing resolution. Labels use native
-HTML spans in a non-interactive overlay positioned relative to the canvas,
-not `fillText`. Their 13px font is rendered by the browser; long names use
-ellipsis rather than horizontally compressed glyphs. DOM text is assigned
-through `textContent`; all label boxes are measured in a batch before
-collision-aware placement at whole CSS-pixel offsets. The overlay is hidden
-from assistive technology because the existing lookup and overview provide
-accessible navigation. Labels clear on redraw/reset, including empty maps.
-The backing buffer
-is rounded from the displayed canvas size multiplied by `devicePixelRatio`;
-the context transform accounts for rounding on each axis. The active Map view
-uses a viewport-height flex layout: the canvas fills the remaining height
-after the toolbar and legend, independently of its backing buffer's intrinsic
-size. Proportional projection preserves galaxy geometry at every aspect ratio.
-The viewport lock applies only when Galaxy Scout and Map are both active;
-Search, directories and other tabs keep normal document scrolling. At heights
-up to 700 CSS pixels, the footer is hidden, but standard panel padding,
-16px inter-panel spacing and legend sizing remain unchanged;
-up to 450 pixels, the in-map controls form a horizontal row.
-`ResizeObserver` handles container/show-hide changes, window
-resize handles viewport changes, and a rearmed resolution media query handles
-pixel-density changes. Resizing preserves the world-space center and zoom;
-pointer navigation and hover use the same CSS-coordinate space.
-Zone toggling does not modify the search,
-position, ownership overlays or cached data and issues no network request.
+**Map rendering.** Own chevrons, alliance brackets, search rings and hub
+diamonds render above stars/zones. Own systems use `GET_AUTH_ME.user.username`
+and green brackets; the cyan chevron identifies personal colonies. Saved
+allied owners follow the username; missing usernames use a player-ID label.
+Labels are 13px HTML spans using `textContent`, ellipsis, backgrounds and
+collision-aware placement below the system/selection ring, moving downward
+rather than above the marker; labels that do not fit are hidden. Their
+non-interactive overlay is hidden from assistive
+technology, measured in batches at whole CSS pixels and cleared on redraw/reset.
+Lookup and overview provide accessible navigation.
 
-The inspected reference `galaxy-DJr_n2VN.js` provides name/ID navigation,
-Home and zoom controls, and derives player/alliance occupancy from saved
-planet owners. Nexus Overseer's local lookup adds explicit selection for
-ambiguous names, uses the actual `isHomeworld` planet from `GET /api/auth/me`
-for Home, and retains proportional x/y scaling. Alliance markers derive from
-saved planet **and moon** `userId`/`ownerAllianceTag` values compared with
-`GET_ALLIANCE`'s current member IDs/tag, never from a search-only subset.
-Unknown/unowned bodies are excluded. This is last-known occupancy, not a new
-alliance-wide discovery API or proof of current ownership. Reading local scans
-on initialization adds no game API call; navigation and tooltips are local.
-The map's combined lookup is an ARIA combobox with a local listbox of up to
-50 matching systems, showing plain-text name, ID and zone. Arrow keys update
-`aria-activedescendant`; Enter selects the active, exact or unique match.
-Ambiguous unselected input never chooses arbitrarily. Escape and focus leaving
-the widget close suggestions; the clear icon only resets lookup text.
+The map uses proportional projection, CSS-coordinate hit testing and a
+`devicePixelRatio`-scaled backing buffer with rounding-aware transforms.
+`ResizeObserver`, window resize and a rearmed resolution media query handle
+container, viewport and pixel-density changes while preserving center and zoom.
+Only the active Map view locks viewport height; other views scroll normally.
+At heights <=700 CSS pixels the footer is hidden without changing panel spacing
+or legend sizing; at <=450 the in-map controls form a row. Home is an
+accessible house button; zone-ring `is-selected` and
+`aria-pressed` states match. The local zone toggle changes neither search,
+position, ownership nor cache and makes no request.
 
-Map hover and click share the same nearest-system hit test in CSS coordinates,
-with an eight-pixel radius independent of HiDPI backing resolution. Hover
-explicitly sets `display: block` to override the tooltip's hidden CSS default.
-Clicking selects without recentering and opens a non-modal, focusable action
-box with star/zone/visibility, saved own/alliance occupancy and body counts
-from `finderScans`. Missing body groups say `not saved`, never zero. The action
-opens the existing local system overview without fetching data. Names use
-plain text. The box is clamped inside the map, scrolls internally if needed,
-and closes on Escape, outside click, redraw or view reset. A four-CSS-pixel
-drag threshold prevents pan gestures from triggering the click selection.
-The reference sizes its canvas to its parent's `clientWidth`/`clientHeight`
-on mount/window resize and draws hover text as HTML, not canvas text. Its
-inspected renderer does not multiply the backing size by `devicePixelRatio`.
-Nexus Overseer additionally handles HiDPI and container-only resizing.
+**Map navigation.** Home uses the `isHomeworld` planet from `GET /api/auth/me`.
+Alliance occupancy compares saved planet and moon `userId`/`ownerAllianceTag`
+with `GET_ALLIANCE` member IDs/tag, excluding unknown/unowned bodies: it is
+last-known occupancy, not current ownership or alliance-wide discovery.
+Initialization, navigation and tooltips use local scans without game requests.
+The ARIA combobox offers up to 50 name/ID/zone matches; arrows update
+`aria-activedescendant`, Enter selects an active, exact or unique match, Escape
+or focus loss closes suggestions, and clear resets the text. Ambiguous names
+are not chosen arbitrarily.
+
+Hover and click share an eight-CSS-pixel nearest-system hit test. A click
+opens a focusable non-modal box without recentering, showing star, zone,
+visibility, saved occupancy and `finderScans` body counts; missing groups
+are `not saved`, not zero. Its overview action reads locally. The box is
+clamped, scrollable and closes on Escape, outside click, redraw or reset;
+four CSS pixels distinguish a drag. The inspected reference renderer uses
+HTML hover text and parent-sized canvas without HiDPI backing or container-only
+resize handling.
 
 The reference client's image components derive type-based assets using
 `/api/images/planets/{planetType}.webp` and `/images/moons/{moonType}.webp`.
@@ -1678,8 +2024,23 @@ snapshot. List views project matching planets into unique systems or associated
 moons, or browse all saved data. A slot-filtered moon projection includes only
 qualifying free moons. Entering list views uses `GET_GALAXY_SCANS` (local database only);
 they do not trigger system API requests or ownership checks. List filtering,
-sorting and 50-row pagination run locally. Cached observations read on a view
+sorting and pagination run locally. Cached observations read on a view
 change also update the shared last-known ownership used by map result filters.
+Galaxy Scout's Search results and Systems, Planets and Moons lists use
+ranking-inspired tables and compact badges. Search results and directory lists
+show counts and pagination in a shared footer. The system overview paginates
+saved bodies and asteroid fields separately while retaining planet/moon grouping;
+when a group continues on another page, the parent planet remains identified.
+Opening from a planet or moon selects the page containing that entry.
+In Systems, Matches counts planets matching the last search. Known-data badges keep
+their labels in each row: `—` means unknown (also explained in the tooltip), while
+`0` means known empty. Narrow windows reduce spacing before scrolling the table
+horizontally; no columns are hidden and pagination
+stays outside the scroll area. Its Map and Overview buttons show the system on the
+map and open the saved system overview, respectively.
+Click a system name in Search results or the Systems, Planets or Moons list
+to copy the exact name for the in-game map search. Rows that only have an
+internal system ID do not offer copying.
 Each list retains its own multi-select security-zone filter (empty selection means
 all zones), intersected with text and shared-result filters. System overview uses
 the same saved snapshot and shows planets, moons, asteroid contents, ownership
@@ -1762,7 +2123,7 @@ zone. The system-contents endpoint returns separate `planets`,
 `asteroidFields`, and `moons` arrays; `included` indicates which entity groups
 were resolved. Any one of these arrays can be empty.
 
-The supplied live response from 21 October 2026 uses
+A supplied October 2026 response uses
 `included: { planets: true, moons: true, fields: true }`: the inclusion key is
 `fields`, although the corresponding array is named `asteroidFields`. The cache
 maps these names for both fetched and passively observed responses, retaining
@@ -1778,24 +2139,24 @@ Abbreviated illustrative system-contents response (not an exhaustive schema):
 {
   "planets": [
     {
-      "id": 74062,
-      "systemId": 5752,
+      "id": 900401,
+      "systemId": 900001,
       "name": "Homeworld",
       "position": 3,
       "planetType": "terra",
       "size": 220,
       "temperature": 24,
-      "userId": 1234,
+      "userId": 900601,
       "isHomeworld": true,
-      "colonizedAt": "2026-07-20T12:00:00Z",
-      "ownerName": "Commander"
+      "colonizedAt": "2030-01-01T12:00:00Z",
+      "ownerName": "Demo Commander"
     }
   ],
   "asteroidFields": [
     {
-      "id": 11748,
-      "systemId": 5752,
-      "name": "G21-52-AF1",
+      "id": 900701,
+      "systemId": 900001,
+      "name": "Demo Field",
       "position": 9,
       "fieldType": "ore",
       "richness": 3,
@@ -1805,14 +2166,14 @@ Abbreviated illustrative system-contents response (not an exhaustive schema):
   ],
   "moons": [
     {
-      "id": 8102,
-      "planetId": 74062,
-      "systemId": 5752,
+      "id": 900801,
+      "planetId": 900401,
+      "systemId": 900001,
       "name": "Homeworld Moon",
       "moonType": "rocky",
       "size": 50,
       "buildingSlots": 8,
-      "userId": 1234
+      "userId": 900601
     }
   ]
 }
@@ -1829,6 +2190,24 @@ system visibility from detailed field-scan intelligence; do not assume all
 field data is present merely because a system is visible.
 Ownership is represented by fields such as `userId` and `ownerName`; a moon's
 `planetId` identifies its parent. The `colonizedAt` value is an ISO-8601 timestamp.
+
+### Statistics tables
+
+Statistics tables use a separate table surface and footer. Their row counts
+describe the current filtered results, and navigation appears only when more
+than one page is needed. The global Rows per table page setting defaults to 25
+and also applies to active debris runs and the full saved collection log; each
+debris table has its own page. Changing filters or the page size clamps the
+current page to the available results. Battles CSV export remains in the source
+controls and exports all filtered rows, not just the visible page.
+
+The Market tab separates offers and their filters from trade history, profit
+and resource-flow summaries in two subviews. The offers and history tables use
+the same table panels and
+global page size. Their pages are independent; filtering or changing the page
+size clamps each page, while profit and resource-flow summaries still cover all
+trades in the selected range. Deal comparison uses all loaded offers, not only
+the current page.
 
 ### Research
 
@@ -1852,6 +2231,8 @@ The following POST routes are used by interactive features:
 | `POST /api/fleet/scout-camp` | Send a scout fleet to a pirate camp |
 | `POST /api/fleet/attack-pirates` | Send an attack fleet to a pirate camp |
 | `POST /api/fleet/xeno-survey` | Survey a moon |
+| `POST /api/xeno/dig` | Launch a dig fleet; observed with main and side entrances and a leadership vessel |
+| `POST /api/xeno/dig/estimate` | In-game dig preflight: mass, requirements, fuel, travel/dig times and problems |
 | `POST /api/research/{researchId}/start` | Start research on a planet |
 | `POST /api/fleet/dispatch` and outpost/moon routes | Send fleets or resources through logistics |
 | `POST /api/fleet/fuel-estimate` | Calculate dispatch fuel and travel values; does not itself launch a fleet |

@@ -105,6 +105,39 @@ async function simulationListener(sendMessage) {
 
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
+test('SIM_JOB submits Xeno options and polls the scheduler-routed job on the same origin', async t => {
+  const sent = [];
+  const listener = await simulationListener(async (tabId, message) => {
+    sent.push({ tabId, ...message });
+    if (message.method === 'POST') return { ok: true, data: { status: 'pending', ticket: 'job.ticket' } };
+    return { ok: true, data: { status: 'complete', result: { report } } };
+  });
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 100000 });
+  const defender = { type: 'npc', fleet: [{ shipDefId: -20007, quantity: 21 }], npcZone: 'rift' };
+  const pending = listener({ ...simulationRequest, type: 'SIM_JOB', defender });
+  for (let i = 0; i < 50 && !sent.length; i++) await settle();
+  assert.equal(sent[0].path, '/api/combat-simulator/jobs');
+  assert.equal(sent[0].body.civilianScreen, true);
+  assert.deepEqual(sent[0].body.defender, defender);
+  t.mock.timers.tick(500);
+  for (let i = 0; i < 50 && sent.length < 2; i++) await settle();
+  assert.equal(sent[1].path, '/api/combat-simulator/jobs/job.ticket');
+  assert.equal(sent[1].method, 'GET');
+  assert.equal(sent[0].tabId, sent[1].tabId);
+  assert.deepEqual((await pending).data.report, report);
+});
+
+test('SIM_JOB rejects an invalid ticket without polling it', async () => {
+  const sent = [];
+  const listener = await simulationListener(async (_tabId, message) => {
+    sent.push(message);
+    return { ok: true, data: { status: 'pending', ticket: '../unsafe' } };
+  });
+  const response = await listener({ ...simulationRequest, type: 'SIM_JOB' });
+  assert.match(response.error, /valid job ticket/);
+  assert.equal(sent.length, 1);
+});
+
 test('simulator requests bypass a held storage scope and stay pinned to the selected universe during retries', async t => {
   makeBrowserStub();
   globalThis.browser.alarms.get = async () => null;

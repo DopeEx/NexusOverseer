@@ -534,6 +534,366 @@ test('successful add-on transport does not trigger its own realtime follow-up', 
   assert.equal(sends, 1);
 });
 
+test('Xeno sector zone lookup uses the scheduler-backed galaxy catalog', async () => {
+  makeBrowserStub();
+  globalThis.browser.alarms.get = async () => null;
+  await restoreGalaxyCache();
+  let release;
+  let path;
+  globalThis.browser.tabs.query = async () => [{ id: 42 }];
+  globalThis.browser.tabs.sendMessage = async (_id, message) => {
+    path = message.path;
+    return new Promise(resolve => { release = resolve; });
+  };
+  await loadBackground();
+  const listener = globalThis.browser.runtime.onMessage.listeners.at(-1);
+  const pending = listener({ type: 'GET_SECTOR_SYSTEMS', sectorId: 98765, priority: 'bulk', source: 'xeno-search' });
+  for (let i = 0; i < 100 && !release; i++) await settle();
+  assert.equal(path, '/api/galaxy/sectors/98765/systems');
+  assert.equal((await listener({ type: 'GET_API_STATUS', path })).request.reason, 'running');
+  release({ ok: true, data: { systems: [{ id: 2, securityZone: 'open' }] } });
+  assert.deepEqual((await pending).systems, [{ id: 2, securityZone: 'open' }]);
+});
+
+test('Xeno account overview uses the scheduler-backed game API transport', async () => {
+  makeBrowserStub();
+  globalThis.browser.alarms.get = async () => null;
+  const paths = [];
+  globalThis.browser.tabs.query = async () => [{ id: 42 }];
+  globalThis.browser.tabs.sendMessage = async (_id, message) => {
+    paths.push(message.path);
+    return { ok: true, data: { hasResearch: true, reports: [] } };
+  };
+  await loadBackground();
+  const listener = globalThis.browser.runtime.onMessage.listeners.at(-1);
+  const result = await listener({ type: 'GET_XENO_OVERVIEW', source: 'xeno' });
+  assert.deepEqual(paths, ['/api/xeno']);
+  assert.deepEqual(result, { hasResearch: true, reports: [] });
+  const saved = await globalThis.browser.storage.local.get('xeno_totals');
+  assert.equal(saved.xeno_totals.digs, 0);
+});
+
+test('Xeno overview archives reports in its original universe after the selected server changes', async () => {
+  makeBrowserStub();
+  globalThis.browser.alarms.get = async () => null;
+  await import(`../nexus-addon/server-storage.js?xeno=${crypto.randomUUID()}`);
+  const storage = globalThis.nexusStorage;
+  await storage.setActiveServer('s0');
+  let entered;
+  let release;
+  const ready = new Promise(resolve => { entered = resolve; });
+  globalThis.browser.tabs.query = async () => [{ id: 42, url: 'https://s0.nexuslegacy.space/overview' }];
+  globalThis.browser.tabs.sendMessage = async () => {
+    entered();
+    await new Promise(resolve => { release = resolve; });
+    return { ok: true, data: { hasResearch: true, reports: [{
+      id: 900103, missionId: 900203, createdAt: '2030-01-21T14:00:00.000Z',
+      outcome: 'success', zone: 'sentinel', excavatorsSent: 3, excavatorsLost: 0,
+      report: { shipsLost: [], delivered: { resources: { silicates: 10454 }, artifactTier: 'rare' } },
+    }] } };
+  };
+  await loadBackground();
+  const listener = globalThis.browser.runtime.onMessage.listeners.at(-1);
+  const read = listener({ type: 'GET_XENO_OVERVIEW', source: 'xeno' });
+  await ready;
+  await storage.setActiveServer('beta');
+  release();
+  const result = await read;
+  assert.equal(result.reports.length, 1);
+  const original = await storage.forServer('s0').get(['xeno_totals', 'xeno_archive_2030-01']);
+  const selected = await storage.forServer('beta').get('xeno_totals');
+  assert.equal(original.xeno_totals.digs, 1);
+  assert.equal(original.xeno_totals.silicates, 10454);
+  assert.equal(original['xeno_archive_2030-01'][0].report.id, 900103);
+  assert.equal(selected.xeno_totals, undefined);
+  assert.equal((await storage.getSelectedServer()).key, 'beta');
+});
+
+test('Xeno overview reports archive failures explicitly instead of returning unpersisted success', async () => {
+  makeBrowserStub();
+  globalThis.browser.alarms.get = async () => null;
+  globalThis.browser.tabs.query = async () => [{ id: 42 }];
+  globalThis.browser.tabs.sendMessage = async () => ({ ok: true, data: { hasResearch: true, reports: [] } });
+  await loadBackground();
+  const originalSet = globalThis.browser.storage.local.set;
+  globalThis.browser.storage.local.set = async patch => {
+    if (patch.xeno_totals) throw new Error('Storage full');
+    return originalSet(patch);
+  };
+  const listener = globalThis.browser.runtime.onMessage.listeners.at(-1);
+  const result = await listener({ type: 'GET_XENO_OVERVIEW', source: 'xeno' });
+  assert.match(result.error, /Could not archive Xeno reports: Storage full/);
+  assert.equal((await globalThis.browser.storage.local.get('last_error')).last_error, 'Storage full');
+});
+
+test('observed cached Xeno overview is re-fetched through the scheduler and archived in the game tab universe', async t => {
+  makeBrowserStub();
+  globalThis.browser.alarms.get = async () => null;
+  await import(`../nexus-addon/server-storage.js?xeno-observed=${crypto.randomUUID()}`);
+  const storage = globalThis.nexusStorage;
+  await storage.setActiveServer('s0');
+  let observed;
+  globalThis.browser.webRequest.onCompleted.addListener = (listener, filter) => {
+    if (filter.urls.includes('https://*.nexuslegacy.space/api/xeno')) observed = listener;
+  };
+  const requests = [];
+  globalThis.browser.tabs.query = async () => [{ id: 42, url: 'https://beta.nexuslegacy.space/overview' }];
+  globalThis.browser.tabs.sendMessage = async (_id, message) => {
+    requests.push(message);
+    return { ok: true, data: { hasResearch: true, reports: [{
+      id: 99, missionId: 199, createdAt: '2030-01-21T14:00:00.000Z',
+      outcome: 'success', report: { shipsLost: [], delivered: { resources: { silicates: 123 } } },
+    }] } };
+  };
+  await loadBackground();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  observed({ method: 'GET', tabId: 42, statusCode: 304, url: 'https://beta.nexuslegacy.space/api/xeno' });
+  let totals;
+  for (let i = 0; i < 100 && !totals; i++) {
+    await settle();
+    totals = (await storage.forServer('beta').get('xeno_totals')).xeno_totals;
+  }
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].type, 'GAME_FETCH');
+  assert.equal(requests[0].path, '/api/xeno');
+  assert.equal(totals.digs, 1);
+  assert.equal(totals.silicates, 123);
+  assert.equal((await storage.forServer('s0').get('xeno_totals')).xeno_totals, undefined);
+});
+
+test('Xeno leadership data uses the scheduler-backed game API transport', async () => {
+  makeBrowserStub();
+  globalThis.browser.alarms.get = async () => null;
+  const paths = [];
+  globalThis.browser.tabs.query = async () => [{ id: 42 }];
+  globalThis.browser.tabs.sendMessage = async (_id, message) => {
+    paths.push(message.path);
+    return { ok: true, data: { vessel: { status: 'ready' }, combatStats: { maxHull: 2050 } } };
+  };
+  await loadBackground();
+  const listener = globalThis.browser.runtime.onMessage.listeners.at(-1);
+  const result = await listener({ type: 'GET_XENO_LEADERSHIP', source: 'xeno' });
+  assert.deepEqual(paths, ['/api/leadership']);
+  assert.equal(result.combatStats.maxHull, 2050);
+});
+
+test('Xeno survey dispatch checks full ship availability and fresh missions without bypassing the scheduler', async () => {
+  makeBrowserStub();
+  const browser = globalThis.browser;
+  await import(`../nexus-addon/server-storage.js?xeno-survey=${crypto.randomUUID()}`);
+  await globalThis.nexusStorage.setActiveServer('s0');
+  browser.alarms.get = async () => null;
+  browser.tabs.query = async () => [{ id: 42 }];
+  const survey = id => ({ id, missionType: 'xeno_survey', status: id === 4 ? 'returning' : 'exploring' });
+  let missions = [
+    ...Array.from({ length: 4 }, (_, i) => survey(i + 1)),
+    { id: 20, missionType: 'xeno_dig', status: 'returning' },
+    { id: 21, missionType: 'patrol', status: 'patrolling' },
+  ];
+  let invalid = null;
+  let holdRead = false;
+  let release;
+  let rateLimited = false;
+  let inventory = { fleet: [
+    { shipDefId: 2, quantity: 5 }, { shipDefId: 16, quantity: 5 },
+    { shipDefId: 8, quantity: 4, damagedQuantity: 1 },
+  ] };
+  const sent = [];
+  browser.tabs.sendMessage = async (_id, message) => {
+    sent.push(message);
+    if (message.path === '/api/planets/1/fleet') return { ok: true, data: structuredClone(inventory) };
+    if (message.path === '/api/fleet/missions') {
+      if (holdRead) return new Promise(resolve => { release = resolve; });
+      return { ok: true, data: invalid || { missions: structuredClone(missions) } };
+    }
+    assert.equal(message.path, '/api/fleet/xeno-survey');
+    if (rateLimited) return { status: 429, error: 'Rate limited', retryAfter: '1' };
+    missions.push(survey(5));
+    return { ok: true, status: 200, data: { missionId: 5 } };
+  };
+  await loadBackground();
+  const listener = browser.runtime.onMessage.listeners.at(-1);
+  const request = { type: 'SEND_XENO_SURVEY', source: 'xeno', serverKey: 's0',
+    sourcePlanetId: 1, targetMoonId: 10,
+    ships: [{ shipDefId: 2, quantity: 2 }, { shipDefId: 16, quantity: 1 }, { shipDefId: 8, quantity: 3 }] };
+  assert.match((await listener({ ...request, serverKey: 'beta' })).error, /server changed/i);
+  assert.equal(sent.length, 0);
+  for (const missing of [2, 16, 'both']) {
+    const ships = request.ships.filter(ship => missing === 'both'
+      ? ![2, 16].includes(ship.shipDefId) : ship.shipDefId !== missing);
+    const rejected = await listener({ ...request, ships });
+    assert.match(rejected.error, /requires at least 1 Spy Probe and 1 Hacker Ship/);
+    assert.equal(sent.length, 0, 'missing required ship types fail before any game request');
+  }
+  const completeInventory = inventory;
+  for (const stock of [
+    { fleet: [{ shipDefId: 2, quantity: 5 }, { shipDefId: 16, quantity: 5 },
+      { shipDefId: 8, quantity: 3, damagedQuantity: 1 }] },
+    { fleet: [{ shipDefId: 2, quantity: 1 }, { shipDefId: 16, quantity: 5 }, { shipDefId: 8, quantity: 3 }] },
+    { fleet: null },
+  ]) {
+    inventory = stock;
+    const rejected = await listener(request);
+    assert.match(rejected.error, /Full survey template unavailable|Invalid planet fleet response/);
+    assert.equal(sent.some(message => message.method === 'POST'), false, 'fresh ship shortages and unknown inventory prevent sending');
+  }
+  inventory = completeInventory;
+  sent.length = 0;
+  assert.equal((await listener(request)).ok, true, 'four surveys allow the fifth despite other fleet types');
+  assert.deepEqual(sent.map(message => [message.method, message.path]), [
+    ['GET', '/api/planets/1/fleet'], ['GET', '/api/fleet/missions'], ['POST', '/api/fleet/xeno-survey'],
+  ]);
+  assert.deepEqual(sent[2].body, { sourcePlanetId: 1, targetMoonId: 10, ships: request.ships, hangarAssignments: {} },
+    'all requested quantities are preserved, including optional escorts and more than one required ship');
+  const blocked = await listener(request);
+  assert.match(blocked.error, /5 \/ 5.*including returning fleets/);
+  assert.equal(blocked.surveyLimitReached, true);
+  assert.deepEqual(blocked.missionSnapshot.missions, missions);
+  assert.equal(sent.filter(message => message.method === 'POST').length, 1, 'the fresh check prevents a sixth fleet');
+  for (const response of [{}, { missions: [{}] }, { missions: [null] }]) {
+    invalid = response;
+    const failed = await listener(request);
+    assert.match(failed.error, /Could not check active surveys/);
+    assert.equal(failed.missionCheckFailed, true);
+    assert.equal(sent.filter(message => message.method === 'POST').length, 1, 'unknown fleet types are not assumed to be non-surveys');
+  }
+
+  invalid = null;
+  missions = missions.filter(mission => mission.id !== 5);
+  holdRead = true;
+  rateLimited = true;
+  const pending = listener(request);
+  for (let i = 0; i < 100 && !release; i++) await settle();
+  assert.ok(release, 'the dispatch waits for its fresh mission read');
+  const reads = sent.length;
+  assert.match((await listener(request)).error, /already in progress/);
+  assert.equal(sent.length, reads, 'concurrent views cannot bypass the dispatch lock');
+  release({ ok: true, data: { missions: structuredClone(missions) } });
+  assert.equal((await pending).status, 429);
+  assert.equal(sent.filter(message => message.method === 'POST').length, 2, 'rate-limited sends are not retried with stale capacity');
+});
+
+test('Xeno dig launch is scheduled once, locks concurrent sends and rejects a different server', async () => {
+  makeBrowserStub();
+  globalThis.browser.alarms.get = async () => null;
+  const sent = [];
+  let release;
+  globalThis.browser.tabs.query = async () => [{ id: 42 }];
+  globalThis.browser.tabs.sendMessage = async (_id, message) => {
+    sent.push(message);
+    return new Promise(resolve => { release = resolve; });
+  };
+  await loadBackground();
+  const listener = globalThis.browser.runtime.onMessage.listeners.at(-1);
+  const request = { type: 'SEND_XENO_DIG', serverKey: 's0', chainId: 5, comparisonAt: 123, sourcePlanetId: 1,
+    ships: [{ shipDefId: 12, quantity: 41 }, { shipDefId: 29, quantity: 3 }],
+    attachLeader: true, mode: 'careful', entrance: 'spire' };
+  assert.match((await listener({ ...request, serverKey: 'beta' })).error, /server changed/i);
+  const pending = listener(request);
+  for (let i = 0; i < 100 && !release; i++) await settle();
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].path, '/api/xeno/dig');
+  assert.equal(sent[0].method, 'POST');
+  assert.deepEqual(sent[0].body, { sourcePlanetId: 1, ships: request.ships, attachLeader: true,
+    hangarAssignments: {}, mode: 'careful', entrance: 'spire', hall: false });
+  assert.equal((await listener({ type: 'GET_API_STATUS', path: '/api/xeno/dig' })).request.reason, 'running');
+  assert.match((await listener(request)).error, /already in progress/);
+  release({ status: 429, error: 'Rate limited', retryAfter: '1' });
+  assert.equal((await pending).status, 429);
+  await settle();
+  assert.match((await listener(request)).error, /already been used/);
+  await loadBackground();
+  const restartedListener = globalThis.browser.runtime.onMessage.listeners.at(-1);
+  assert.match((await restartedListener(request)).error, /already been used/);
+  assert.equal(sent.length, 1);
+});
+
+test('Xeno launch archives its selected simulation by mission independently of later comparisons', async t => {
+  makeBrowserStub();
+  await import(`../nexus-addon/server-storage.js?xeno-archive=${crypto.randomUUID()}`);
+  await globalThis.nexusStorage.setActiveServer('s0');
+  globalThis.browser.alarms.get = async () => null;
+  globalThis.browser.tabs.query = async () => [{ id: 42 }];
+  const calls = [];
+  let missionId = 900203;
+  globalThis.browser.tabs.sendMessage = async (_id, message) => {
+    calls.push(message);
+    return { ok: true, status: 200, data: { missionId, arrivesAt: '2030-01-21T15:00:00.000Z' } };
+  };
+  await loadBackground();
+  const listener = globalThis.browser.runtime.onMessage.listeners.at(-1);
+  const ships = [{ shipDefId: 12, quantity: 41 }, { shipDefId: 29, quantity: 3 }];
+  const simulation = { entranceId: 'spire', mode: 'fast', candidate: { fleet: ships },
+    result: { outcome: 'attacker_won', excavators: 3, destroyed: 1, damaged: 0 } };
+  const storage = globalThis.nexusStorage.forServer('s0');
+  await storage.set({ xeno_dig_comparison: { at: 123, serverKey: 's0', siteMoonId: 900401,
+    leadership: true, launchSimulation: simulation } });
+  const response = await listener({ type: 'SEND_XENO_DIG', serverKey: 's0', chainId: 900601,
+    comparisonAt: 123, sourcePlanetId: 900501, ships, attachLeader: true, mode: 'fast', entrance: 'spire' });
+  assert.equal(response.ok, true);
+  await storage.set({ xeno_dig_comparison: { at: 456 } });
+  const archive = (await storage.get('xeno_dig_missions')).xeno_dig_missions;
+  assert.deepEqual(archive[900203], { simulation, comparisonAt: 123,
+    chainId: 900601, siteMoonId: 900401, leadership: true });
+  assert.equal((await globalThis.nexusStorage.forServer('beta').get('xeno_dig_missions')).xeno_dig_missions, undefined);
+
+  missionId = 900204;
+  const mainSimulation = { ...simulation, entranceId: 'main', mode: 'careful',
+    result: { outcome: 'attacker_won', excavators: 3, destroyed: 5, damaged: 2 } };
+  await storage.set({ xeno_dig_comparison: { at: 456, serverKey: 's0', siteMoonId: 900402,
+    leadership: true, launchSimulation: mainSimulation } });
+  const mainResponse = await listener({ type: 'SEND_XENO_DIG', serverKey: 's0', chainId: 900602,
+    comparisonAt: 456, sourcePlanetId: 900501, ships, attachLeader: true, mode: 'careful', entrance: 'main' });
+  assert.equal(mainResponse.ok, true);
+  assert.equal(calls.at(-1).method, 'POST');
+  assert.equal(calls.at(-1).path, '/api/xeno/dig');
+  assert.deepEqual(calls.at(-1).body, { sourcePlanetId: 900501, ships, attachLeader: true,
+    hangarAssignments: {}, mode: 'careful', entrance: 'main', hall: false });
+  const mainArchive = (await storage.get('xeno_dig_missions')).xeno_dig_missions;
+  assert.deepEqual(mainArchive[900204], { simulation: mainSimulation, comparisonAt: 456,
+    chainId: 900602, siteMoonId: 900402, leadership: true });
+  assert.deepEqual(mainArchive[900203], archive[900203], 'the side-entrance archive remains unchanged');
+
+  missionId = 900203;
+  await storage.set({ xeno_dig_comparison: { at: 789, serverKey: 's0',
+    launchSimulation: simulation } });
+  const originalStorage = globalThis.nexusStorage;
+  t.after(() => { globalThis.nexusStorage = originalStorage; });
+  globalThis.nexusStorage = { ...originalStorage, forServer: () => ({
+    get: keys => storage.get(keys),
+    set: async value => {
+      if (value.xeno_dig_missions) throw new Error('Archive write failed');
+      return storage.set(value);
+    },
+  }) };
+  const errors = [];
+  t.mock.method(console, 'error', (...args) => errors.push(args));
+  const failedArchive = await listener({ type: 'SEND_XENO_DIG', serverKey: 's0', chainId: 553,
+    comparisonAt: 789, sourcePlanetId: 900501, ships, attachLeader: true, mode: 'fast', entrance: 'spire' });
+  assert.equal(failedArchive.ok, true);
+  assert.equal(failedArchive.data.missionId, 900203);
+  assert.equal(failedArchive.archiveError, 'Archive write failed');
+  assert.equal(errors.length, 1);
+});
+
+test('Xeno moon detail uses the scheduler-backed game API transport and validates IDs', async () => {
+  makeBrowserStub();
+  globalThis.browser.alarms.get = async () => null;
+  const paths = [];
+  globalThis.browser.tabs.query = async () => [{ id: 42 }];
+  globalThis.browser.tabs.sendMessage = async (_id, message) => {
+    paths.push(message.path);
+    return { ok: true, data: { moonId: 900401, cooldownRemainingSeconds: 120 } };
+  };
+  await loadBackground();
+  const listener = globalThis.browser.runtime.onMessage.listeners.at(-1);
+  const result = await listener({ type: 'GET_XENO_MOON', moonId: 900401, source: 'xeno' });
+  assert.deepEqual(paths, ['/api/xeno/moons/900401']);
+  assert.deepEqual(result, { moonId: 900401, cooldownRemainingSeconds: 120 });
+  assert.deepEqual(await listener({ type: 'GET_XENO_MOON', moonId: '900401/other' }), { error: 'Invalid Xeno moon ID.' });
+  assert.deepEqual(paths, ['/api/xeno/moons/900401']);
+});
+
 test('successful POST actions do not trigger realtime GET follow-ups', async () => {
   makeBrowserStub();
   globalThis.browser.alarms.get = async () => null;

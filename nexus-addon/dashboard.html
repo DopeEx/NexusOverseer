@@ -37,9 +37,10 @@
     <button class="tab main-tab active" data-tab="dashboard"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg><span>Dashboard</span></button>
     <button class="tab main-tab" data-tab="statistics"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg><span>Statistics</span></button>
     <div class="nav-group">Explore</div>
-    <button class="tab main-tab expert-only" data-tab="scouting"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg><span>Scouting</span></button>
+    <button class="tab main-tab" data-tab="scouting"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg><span>Scouting</span></button>
     <button class="tab main-tab" data-tab="asteroids"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 13-8.381 8.38a1 1 0 0 1-3.001-3L11 9.999"/><path d="M15.973 4.027A13 13 0 0 0 5.902 2.373c-1.398.342-1.092 2.158.277 2.601a19.9 19.9 0 0 1 5.822 3.024"/><path d="M16.001 11.999a19.9 19.9 0 0 1 3.024 5.824c.444 1.369 2.26 1.676 2.603.278A13 13 0 0 0 20 8.069"/><path d="M18.352 3.352a1.205 1.205 0 0 0-1.704 0l-5.296 5.296a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l5.296-5.296a1.205 1.205 0 0 0 0-1.704z"/></svg><span>Asteroids</span></button>
-    <button class="tab main-tab expert-only" data-tab="expeditions"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg><span>Expeditions</span></button>
+    <button class="tab main-tab" data-tab="expeditions"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg><span>Expeditions</span></button>
+    <button class="tab main-tab" data-tab="xeno"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18M5.64 5.64l12.72 12.72M18.36 5.64 5.64 18.36"/></svg><span>Xeno</span></button>
     <button class="tab main-tab" data-tab="finder"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span>Galaxy Scout</span></button>
     <div class="nav-group">Military</div>
     <button class="tab main-tab" data-tab="pirates"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12.5 17-.5-1-.5 1h1z"/><path d="M15 22a1 1 0 0 0 1-1v-1a2 2 0 0 0 1.56-3.25 8 8 0 1 0-11.12 0A2 2 0 0 0 8 20v1a1 1 0 0 0 1 1z"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="12" r="1"/></svg><span>Pirates</span></button>
@@ -1399,7 +1400,7 @@
         <h2>Scans</h2>
         <span id="sc-transit-count" class="sc-transit-count"></span>
       </div>
-      <div class="panel-toolbar">
+      <div class="panel-toolbar expert-only">
         <input type="checkbox" id="sc-auto" class="m-switch" title="Automate scouting">
         <span class="panel-toolbar-label">Automate Scouting</span>
         <label class="panel-toolbar-field" title="Maximum number of scanning fleets">Max fleets
@@ -1415,7 +1416,7 @@
         <h2>Surveys</h2>
         <span id="sc-count" class="sc-count"></span>
       </div>
-      <div class="panel-toolbar">
+      <div class="panel-toolbar expert-only">
         <input type="checkbox" id="sc-investigate-auto" class="m-switch" title="Automate investigation">
         <span class="panel-toolbar-label">Automate Investigation</span>
         <label class="panel-toolbar-field" title="Maximum number of investigation fleets">Max fleets
@@ -1440,7 +1441,7 @@
         </label>
         <button id="sc-debris-hidden" class="sc-hidden-button"></button>
       </div>
-      <div class="panel-toolbar">
+      <div class="panel-toolbar expert-only">
         <input type="checkbox" id="sc-debris-auto" class="m-switch" title="Automate debris collection">
         <span class="panel-toolbar-label">Automate Debris Collection</span>
         <label class="panel-toolbar-field" title="Maximum number of debris collection fleets">Max fleets
@@ -1468,7 +1469,7 @@
         <h2>Salvage</h2>
         <span id="sc-salvage-count" class="sc-count"></span>
       </div>
-      <div class="panel-toolbar">
+      <div class="panel-toolbar expert-only">
         <input type="checkbox" id="sc-salvage-auto" class="m-switch" title="Automate salvage collection">
         <span class="panel-toolbar-label">Automate Salvage Collection</span>
         <label class="panel-toolbar-field" title="Maximum number of salvage fleets">Max fleets
@@ -1493,59 +1494,166 @@
   </div>
 
   <div id="xeno-content" class="xeno-dashboard statistics-split-layout" style="display:none;">
-    <div class="expert-only">
-      <div class="toolbar-panel xeno-launch-toolbar">
-        <label>Survey From
-          <select id="xn-planet"></select>
-        </label>
-        <label>Fleet template
-          <select id="xn-template"></select>
-        </label>
-        <button id="xn-scan" class="toolbar-button primary-button">Launch Ruins Survey</button>
-        <span id="xn-progress" class="xeno-launch-status"></span>
-        <span id="xn-slots" class="xeno-launch-active" title="Fleet slots in use"></span>
+    <div>
+      <div class="toolbar-panel scouting-toolbar-panel xeno-launch-toolbar">
+        <div class="toolbar-row toolbar-row-main">
+          <label class="toolbar-field">
+            <span class="toolbar-label">Survey From</span>
+            <select id="xn-planet" class="toolbar-select"></select>
+          </label>
+          <label class="toolbar-field">
+            <span class="toolbar-label">Fleet template</span>
+            <select id="xn-template" class="toolbar-select"></select>
+          </label>
+          <label id="xn-trace-control" class="toolbar-field" hidden>
+            <span id="xn-trace-label" class="toolbar-label">First archive trace</span>
+            <select id="xn-trace" class="toolbar-select">
+              <option value="">Automatic · nearest available</option>
+              <option value="ruins">Ruins</option>
+              <option value="spire">Spire</option>
+              <option value="observatory">Observatory</option>
+              <option value="necropolis">Necropolis</option>
+            </select>
+          </label>
+          <label id="xn-zone-control" class="toolbar-field" hidden>
+            <span id="xn-zone-label" class="toolbar-label">First archive zone</span>
+            <select id="xn-zone" class="toolbar-select">
+              <option value="">Any zone</option>
+              <option value="sentinel">Sentinel</option>
+              <option value="open">Open</option>
+              <option value="dead">Dead</option>
+            </select>
+          </label>
+          <div class="toolbar-actions">
+            <button id="xn-scan" class="toolbar-button primary-button" disabled>Launch Xeno Survey</button>
+          </div>
+        </div>
+        <div class="toolbar-row toolbar-row-meta">
+          <span id="xn-survey-limit" class="toolbar-meta-text" role="status" aria-live="polite" title="Only Xeno survey fleets count, including returning fleets; dig fleets are excluded"></span>
+          <span id="xn-progress" class="toolbar-meta-text" role="status" aria-live="polite"></span>
+          <span id="xn-active-trace" class="toolbar-meta-text" hidden></span>
+          <span id="xn-slots" class="toolbar-meta-text toolbar-meta-text-right" title="Fleet slots in use"></span>
+        </div>
       </div>
       <div id="xn-avail" class="xeno-availability"></div>
-      <div class="xeno-launch-note">
-        Finds the nearest system with an unowned Ancient moon not already targeted by an in-flight ruins survey,
-        then launches one there with the selected fleet template.
-      </div>
     </div>
 
     <div class="reports-section mission-panel">
       <div class="reports-header">
-        <h2>Ruins survey fleets in transit</h2>
+        <h2>Xeno fleets in transit</h2>
         <span id="xn-transit-count" class="mission-count"></span>
       </div>
+      <p id="xn-dig-launch-status" class="toolbar-meta-text" role="status" aria-live="polite"></p>
       <div id="xn-transit-list" class="sc-transit-list"></div>
     </div>
 
-    <div class="reports-section mission-panel">
+    <div class="reports-section mission-panel xeno-progress-panel xeno-campaign-panel">
       <div class="reports-header">
-        <h2>Moons on cooldown</h2>
-        <span id="xn-cooldown-count" class="mission-count"></span>
+        <h2>Xeno campaign progress</h2>
+        <div id="xn-overview-status" class="xeno-overview-status" role="status" aria-live="polite">Loading…</div>
       </div>
-      <table>
-        <thead>
-          <tr>
-            <th>Moon</th>
-            <th>System</th>
-            <th>Available in</th>
-          </tr>
-        </thead>
-        <tbody id="xn-cooldown-tbody"></tbody>
-      </table>
+      <div id="xn-campaign-context" class="xeno-campaign-context" hidden>
+        <div id="xn-campaign-stats" class="xeno-summary-row"></div>
+        <div id="xn-clue-milestones" class="xeno-clue-milestones" aria-label="Campaign milestones"></div>
+      </div>
+      <p id="xn-campaign-empty" class="mission-empty-state">Loading Xeno campaign…</p>
+      <div id="xn-campaign-layout" class="xeno-campaign-layout" hidden>
+        <section id="xn-overview-archive" class="xeno-progress-details" hidden>
+          <h3>Archive clues</h3>
+          <p class="xeno-section-note"></p>
+          <ol class="xeno-clue-list"></ol>
+        </section>
+        <section id="xn-site-details" class="xeno-progress-details" hidden>
+          <h3>Dig site and entrances</h3>
+          <div class="xeno-site-context">
+            <p id="xn-site-location" class="xeno-site-location"></p>
+            <p id="xn-site-requirements" class="xeno-section-note"></p>
+          </div>
+          <div id="xn-site-entrances" class="xeno-entrance-list"></div>
+        </section>
+      </div>
+    </div>
+
+    <div id="xn-dig-panel" class="reports-section mission-panel xeno-progress-panel" hidden>
+      <div class="reports-header"><h2>Dig fleet comparison</h2></div>
+      <div class="toolbar-row">
+        <label class="toolbar-field">
+          <span class="toolbar-label">Fleet</span>
+          <select id="xn-dig-template" class="toolbar-select">
+            <option value="">Automatic escort comparison</option>
+          </select>
+        </label>
+        <label class="toolbar-field">
+          <span class="toolbar-label">Entrance</span>
+          <select id="xn-dig-entrance" class="toolbar-select">
+            <option value="all">All unlocked entrances</option>
+          </select>
+        </label>
+        <label class="toolbar-field">
+          <span class="toolbar-label">Leadership vessel</span>
+          <select id="xn-dig-leadership" class="toolbar-select">
+            <option value="no">Do not assign</option>
+            <option value="yes">Assign at source planet</option>
+          </select>
+        </label>
+        <label class="toolbar-field">
+          <span class="toolbar-label">Dig mode</span>
+          <select id="xn-dig-mode" class="toolbar-select">
+            <option value="careful">Careful</option>
+            <option value="fast">Fast</option>
+          </select>
+        </label>
+        <button id="xn-dig-simulate" class="toolbar-button primary-button" type="button">Compare fleets</button>
+      </div>
+      <div class="xeno-progress-details">
+        <p>Uses the survey source planet. Automatic comparison tests up to five single-type escorts; choose a template to compare a mixed fleet. Results and tunnel mass are estimates, not a guarantee. The archive hall is not supported yet.</p>
+        <p id="xn-dig-status" role="status" aria-live="polite"></p>
+        <p id="xn-dig-context"></p>
+      </div>
+    </div>
+    <div id="xn-dig-results" hidden></div>
+
+    <div class="reports-section mission-panel xeno-progress-panel xeno-account-panel">
+      <div class="reports-header">
+        <h2>Xeno account progress</h2>
+      </div>
+      <div id="xn-overview-stats" class="xeno-summary-row"></div>
+      <div id="xn-account-details" class="xeno-progress-details xeno-account-details" hidden>
+        <section>
+          <h3>Codex</h3>
+          <div id="xn-overview-codex" class="xeno-codex-grid"></div>
+        </section>
+        <section>
+          <div class="xeno-section-heading">
+            <h3>Monuments</h3>
+            <span id="xn-monument-count" class="badge" title="Reported account collection; twelve monument types">Unknown</span>
+          </div>
+          <div id="xn-overview-monuments" class="xeno-monument-grid"></div>
+        </section>
+        <section>
+          <h3>Dig reports</h3>
+          <div id="xn-overview-reports"></div>
+        </section>
+      </div>
     </div>
 
   </div>
 
   <div id="xeno-stats-content" class="statistics-dashboard statistics-split-layout" style="display:none;">
     <section class="statistics-summary-panel">
-    <div class="section-label">Loot collected — ruins surveys</div>
+    <div class="section-label">Delivered Xeno loot</div>
     <div class="stats" id="xn-stats-collected"></div>
 
-    <div class="section-label">Ships lost (build cost)</div>
+    <div class="section-label">Dig results and fleet</div>
+    <div class="stats" id="xn-stats-results"></div>
+    <div class="section-label">Artifact tiers, monuments and Codex rewards</div>
+    <div class="stats" id="xn-stats-rewards"></div>
+    <div class="section-label">Overflow — not delivered, excluded from income</div>
+    <div class="stats" id="xn-stats-overflow"></div>
+    <div class="section-label">Ships destroyed (build cost)</div>
     <div class="stats" id="xn-stats-lost"></div>
+    <div class="section-label">Ships damaged (repair cost: 50% of build cost)</div>
+    <div class="stats" id="xn-stats-repair"></div>
     </section>
 
     <div class="charts">
@@ -1559,26 +1667,38 @@
       </div>
     </div>
 
-    <div class="reports-section statistics-list-panel">
-      <div class="reports-header">
-        <h2>Ruins survey reports</h2>
+    <div class="reports-section dashboard-panel explore-military-table-panel">
+      <div class="dashboard-table-scroll explore-military-table-scroll statistics-table-scroll" role="region" aria-label="Xeno reports table" tabindex="0">
+        <table>
+          <thead id="xn-reports-head">
+            <tr>
+              <th class="sortable" data-key="created_at"><button type="button">Date</button></th>
+              <th class="sortable" data-key="location"><button type="button">Site / System</button></th>
+              <th class="sortable" data-key="zone"><button type="button">Zone</button></th>
+              <th class="sortable" data-key="trace"><button type="button">Channel</button></th>
+              <th class="sortable" data-key="entrance"><button type="button">Entrance</button></th>
+              <th class="sortable" data-key="mode"><button type="button">Mode</button></th>
+              <th class="sortable" data-key="event"><button type="button">Outcome</button></th>
+              <th class="sortable" data-key="silicates"><button type="button">Silicates</button></th>
+              <th class="sortable" data-key="alloys"><button type="button">Alloys</button></th>
+              <th class="sortable" data-key="precursor_fragments"><button type="button" title="Delivered Precursor Fragments">Fragments</button></th>
+              <th class="sortable" data-key="artifact"><button type="button">Artifacts</button></th>
+              <th class="sortable" data-key="monument_copies"><button type="button" title="Monument blueprint copies awarded by this dig">Monuments</button></th>
+              <th class="sortable" data-key="codex_count"><button type="button" title="Codex entries awarded by this dig">Codex</button></th>
+              <th class="sortable" data-key="total_losses"><button type="button" title="Destroyed ships, including lost Excavators; damaged ships are excluded">Ships lost</button></th>
+            </tr>
+          </thead>
+          <tbody id="xn-reports-tbody"></tbody>
+        </table>
+      </div>
+      <div class="table-footer">
         <span id="xn-report-page-info-count" class="dashboard-list-count"></span>
-        <div id="xn-report-page-info-controls" class="pagination">
-          <button id="xn-report-btn-prev">← Prev</button>
-          <span id="xn-report-page-info">Page 1</span>
-          <button id="xn-report-btn-next">Next →</button>
+        <div id="xn-report-page-info-controls" class="table-pagination" hidden>
+          <button id="xn-report-btn-prev" class="toolbar-button secondary-button" type="button">Previous</button>
+          <span id="xn-report-page-info" class="dashboard-list-count"></span>
+          <button id="xn-report-btn-next" class="toolbar-button secondary-button" type="button">Next</button>
         </div>
       </div>
-      <table>
-        <thead id="xn-reports-head">
-          <tr>
-            <th class="sortable" data-key="created_at">Date</th>
-            <th class="sortable" data-key="precursor_fragments">Precursor Fragments</th>
-            <th class="sortable" data-key="artifact">Artifacts</th>
-          </tr>
-        </thead>
-        <tbody id="xn-reports-tbody"></tbody>
-      </table>
     </div>
   </div>
 

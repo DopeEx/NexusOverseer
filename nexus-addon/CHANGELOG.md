@@ -6,6 +6,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- Xeno campaign and account progress, dig reports and statistics show collected
+  rewards and losses; fleet comparisons help prepare digs.
+
 ### Changed
 - Report tables use a configurable number of rows per page
   (25 by default), with refreshed layouts and clearer status badges.

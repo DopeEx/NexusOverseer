@@ -15,6 +15,6 @@
   "tabs/global.js", "tabs/dashboard.js", "tabs/surveys.js", "tabs/pirates.js", "tabs/mining.js",
   "tabs/battles.js", "tabs/debris.js", "tabs/expeditions.js", "tabs/wormholes.js", "tabs/finder.js", "tabs/asteroids.js", "tabs/fleets.js", "tabs/scouting.js", "tabs/xeno.js", "tabs/market.js", "tabs/tech-tree.js",
   "tabs/simulator.js", "tabs/guide.js", "simulator-intel.js",
-  "pagination.js", "chart.umd.js", "browser-polyfill.js",
+  "pagination.js", "xeno-dig-planner.js", "xeno-moon-search.js", "xeno-reports.js", "chart.umd.js", "browser-polyfill.js",
   "icons/icon128.png"
 ]

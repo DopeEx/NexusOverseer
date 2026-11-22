@@ -105,6 +105,39 @@ test('exploration ends at arrivesAt and starts at actual arrival', () => {
   assert.equal(incomplete.event.at, now(30));
 });
 
+test('Xeno exploration countdown ends at returnDepartsAt after the moon arrival', () => {
+  const mission = {
+    missionType: 'xeno_survey', status: 'exploring',
+    departsAt: '2030-01-19T23:57:14.000Z',
+    arrivesAt: '2030-01-20T00:00:00.000Z',
+    returnDepartsAt: '2030-01-20T04:00:00.020Z',
+    returnArrivesAt: null,
+  };
+  const nowMs = Date.parse('2030-01-20T01:21:46.563Z');
+  const progress = missionProgress(mission, nowMs);
+  assert.equal(progress.label, 'Surveying ruins');
+  assert.equal(progress.eta, Date.parse(mission.returnDepartsAt) - nowMs);
+  assert.deepEqual(progress.event, { label: 'Departure', at: Date.parse(mission.returnDepartsAt) });
+  assert.equal(progress.needsRefresh, false);
+  assert.equal(missionCountdown(progress), '2h 38m 13s');
+});
+
+test('Xeno dig countdown shows excavation progress to the return departure', () => {
+  const mission = {
+    missionType: 'xeno_dig', status: 'exploring',
+    departsAt: '2030-01-20T19:48:28.000Z',
+    arrivesAt: '2030-01-20T20:00:00.000Z',
+    returnDepartsAt: '2030-01-21T03:40:48.008Z',
+    returnArrivesAt: null,
+  };
+  const nowMs = Date.parse('2030-01-20T21:46:04.598Z');
+  const progress = missionProgress(mission, nowMs);
+  assert.equal(progress.label, 'Excavating');
+  assert.equal(progress.eta, Date.parse(mission.returnDepartsAt) - nowMs);
+  assert.deepEqual(progress.event, { label: 'Departure', at: Date.parse(mission.returnDepartsAt) });
+  assert.equal(progress.needsRefresh, false);
+});
+
 test('patrolling with a future arrivesAt is never outbound', () => {
   const p = missionProgress({
     missionType: 'patrol', status: 'patrolling', departsAt: at(0), arrivesAt: at(60),

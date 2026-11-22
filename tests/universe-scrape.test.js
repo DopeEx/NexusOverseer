@@ -108,7 +108,9 @@ async function setupBackupScrape(t) {
   browser.runtime.getManifest = () => ({ version: '2.5.0' });
   browser.alarms.get = async () => ({ name: 'nexus-scrape' });
   browser.tabs.query = async () => [{ id: 1, url: 'https://s0.nexuslegacy.space/' }];
-  browser.tabs.sendMessage = async () => ({ ok: true, data: {} });
+  browser.tabs.sendMessage = async (_tabId, message) => ({
+    ok: true, data: message.path === '/api/xeno' ? { reports: [] } : {},
+  });
   const downloadState = { state: 'complete' };
   const cancelledDownloads = [];
   const writerActions = [];

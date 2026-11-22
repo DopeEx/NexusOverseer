@@ -53,13 +53,14 @@ onSettingsChange(settings => {
 
 export async function loadAll() {
   const activeServer = await globalThis.nexusStorage?.getActiveServer?.() || { key: 's0' };
+  const local = globalThis.nexusStorage?.forServer?.(activeServer.key) || browser.storage.local;
   const serverSelect = document.getElementById('server-select');
   if (serverSelect) {
     await populateServerOptions(serverSelect, activeServer);
     serverSelect.value = activeServer.key || 's0';
   }
 
-  setStore(await browser.storage.local.get([
+  const stored = await local.get([
     'totals', 'daily', 'hourly', 'resources_lost', 'event_breakdown',
     'recent_reports', 'ships', 'last_scrape', 'last_error', 'records_cap',
     'last_alarm_fire_at',
@@ -71,9 +72,14 @@ export async function loadAll() {
     'exp_totals', 'expedition_totals', 'wormhole_totals', 'exp_daily', 'exp_recent_reports',
     'expedition_resources_lost', 'wormhole_resources_lost', 'stats_drift',
     'xeno_totals', 'xeno_daily', 'xeno_recent_reports', 'xeno_resources_lost',
+    'archive_index',
     'pvp_recent_reports',
     'research', 'research_speed_mult', 'active_research', 'fuel_log',
-  ]));
+  ]);
+  const xenoKeys = (stored.archive_index?.xeno?.months || []).map(month => `xeno_archive_${month}`);
+  const xenoArchives = xenoKeys.length ? await local.get(xenoKeys) : {};
+  stored.xeno_history = Object.values(xenoArchives).flat();
+  setStore(stored);
 
   const cap = store.records_cap ?? 5000;
   document.getElementById('records-cap').value = cap === Infinity ? 0 : cap;
@@ -298,15 +304,10 @@ export const TAB_CONTENT = {
 };
 
 const EXPERT_MODE_KEY = 'expert_mode_enabled';
-const EXPERT_TABS = new Set(['scouting', 'expeditions', 'xeno']);
 const HIDE_GLOBAL_CONTROLS_TABS = new Set([
   'dashboard', 'options', 'guide', 'pirates', 'finder', 'asteroids', 'fleets', 'scouting', 'techtree', 'market', 'simulator', 'xeno',
 ]);
 let expertModeEnabled = false;
-
-function isExpertTab(tab) {
-  return EXPERT_TABS.has(tab);
-}
 
 function syncVisibleTabContent() {
   for (const [tabName, id] of Object.entries(TAB_CONTENT)) {
@@ -314,16 +315,8 @@ function syncVisibleTabContent() {
   }
 }
 
-function enforceAllowedTab() {
-  if (!expertModeEnabled && (isExpertTab(activeTab) || isExpertTab(activeMainTab))) {
-    setActiveTab('dashboard');
-    activeMainTab = 'dashboard';
-  }
-}
-
 function applyExpertModeVisibility() {
   document.body.classList.toggle('expert-mode', expertModeEnabled);
-  enforceAllowedTab();
   updateTabNavigation();
   syncVisibleTabContent();
   updateGlobalControlsVisibility();
@@ -340,9 +333,7 @@ function updateGlobalControlsVisibility() {
 function openHashTab() {
   if (!location.hash) return;
   const hashTab = location.hash.slice(1);
-  if (!isExpertTab(hashTab) || expertModeEnabled) {
-    document.querySelector(`.tab[data-tab="${hashTab}"]`)?.click();
-  }
+  document.querySelector(`.tab[data-tab="${hashTab}"]`)?.click();
 }
 
 async function initExpertModeToggle() {
@@ -381,7 +372,6 @@ function updateTabNavigation() {
 document.querySelectorAll('.main-tab, #statistics-subtabs .subtab').forEach(btn => {
   btn.addEventListener('click', () => {
     const tab = btn.dataset.tab;
-    if (!expertModeEnabled && isExpertTab(tab)) return;
     if (tab === 'finder' && activeTab !== 'finder') void selectFinderView('map');
     if (SUBTAB_TABS.includes(tab)) {
       setActiveTab(tab);
@@ -393,7 +383,6 @@ document.querySelectorAll('.main-tab, #statistics-subtabs .subtab').forEach(btn 
       setActiveTab(tab);
       activeMainTab = tab;
     }
-    enforceAllowedTab();
     updateTabNavigation();
     syncVisibleTabContent();
     updateGlobalControlsVisibility();
@@ -877,6 +866,6 @@ if (versionLink) {
 browser.storage.local.onChanged.addListener((changes, area) => {
   if (area === 'local' && (
     changes.last_scrape || changes.last_error || changes.last_alarm_fire_at ||
-    changes.totals || changes.pirate_totals
+    changes.totals || changes.pirate_totals || changes.xeno_totals
   )) loadAll();
 });
