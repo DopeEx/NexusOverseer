@@ -1,6 +1,6 @@
 // Surveys tab.
 
-import { appendExtraResourceCards, computeEventBreakdown, computeResourcesLost, computeSeries, cssVar, emptyResources, EXTRA_RES_KEYS_UI, filterZone, fmt, fuelForMode, getMode, inWindowRange, isUnfiltered, makeResourceLineChart, makeStatCard, PER_PAGE, recordsForMode, renderLostCards, RESOURCE_SERIES, SCALE_OPTS, SERIES_GETTERS, store, windowActive, zoneCell } from '../common.js';
+import { appendExtraResourceCards, computeEventBreakdown, computeResourcesLost, computeSeries, cssVar, emptyResources, EXTRA_RES_KEYS_UI, filterZone, fmt, formatBadgeLabel, fuelForMode, getMode, inWindowRange, isUnfiltered, makeResourceLineChart, makeStatCard, paginateStatistics, recordsForMode, renderLostCards, RESOURCE_SERIES, SCALE_OPTS, SERIES_GETTERS, store, windowActive, zoneCell } from '../common.js';
 
 export let chartResources, chartEvents, chartByEvent;
 
@@ -202,19 +202,18 @@ export function renderTable() {
     const old = th.querySelector('.arrow');
     if (old) old.remove();
     if (th.dataset.key === key) {
+      th.setAttribute('aria-sort', dir === -1 ? 'descending' : 'ascending');
       const arrow = document.createElement('span');
       arrow.className = 'arrow';
       arrow.textContent = dir === -1 ? ' ▼' : ' ▲';
       th.appendChild(arrow);
+    } else {
+      th.removeAttribute('aria-sort');
     }
   });
 
-  const totalPages = Math.ceil(allReports.length / PER_PAGE);
-  document.getElementById('page-info').textContent = `Page ${currentPage} / ${Math.max(1, totalPages)} (${allReports.length} total)`;
-  document.getElementById('btn-prev').disabled = currentPage <= 1;
-  document.getElementById('btn-next').disabled = currentPage >= totalPages;
-
-  const slice = allReports.slice((currentPage - 1) * PER_PAGE, currentPage * PER_PAGE);
+  const result = paginateStatistics(allReports, currentPage, 'page-info', 'btn-prev', 'btn-next');
+  currentPage = result.page + 1;
   const tbody = document.getElementById('reports-tbody');
   tbody.textContent = '';
 
@@ -231,7 +230,7 @@ export function renderTable() {
     return td;
   }
 
-  for (const r of slice) {
+  for (const r of result.rows) {
     const tr = document.createElement('tr');
 
     const tdDate = document.createElement('td');
@@ -242,8 +241,8 @@ export function renderTable() {
 
     const tdEvt = document.createElement('td');
     const badge = document.createElement('span');
-    badge.className = `badge ${r.event_type}`;
-    badge.textContent = r.event_type.replace(/_/g, ' ');
+    badge.className = r.event_type ? `badge ${r.event_type}` : 'badge';
+    badge.textContent = formatBadgeLabel(r.event_type);
     tdEvt.appendChild(badge);
 
     const tdOre = zeroTd(r.ore);       tdOre.className = 'ore';

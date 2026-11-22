@@ -17,20 +17,23 @@ const field = (id, type = 'ore', extra = {}) => ({
   id, fieldType: type, richness: 2, remainingResources: 1000, totalResources: 2000, ...extra,
 });
 
-test('Asteroids shares the Galaxy Scout list presentation without changing its columns', async () => {
+test('Asteroids shares the Galaxy Scout list presentation with distance and fuel before field ID', async () => {
   const html = await readFile(new URL('../nexus-addon/dashboard.html', import.meta.url), 'utf8');
-  const panel = html.slice(html.indexOf('<div class="dashboard-panel dashboard-list-panel asteroids-results-panel">'),
+  const section = html.slice(html.indexOf('<div class="asteroids-results-section">'),
     html.indexOf('<div id="scouting-content"'));
-  assert.ok(panel.includes('dashboard-table-scroll'));
-  assert.ok(panel.includes('dashboard-list-status'));
-  assert.ok(panel.includes('dashboard-list-footer'));
-  assert.ok(!panel.includes('statistics-list-panel'), 'only the table scrolls, not its heading and navigation');
+  const panel = section.slice(section.indexOf('<div class="dashboard-panel dashboard-list-panel asteroids-results-panel">'));
+  assert.match(panel, /class="dashboard-table-scroll explore-military-table-scroll" role="region" aria-label="Asteroid fields table" tabindex="0"/);
+  const toolbar = html.slice(html.indexOf('<div id="asteroids-content"'), html.indexOf('<div class="asteroids-results-section">'));
+  assert.ok(toolbar.includes('dashboard-list-status'));
+  assert.ok(toolbar.includes('af-search-issues'));
+  assert.match(panel, /<\/table>\s*<\/div>\s*<div class="table-footer">/);
+  assert.ok(panel.includes('id="af-count"'));
   assert.deepEqual([...panel.matchAll(/data-key="([^"]+)"/g)].map(match => match[1]),
-    ['system', 'type', 'mult', 'remaining', 'leftPct', 'zone', 'fieldId', 'ownerName', 'distance', 'recShips']);
+    ['system', 'type', 'mult', 'remaining', 'leftPct', 'zone', 'distance', 'fieldId', 'ownerName', 'recShips']);
+  assert.match(panel, /data-key="distance"[\s\S]*?<th title="Hydrogen to send the selected template here">Fuel Cost<\/th>\s*<th class="sortable" data-key="fieldId"/);
   assert.equal((panel.match(/<th(?:\s|>)/g) || []).length, 12);
   assert.equal((panel.match(/<button type="button">/g) || []).length, 10,
     'sortable headings use keyboard-accessible buttons like Galaxy Scout');
-  assert.ok(html.includes('dashboard-panel dashboard-list-panel finder-results-panel'));
 });
 
 class Element {
@@ -133,6 +136,53 @@ async function harness(t, { store = {}, size = 15, data = {}, respond, fetchSyst
   return { el, systems, messages, requests, store, module, rows, timers, scan: () => el('af-scan').click() };
 }
 
+test('cached scan status separates missing mining missions from discovered matching fields', async t => {
+  const cached = {
+    at: Date.now(), planetId: 1, near: 10, zones: [], types: [], referenceSystem: { x: 0, y: 0 },
+    fields: [
+      { fieldId: 2, systemId: 2, system: 'S2', type: 'ore', zone: 'open', remaining: 100, total: 200 },
+      { fieldId: 3, systemId: 3, system: 'S3', type: 'gas', zone: 'open', missing: true },
+    ],
+  };
+  const h = await harness(t, {
+    store: { asteroid_scan_results: cached },
+    respond: message => message.type === 'GET_MISSIONS'
+      ? { missions: [{ missionType: 'mine', targetFieldId: 3 }] } : undefined,
+  });
+  assert.match(h.el('af-progress').textContent, /1 fields discovered, 1 match filters \+ 1 own mission exception/);
+  const systemCell = h.rows()[1].children[1];
+  assert.equal(systemCell.children[0].children[1].textContent, '⛏');
+  assert.equal(systemCell.children[1].textContent, 'Field missing');
+  assert.equal(systemCell.children[1].title, 'Field no longer present - own mining mission still active');
+});
+
+test('active mining markers stay with the name and unconfirmed details remain available', async t => {
+  const cached = {
+    at: Date.now(), planetId: 1, near: 10, zones: [], types: [], referenceSystem: { x: 0, y: 0 },
+    fields: [
+      { fieldId: 2, systemId: 2, system: 'S2', type: 'ore', zone: 'open', remaining: 100, total: 200 },
+      { fieldId: 3, systemId: 3, system: 'S3', type: 'gas', zone: 'open', unconfirmed: true },
+    ],
+  };
+  const h = await harness(t, {
+    store: { asteroid_scan_results: cached },
+    respond: message => message.type === 'GET_MISSIONS' ? {
+      missions: [2, 3].map(targetFieldId => ({ missionType: 'mine', targetFieldId })),
+    } : undefined,
+  });
+  const [active, unconfirmed] = h.rows().map(row => row.children[1]);
+  assert.equal(active.children[0].children[0].textContent, 'S2');
+  assert.equal(active.children[0].children[1].textContent, '⛏');
+  assert.equal(active.children[0].children[1].className, 'badge badge-warning badge-outline af-mission-badge');
+  assert.equal(active.children[1].hidden, true);
+  assert.equal(unconfirmed.children[0].children[0].textContent, 'S3');
+  assert.equal(unconfirmed.children[0].children[1].textContent, '⛏');
+  assert.equal(unconfirmed.children[1].textContent, 'Not rechecked');
+  assert.equal(unconfirmed.children[1].title, 'Field not rechecked - own mining mission still active');
+  h.module.renderAsteroids();
+  assert.equal(h.rows()[0].children[1].children[0].children[1], active.children[0].children[1]);
+});
+
 test('type-filter scan interleaves sector/detail reads, shows and saves the first match before the next reply', async t => {
   const held = deferred();
   const h = await harness(t, {
@@ -176,14 +226,14 @@ test('alliance tags are optional enrichment and never hold up results or scan co
     assert.equal(h.rows().length, 1);
     assert.match(h.el('af-progress').textContent, /^Done:/);
     assert.equal(h.el('af-scan').textContent, 'Scan');
-    assert.equal(h.rows()[0].children[8].textContent, 'Owner');
+    assert.equal(h.rows()[0].children[10].textContent, 'Owner');
   } finally {
     held.resolve({ tag: 'TEAM' });
     await settle();
   }
-  assert.equal(h.rows()[0].children[8].children[0].textContent, 'Owner');
-  assert.equal(h.rows()[0].children[8].children[1].textContent, '[TEAM]');
-  assert.equal(h.rows()[0].children[8].children[1].className, 'finder-badge finder-alliance');
+  assert.equal(h.rows()[0].children[10].children[0].textContent, 'Owner');
+  assert.equal(h.rows()[0].children[10].children[1].textContent, '[TEAM]');
+  assert.equal(h.rows()[0].children[10].children[1].className, 'badge finder-alliance');
 });
 
 for (const status of [429, 401]) {
@@ -415,12 +465,17 @@ test('Auto Scan updates keep matching row, controls and cells attached while cha
   assert.equal(h.rows()[0], row);
   assert.deepEqual(row.children, cells, 'all cells remain attached, including the fuel cell');
   assert.equal(row.children[0].children[0], ship, 'the focused launch control is not replaced');
+  assert.equal(row.children[7].textContent, '21');
+  assert.equal(row.children[8].className, 'af-fuel');
+  assert.equal(row.children[8].textContent, '—');
+  assert.equal(row.children[9].children[0].textContent, '21');
   assert.equal(row.children[4].textContent, '80 / 200');
   assert.equal(h.el('af-progress').textContent, 'Updating…');
   h.module.renderAsteroids();
   h.module.renderAsteroids();
   assert.equal(h.rows()[0], row);
-  assert.equal(row.children[1].children.length, 3, 'mission badges and notes never accumulate');
+  assert.equal(row.children[1].children.length, 2, 'mission badges and notes never accumulate');
+  assert.equal(row.children[1].children[0].children.length, 2);
 });
 
 test('Asteroids uses Scout badges for zones, resource types and alliances and updates badges in place', async t => {
@@ -437,14 +492,14 @@ test('Asteroids uses Scout badges for zones, resource types and alliances and up
   await settle();
   h.rows().forEach((row, i) => {
     assert.equal(row.children[6].children[0].className, zoneBadge(fields[i].zone).className);
-    assert.equal(row.children[6].children[0].textContent, fields[i].zone);
-    assert.equal(row.children[2].children[0].className, 'finder-badge asteroids-type-badge');
-    assert.equal(row.children[2].children[0].textContent, 'ore');
-    assert.equal(row.children[3].children[0].className, 'finder-badge asteroids-mult-badge');
+    assert.equal(row.children[6].children[0].textContent, zoneBadge(fields[i].zone).textContent);
+    assert.equal(row.children[2].children[0].className, 'badge asteroids-type-badge');
+    assert.equal(row.children[2].children[0].textContent, 'Ore');
+    assert.equal(row.children[3].children[0].className, 'badge asteroids-mult-badge');
     assert.equal(row.children[3].children[0].textContent, '×1');
-    assert.equal(row.children[8].children[0].className, '');
-    assert.equal(row.children[8].children[0].textContent, '—');
-    assert.equal(row.children[8].children[1].hidden, true);
+    assert.equal(row.children[10].children[0].className, '');
+    assert.equal(row.children[10].children[0].textContent, '—');
+    assert.equal(row.children[10].children[1].hidden, true);
   });
   const row = h.rows()[0], badge = row.children[6].children[0], type = row.children[2].children[0];
   await globalThis.browser.storage.local.set({ asteroid_scan_results: {
@@ -453,9 +508,9 @@ test('Asteroids uses Scout badges for zones, resource types and alliances and up
   await settle();
   assert.equal(h.rows()[0], row);
   assert.equal(row.children[6].children[0], badge);
-  assert.equal(badge.className, 'finder-badge finder-zone-rift');
+  assert.equal(badge.className, 'badge finder-zone-rift');
   assert.equal(row.children[2].children[0], type);
-  assert.equal(type.textContent, 'gas');
+  assert.equal(type.textContent, 'Gas');
   const mult = row.children[3].children[0];
   await globalThis.browser.storage.local.set({ asteroid_scan_results: {
     ...snapshot, fields: [{ ...fields[0], mult: null }],
@@ -493,7 +548,7 @@ test('field ID button copies its ID, survives updates and explicitly reports cli
     else delete globalThis.navigator.clipboard;
   });
   await h.scan();
-  const button = h.rows()[0].children[7].children[0];
+  const button = h.rows()[0].children[9].children[0];
   assert.equal(button.type, 'button');
   assert.equal(button.title, 'Copy field ID');
   await button.onclick();
@@ -502,7 +557,7 @@ test('field ID button copies its ID, survives updates and explicitly reports cli
   assert.equal(button.title, 'Copied');
   assert.equal(h.el('af-progress').textContent, 'Copied ID 2');
   h.module.renderAsteroids();
-  assert.equal(h.rows()[0].children[7].children[0], button);
+  assert.equal(h.rows()[0].children[9].children[0], button);
   globalThis.navigator.clipboard.writeText = async () => { throw new Error('Permission denied'); };
   await button.onclick();
   assert.equal(button.title, 'Copy failed');
@@ -550,7 +605,10 @@ test('manual refresh retains below-filter mining fields, removes vanished normal
   await h.scan();
   assert.equal(h.rows().length, 1);
   assert.equal(h.rows()[0].dataset.field, 22);
-  assert.match(h.rows()[0].textContent, /Own mining mission - outside filters/);
+  const systemCell = h.rows()[0].children[1];
+  assert.equal(systemCell.children[0].children[1].textContent, '⛏');
+  assert.equal(systemCell.children[1].textContent, 'Outside filters');
+  assert.equal(systemCell.children[1].title, 'Own mining mission - outside filters');
   missions = [];
   h.timers.find(timer => timer.interval === 10000).run();
   await settle();
@@ -568,7 +626,7 @@ test('vanished field with own mission stays marked without resource values or la
   await saveSystem('s0', 2, { asteroidFields: [], included: { fields: true } });
   await h.scan();
   assert.equal(h.rows().length, 1);
-  assert.match(h.rows()[0].textContent, /Field no longer present/);
+  assert.equal(h.rows()[0].children[1].children[1].textContent, 'Field missing');
   assert.equal(h.rows()[0].children[4].textContent, '—');
   assert.equal(h.rows()[0].children[0].children[0].listeners.click, undefined);
   assert.equal(h.rows()[0].children[0].children[0].onclick, null);

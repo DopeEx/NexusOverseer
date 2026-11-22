@@ -13,26 +13,43 @@ import { initApiStatus } from './api-status.js';
 import { changelogForVersion } from './common.js';
 import { initSimulatorTab } from './tabs/simulator.js';
 import { renderBattlesTab } from './tabs/battles.js';
-import { renderDebrisTab } from './tabs/debris.js';
-import { initExpeditionsTab, renderExpeditionStatsTab, renderExpeditionsTab, runExpeditionAutomations, setExpPage } from './tabs/expeditions.js';
-import { renderWormholesTab, setWhPage } from './tabs/wormholes.js';
+import { renderActiveRuns, renderCollectionLog, renderDebrisTab } from './tabs/debris.js';
+import { initExpeditionsTab, renderExpeditionStatsTab, renderExpeditionsTab, renderExpTable, runExpeditionAutomations, setExpPage } from './tabs/expeditions.js';
+import { renderWhTable, renderWormholesTab, setWhPage } from './tabs/wormholes.js';
 import { initAsteroidsTab } from './tabs/asteroids.js';
 import { renderFleetsTab } from './tabs/fleets.js';
 import { initScoutingTab, runScoutingAutomations } from './tabs/scouting.js';
-import { initXenoTab, renderXenoStatsTab, setXnReportPage } from './tabs/xeno.js';
+import { initXenoTab, renderXenoStatsTab, renderXnReportTable, setXnReportPage } from './tabs/xeno.js';
 import { initFinderTab, selectFinderView } from './tabs/finder.js';
 import { initMarketTab } from './tabs/market.js';
 import { registerAutomationTask, startAutomationScheduler } from './automation-scheduler.js';
 import { initHumanVerificationBanner } from './human-verification.js';
 import { renderGlobalTab } from './tabs/global.js';
-import { renderMiningTab, setMiningPage } from './tabs/mining.js';
-import { initPiratesTab, renderPirateStatsTab, renderPiratesTab, runPirateAutomations, setPirateCurrentPage } from './tabs/pirates.js';
+import { renderMiningTab, renderMiningTable, setMiningPage } from './tabs/mining.js';
+import { initPiratesTab, renderPirateStatsTab, renderPirateTable, renderPiratesTab, runPirateAutomations, setPirateCurrentPage } from './tabs/pirates.js';
 import { getEventBreakdownForMode, getResourcesLostForMode, getSeriesForMode, getTotalsForMode, populateEventOptions, renderByEventChart, renderCollected, renderEventsChart, renderLost, renderResourceChart, renderTable, setCurrentPage } from './tabs/surveys.js';
 import { renderTechTreeTab } from './tabs/tech-tree.js';
 import { initDashboardTab } from './tabs/dashboard.js';
 import { initOptionsTab, checkPublicGalaxyUpdates } from './tabs/options.js';
 import { initGuideTab } from './tabs/guide.js';
-import { getSetting, loadSettings } from './settings.js';
+import { getSetting, loadSettings, onSettingsChange } from './settings.js';
+
+let statisticsPageSize = getSetting('general.tablePageSize');
+onSettingsChange(settings => {
+  if (settings['general.tablePageSize'] === statisticsPageSize) return;
+  statisticsPageSize = settings['general.tablePageSize'];
+  const render = {
+    surveys: renderTable,
+    'pirates-stats': renderPirateTable,
+    mining: renderMiningTable,
+    battles: renderBattlesTab,
+    debris: () => { renderActiveRuns(); renderCollectionLog(); },
+    'expeditions-stats': renderExpTable,
+    wormholes: renderWhTable,
+    'xeno-stats': renderXnReportTable,
+  }[activeTab];
+  if (render) render();
+});
 
 export async function loadAll() {
   const activeServer = await globalThis.nexusStorage?.getActiveServer?.() || { key: 's0' };

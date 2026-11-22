@@ -2,9 +2,11 @@
 
 // ── Debris tab ─────────────────────────────────────────────────────────────
 
-import { EXTRA_RES_KEYS_UI, PER_PAGE, RESOURCE_SERIES, appendExtraResourceCards, applySort, attachSortable, computeSeries, fillResourceCards, filterZone, fmt, fuelForMode, getLabelKey, getMode, getZone, inWindowRange, makeResourceDoughnut, makeResourceLineChart, makeStatCard, periodLabelFor, store, windowActive, zeroCell, zoneCell } from '../common.js';
+import { EXTRA_RES_KEYS_UI, RESOURCE_SERIES, appendExtraResourceCards, applySort, attachSortable, computeSeries, fillResourceCards, filterZone, fmt, fuelForMode, getLabelKey, getMode, getZone, inWindowRange, makeResourceDoughnut, makeResourceLineChart, makeStatCard, paginateStatistics, periodLabelFor, store, windowActive, zeroCell, zoneCell } from '../common.js';
 
 export let chartDebris, chartDebrisPeriod;
+let activePage = 1;
+let collectedPage = 1;
 
 // Collection log mapped so the shared mode/zone helpers (which key on
 // created_at) work on it.
@@ -90,6 +92,8 @@ export function renderActiveRuns() {
   tbody.textContent = '';
   const runs = (store.debris_active_runs || []).slice()
     .sort((a, b) => String(a.eta || '').localeCompare(String(b.eta || '')));
+  const result = paginateStatistics(runs, activePage, 'd-active-page-info', 'd-active-prev', 'd-active-next', 'active run', 'active runs');
+  activePage = result.page + 1;
   if (!runs.length) {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
@@ -98,7 +102,7 @@ export function renderActiveRuns() {
     tr.appendChild(td); tbody.appendChild(tr);
     return;
   }
-  for (const r of runs) {
+  for (const r of result.rows) {
     const tr = document.createElement('tr');
     const tdFleet = document.createElement('td'); tdFleet.textContent = fleetText(r.fleet);
     const tdSys = document.createElement('td'); tdSys.textContent = r.system;
@@ -113,12 +117,14 @@ export function renderActiveRuns() {
 }
 
 export const collectedSort = { key: 'collected_at', dir: -1 };
-attachSortable('d-collected-head', collectedSort, () => renderCollectionLog());
+attachSortable('d-collected-head', collectedSort, () => { collectedPage = 1; renderCollectionLog(); });
 
 export function renderCollectionLog() {
   const tbody = document.getElementById('d-collected-tbody');
   tbody.textContent = '';
   const log = applySort('d-collected-head', store.debris_collection_log || [], collectedSort, 'collected_at');
+  const result = paginateStatistics(log, collectedPage, 'd-collected-page-info', 'd-collected-prev', 'd-collected-next', 'collection', 'collections');
+  collectedPage = result.page + 1;
   if (!log.length) {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
@@ -127,7 +133,7 @@ export function renderCollectionLog() {
     tr.appendChild(td); tbody.appendChild(tr);
     return;
   }
-  for (const r of log.slice(0, PER_PAGE)) {
+  for (const r of result.rows) {
     const tr = document.createElement('tr');
     const tdWhen = document.createElement('td');
     tdWhen.textContent = new Date(r.collected_at).toLocaleString();
@@ -141,4 +147,9 @@ export function renderCollectionLog() {
               zeroCell(r.dark_matter), zeroCell(r.antimatter));
     tbody.appendChild(tr);
   }
+
+  document.getElementById('d-active-prev').addEventListener('click', () => { activePage--; renderActiveRuns(); });
+  document.getElementById('d-active-next').addEventListener('click', () => { activePage++; renderActiveRuns(); });
+  document.getElementById('d-collected-prev').addEventListener('click', () => { collectedPage--; renderCollectionLog(); });
+  document.getElementById('d-collected-next').addEventListener('click', () => { collectedPage++; renderCollectionLog(); });
 }

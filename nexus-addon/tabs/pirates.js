@@ -4,7 +4,9 @@ import { loadFleetTemplates } from './fleets.js';
 import { usedFleetSlots } from '../mission-state.js';
 import { suggestAttackFleet } from '../pirate-planner.js';
 import { pauseAutomationsForHumanVerification } from '../human-verification.js';
-import { appendExtraResourceCards, applySort, attachSortable, computeResourcesLost, computeSeries, createMissionRefresh, cssVar, editFleetDialog, emptyResources, EXTRA_RES_KEYS_UI, filterZone, fmt, missionCountdown, fuelForMode, getLabelKey, getMode, isUnfiltered, makeResourceLineChart, makeStatCard, missionProgress, PER_PAGE, periodLabelFor, recordsForMode, rememberedSelections, rememberSelection, renderLostCards, renderNetCards, SERIES_GETTERS, setStatusText, store, windowActive, ZONE_COLORS, zoneCell } from '../common.js';
+import { getSetting, onSettingsChange } from '../settings.js';
+import { paginate, updatePagination } from '../pagination.js';
+import { appendExtraResourceCards, applySort, attachSortable, combatOutcomeBadge, computeResourcesLost, computeSeries, createMissionRefresh, cssVar, editFleetDialog, emptyResources, EXTRA_RES_KEYS_UI, filterZone, fmt, missionCountdown, fuelForMode, getLabelKey, getMode, isUnfiltered, makeResourceLineChart, makeStatCard, missionProgress, paginateStatistics, periodLabelFor, recordsForMode, rememberedSelections, rememberSelection, renderLostCards, renderNetCards, SERIES_GETTERS, setStatusText, store, windowActive, ZONE_COLORS, zoneCell } from '../common.js';
 
 export let chartPirateLoot, chartPirateOutcomes;
 
@@ -70,11 +72,26 @@ export function renderPiratesTab() {
 }
 
 let pcReports = [];
+let pcReportsError = '';
+let pcReportsPage = 0;
+let pcPageSize = getSetting('general.tablePageSize');
+onSettingsChange(settings => {
+  if (settings['general.tablePageSize'] === pcPageSize) return;
+  pcPageSize = settings['general.tablePageSize'];
+  if (pcInited) renderPirateReports();
+});
 
 async function refreshPirateReports(priority = 'interactive') {
-  const res = await browser.runtime.sendMessage({ type: 'GET_PIRATE_REPORTS', priority });
+  let res;
+  try {
+    res = await browser.runtime.sendMessage({ type: 'GET_PIRATE_REPORTS', priority });
+  } catch (error) {
+    console.error('[NexusOverseer] Could not load pirate reports:', error);
+    res = { error: error?.message || String(error) };
+  }
   pcReports = res.error ? [] : (res.reports || []);
-  renderPirateReports(res.error);
+  pcReportsError = res.error || '';
+  renderPirateReports();
 }
 
 const fleetText = list => (list || []).filter(s => s.quantity ?? s.lost)
@@ -84,27 +101,35 @@ const lossText = list => (list || []).filter(s => s.lost)
 const resText = o => Object.entries(o || {}).filter(([, v]) => v)
   .map(([k, v]) => `${fmt(v)} ${k}`).join(', ') || '—';
 
-function renderPirateReports(error) {
+function renderPirateReports() {
   const tbody = document.getElementById('pr-tbody');
   tbody.textContent = '';
-  document.getElementById('pr-count').textContent = error ? '' : `${pcReports.length} reports`;
-  if (error || !pcReports.length) {
+  const result = paginate(pcReports, pcReportsPage);
+  pcReportsPage = result.page;
+  updatePagination(result, {
+    count: document.getElementById('pr-count'),
+    controls: document.getElementById('pr-pagination'),
+    previous: document.getElementById('pr-prev'),
+    next: document.getElementById('pr-next'),
+    page: document.getElementById('pr-page'),
+  }, pcReportsError ? '— reports' : `${result.total} report${result.total === 1 ? '' : 's'}`);
+  setStatusText(document.getElementById('pr-status'), pcReportsError ? `Could not load reports: ${pcReportsError}` : '');
+  if (pcReportsError || !pcReports.length) {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
     td.colSpan = 10;
     td.className = 'mission-empty-state';
-    td.textContent = error ? `Could not load reports: ${error}` : 'No pirate reports yet.';
+    td.textContent = pcReportsError ? 'Reports unavailable.' : 'No pirate reports yet.';
     tr.appendChild(td);
     tbody.appendChild(tr);
     return;
   }
   const campName = id => (pcCamps.find(c => c.id === id) || {}).name || `#${id}`;
-  for (const r of pcReports) {
-    const won = r.outcome === 'attacker_won';
+  for (const r of result.rows) {
     const cells = [
       r.createdAt ? new Date(r.createdAt).toLocaleString() : '—',
       campName(r.campId),
-      won ? 'Victory' : 'Defeat',
+      r.outcome,
       (r.rounds || []).length,
       fleetText(r.attackerFleet),
       fleetText(r.pirateFleet),
@@ -116,8 +141,11 @@ function renderPirateReports(error) {
     const tr = document.createElement('tr');
     cells.forEach((v, i) => {
       const td = document.createElement('td');
-      td.textContent = v;
-      if (i === 2) td.style.color = won ? '#7ed957' : '#ff6b7a';
+      if (i === 2) {
+        td.appendChild(combatOutcomeBadge(v));
+      } else {
+        td.textContent = v;
+      }
       tr.appendChild(td);
     });
     tbody.appendChild(tr);
@@ -339,6 +367,12 @@ async function automatePirateScouting() {
 async function initPirateCamps() {
   if (pcInited) return;
   pcInited = true;
+  for (const [id, step] of [['prev', -1], ['next', 1]]) {
+    document.getElementById(`pr-${id}`).addEventListener('click', () => {
+      pcReportsPage += step;
+      renderPirateReports();
+    });
+  }
   document.getElementById('pc-refresh').addEventListener('click', () => {
     refreshPirateCamps();
     refreshPirateReports();
@@ -797,12 +831,8 @@ attachSortable('p-reports-head', pirateSort, () => { pirateCurrentPage = 1; rend
 
 export function renderPirateTable() {
   const allReports = applySort('p-reports-head', filterZone(store.pirate_recent_reports || []), pirateSort);
-  const totalPages = Math.ceil(allReports.length / PER_PAGE);
-  document.getElementById('p-page-info').textContent = `Page ${pirateCurrentPage} / ${Math.max(1, totalPages)} (${allReports.length} total)`;
-  document.getElementById('p-btn-prev').disabled = pirateCurrentPage <= 1;
-  document.getElementById('p-btn-next').disabled = pirateCurrentPage >= totalPages;
-
-  const slice = allReports.slice((pirateCurrentPage - 1) * PER_PAGE, pirateCurrentPage * PER_PAGE);
+  const result = paginateStatistics(allReports, pirateCurrentPage, 'p-page-info', 'p-btn-prev', 'p-btn-next');
+  pirateCurrentPage = result.page + 1;
   const tbody = document.getElementById('p-reports-tbody');
   tbody.textContent = '';
 
@@ -819,7 +849,7 @@ export function renderPirateTable() {
     return td;
   }
 
-  for (const r of slice) {
+  for (const r of result.rows) {
     const tr = document.createElement('tr');
 
     const tdDate = document.createElement('td');
@@ -829,10 +859,7 @@ export function renderPirateTable() {
     tdCamp.textContent = r.camp_id != null ? `#${r.camp_id}` : '—';
 
     const tdOutcome = document.createElement('td');
-    const badge = document.createElement('span');
-    badge.className = `badge ${r.outcome}`;
-    badge.textContent = (r.outcome || 'unknown').replace(/_/g, ' ');
-    tdOutcome.appendChild(badge);
+    tdOutcome.appendChild(combatOutcomeBadge(r.outcome));
 
     const tdOre = zeroTd(r.ore);       tdOre.className = 'ore';
     const tdHyd = zeroTd(r.hydrogen);  tdHyd.className = 'hydrogen';

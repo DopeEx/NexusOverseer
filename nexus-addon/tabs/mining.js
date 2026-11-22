@@ -145,7 +145,7 @@ export function renderMiningTable() {
   const deliveries = (store.mining_recent_reports || []).filter(r => (r.report_type || 'delivery') === 'delivery');
   const reports = applySort('m-reports-head', filterZone(deliveries), miningSort);
   const pending = [];   // rows whose Fuel/ROI cells fill asynchronously
-  renderPagedTable(reports, miningPage, 'm-page-info', 'm-btn-prev', 'm-btn-next', 'm-reports-tbody', r => {
+  miningPage = renderPagedTable(reports, miningPage, 'm-page-info', 'm-btn-prev', 'm-btn-next', 'm-reports-tbody', r => {
     const tr = document.createElement('tr');
     const tdDate = document.createElement('td');
     tdDate.textContent = new Date(r.created_at).toLocaleString();

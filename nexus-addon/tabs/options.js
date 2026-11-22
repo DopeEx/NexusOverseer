@@ -108,7 +108,10 @@ function bind() {
     });
   }
   for (const ctl of document.querySelectorAll('#options-content [data-setting]')) {
-    ctl.addEventListener('change', () => { void save(() => setSettings({ [ctl.dataset.setting]: readControl(ctl) })); });
+    ctl.addEventListener('change', () => {
+      if (!ctl.checkValidity()) { ctl.reportValidity(); syncControls(); return; }
+      void save(() => setSettings({ [ctl.dataset.setting]: readControl(ctl) }));
+    });
   }
   for (const btn of document.querySelectorAll('#options-content [data-reset-prefix]')) {
     btn.addEventListener('click', () => { void save(() => resetSettings(btn.dataset.resetPrefix)); });

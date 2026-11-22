@@ -54,6 +54,32 @@ an application `src/` tree. Keep that layout unless a clear ownership or reuse
 boundary justifies creating a directory; do not move files just to make the
 tree look more layered.
 
+## Shared dashboard badges
+
+Passive dashboard badges share the `.badge` presentation in `dashboard.css`.
+Neutral classifications and information, such as zones, types, alliances,
+survey event types, trade directions, active mining markers and diagnostic
+request methods, are outlined. Evaluated outcomes and statuses needing attention
+use a tinted fill.
+The Dashboard's Needs attention badges use the same text size as dashboard
+mission rows, a lighter font weight and more padding for readability; other
+badges retain the compact default.
+Color remains independent of fill: a green zone identifies a category, not a
+success. Use `badge-outline` with a semantic color variant when an informational
+badge needs that color, and use the shared helpers in `common.js` for repeated
+values such as zones and combat outcomes. Format category identifiers with
+`formatBadgeLabel`: replace underscores with spaces and capitalize the first
+letter. Preserve player and alliance names, diagnostic identifiers and
+technical acronyms as supplied. Combat results use Victory, Defeat or Draw
+from the player's perspective; missing or unrecognized results stay neutral
+instead of being inferred as a defeat. A non-viable Xeno simulation remains a
+warning even when the combat itself was won. Interactive filters and mission
+progress indicators retain their own controls.
+
+Dashboard report tables use the shared pagination helpers in `pagination.js`.
+The General setting controls the page size, and filtering or changing that
+setting must keep the current page within the available results.
+
 ## Testing large backups
 
 Load the add-on in a separate profile. Import a legacy full backup,

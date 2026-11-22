@@ -1861,7 +1861,7 @@ test('compact planet groups contain their own ordered moons, retain orphans and 
   assert.equal(groups[1].children[1].children[1].children[2].textContent, '#1');
   assert.equal(groups[1].children[1].children[1].children[3].textContent, '—');
   assert.match(planet.children[2].textContent, /Colonized/);
-  assert.equal(planet.children[2].children[1].className, 'finder-badge finder-alliance');
+  assert.equal(planet.children[2].children[1].className, 'badge finder-alliance');
   assert.equal(planet.children[2].children[1].textContent, '[OLD]');
   assert.match(groups[1].children[1].children[2].textContent, /Free/);
   assert.match(groups[2].children[1].children[2].textContent, /Unknown ownership/);
@@ -1892,7 +1892,7 @@ test('search displays planet slots instead of temperature while retaining cached
   const h = await harness();
   await h.el('f-search').fire();
   assert.equal(h.el('f-results-tbody').children[0].children[5].textContent, '22');
-  assert.equal(h.el('f-results-tbody').children[0].children[10].children[0].className, 'finder-badge finder-alliance');
+  assert.equal(h.el('f-results-tbody').children[0].children[10].children[0].className, 'badge finder-alliance');
   assert.equal(h.finder.finderHits[0].slots, 22);
   assert.equal(Object.hasOwn(h.finder.finderHits[0], 'temp'), false);
   const html = await readFile(new URL('../nexus-addon/dashboard.html', import.meta.url), 'utf8');
@@ -1914,8 +1914,8 @@ test('map search results share directory badges and actions and open the exact p
   assert.notEqual(row.title, 'Show on map');
   assert.equal(row.children.length, 12);
   assert.equal(row.children[1].className, 'finder-parent-reference');
-  assert.equal(row.children[3].children[0].className, 'finder-badge finder-type-neutral');
-  assert.equal(row.children[7].children[0].className, 'finder-badge finder-zone-open');
+  assert.equal(row.children[3].children[0].className, 'badge finder-type-neutral');
+  assert.equal(row.children[7].children[0].className, 'badge finder-zone-open');
   assert.equal(row.children[9].children[0].className, 'finder-badge finder-owner-colonized');
   assert.match(row.children[9].textContent, /Former owner/);
   const actions = row.children.at(-1).children[0];
@@ -1955,7 +1955,7 @@ test('directory tables share type and ownership badges without confusing unknown
   assert.match(planet.children[2].children[0].className, /finder-type-neutral/);
   assert.match(planet.children[8].children[0].className, /finder-owner-colonized/);
   assert.equal(planet.children[4].textContent, '22');
-  assert.equal(planet.children[9].children[0].className, 'finder-badge finder-alliance');
+  assert.equal(planet.children[9].children[0].className, 'badge finder-alliance');
   await h.finder.selectFinderView('moons');
   const moons = h.el('f-directory-body').children;
   assert.match(moons[0].children[8].children[0].className, /finder-owner-free/);
@@ -1969,19 +1969,19 @@ test('security zone badges follow existing zone colors in every directory and th
   for (const [view, zoneColumn] of [['systems', 2], ['planets', 6], ['moons', 6]]) {
     await h.finder.selectFinderView(view);
     const row = h.el('f-directory-body').children[0];
-    assert.equal(row.children[zoneColumn].children[0].className, 'finder-badge finder-zone-open');
-    assert.equal(row.children[zoneColumn].textContent, 'open');
+    assert.equal(row.children[zoneColumn].children[0].className, 'badge finder-zone-open');
+    assert.equal(row.children[zoneColumn].textContent, 'Open');
     await row.children.at(-1).children[0].children[1].fire();
-    assert.equal(h.el('f-system-meta').children.at(-1).className, 'finder-badge finder-zone-open');
+    assert.equal(h.el('f-system-meta').children.at(-1).className, 'badge finder-zone-open');
     await h.el('f-system-close').fire();
   }
   await h.finder.selectFinderView('systems');
   const rows = h.el('f-directory-body').children;
-  assert.equal(rows[1].children[2].children[0].className, 'finder-badge finder-zone-sentinel');
-  assert.equal(rows[2].children[2].children[0].className, 'finder-badge finder-zone-dead');
+  assert.equal(rows[1].children[2].children[0].className, 'badge finder-zone-sentinel');
+  assert.equal(rows[2].children[2].children[0].className, 'badge finder-zone-dead');
   await h.finder.selectFinderView('map');
   await h.el('f-search').fire();
-  assert.equal(h.el('f-results-tbody').children[0].children[7].children[0].className, 'finder-badge finder-zone-open');
+  assert.equal(h.el('f-results-tbody').children[0].children[7].children[0].className, 'badge finder-zone-open');
   assert.deepEqual(h.requests, []);
 });
 
@@ -2004,7 +2004,7 @@ test('all six game moon colors are shared by directory, overview and search mark
     visit(element);
     return classes;
   };
-  const expected = Object.keys(colors).map(type => `finder-badge finder-moon-${type}`);
+  const expected = Object.keys(colors).map(type => `badge finder-moon-${type}`);
   await h.finder.selectFinderView('moons');
   assert.deepEqual(markers(h.el('f-directory-body')), expected);
   await h.el('f-directory-body').children[0].children.at(-1).children[0].children[1].fire();

@@ -111,7 +111,7 @@ attachSortable('w-reports-head', whSort, () => { whPage = 1; renderWhTable(); })
 
 export function renderWhTable() {
   const reports = applySort('w-reports-head', filterClass(filterZone((store.exp_recent_reports || []).filter(r => r.kind === 'wormhole'))), whSort);
-  renderPagedTable(reports, whPage, 'w-page-info', 'w-btn-prev', 'w-btn-next', 'w-reports-tbody', r => {
+  whPage = renderPagedTable(reports, whPage, 'w-page-info', 'w-btn-prev', 'w-btn-next', 'w-reports-tbody', r => {
     const tr = document.createElement('tr');
     const tdDate = document.createElement('td');
     tdDate.textContent = new Date(r.created_at).toLocaleString();

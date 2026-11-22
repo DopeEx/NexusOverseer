@@ -1,5 +1,18 @@
 export const hasKnownOwnership = body => body.ownershipKnown !== false && Object.hasOwn(body, 'userId');
 
+export const XENO_TRACES = ['ruins', 'spire', 'observatory', 'necropolis'];
+
+export function ancientMoonTrace(moonId) {
+  // Match the observed game frontend's 32-bit hash and avalanche steps.
+  let hash = 2166136261;
+  for (const char of `xeno-trace|${moonId}`) {
+    hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
+  }
+  hash = Math.imul(hash ^ (hash >>> 16), 2246822507);
+  hash = Math.imul(hash ^ (hash >>> 13), 3266489909);
+  return XENO_TRACES[((hash ^ (hash >>> 16)) >>> 0) % XENO_TRACES.length];
+}
+
 export function directoryOwner(body) {
   if (!hasKnownOwnership(body)) return 'unknown';
   return body.userId == null ? 'unowned' : body.ownerName || `Player #${body.userId}`;
@@ -147,7 +160,7 @@ export function parseSectorRange(raw) {
 
 export function queryGalaxyDirectory(rows, {
   text = '', zones = [], types = [], arm = '', sector = '', ranges = {}, ownership = '',
-  contents = '', moonTypes = [], parentTypes = [],
+  contents = '', moonTypes = [], parentTypes = [], xenoTrace = '',
   minFreeMoonSlots = '', invalidNumbers = [], sort = 'distance', direction = 1, page = 0, pageSize = 50,
 }) {
   const bounds = [];
@@ -186,7 +199,8 @@ export function queryGalaxyDirectory(rows, {
     (!parentTypes.length || parentTypes.includes(row.parentType)) &&
     (moonSlots == null || row.freeMoonSlots?.some(slots => slots >= moonSlots)) &&
     (!needle || Object.values(row).some(value =>
-      value != null && String(value).toLowerCase().includes(needle))));
+      value != null && String(value).toLowerCase().includes(needle))) &&
+    (!xenoTrace || row.type === 'ancient' && ancientMoonTrace(row.id) === xenoTrace));
   filtered.sort((a, b) => {
     const av = a[sort], bv = b[sort];
     if (av == null || bv == null) return av == null ? (bv == null ? 0 : 1) : -1;
