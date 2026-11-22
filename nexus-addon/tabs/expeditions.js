@@ -491,7 +491,7 @@ attachSortable('e-reports-head', expSort, () => { expPage = 1; renderExpTable();
 
 export function renderExpTable() {
   const reports = applySort('e-reports-head', filterZone((store.exp_recent_reports || []).filter(r => r.kind === 'expedition')), expSort);
-  renderPagedTable(reports, expPage, 'e-page-info', 'e-btn-prev', 'e-btn-next', 'e-reports-tbody', r => {
+  expPage = renderPagedTable(reports, expPage, 'e-page-info', 'e-btn-prev', 'e-btn-next', 'e-reports-tbody', r => {
     const tr = document.createElement('tr');
     const tdDate = document.createElement('td');
     tdDate.textContent = new Date(r.created_at).toLocaleString();

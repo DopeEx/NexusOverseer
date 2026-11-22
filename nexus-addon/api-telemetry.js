@@ -4,7 +4,7 @@ export const TRAFFIC_SOURCES = new Set([
   'galaxy-search', 'ownership-check', 'galaxy-cache', 'dashboard', 'simulator',
   'background-maintenance', 'fleet-action', 'content-tool', 'native-game',
   'scouting', 'pirates', 'expeditions', 'market', 'research', 'universe-catalog',
-  'asteroid-search', 'xeno-search',
+  'asteroid-search', 'xeno-search', 'xeno',
   'empire-view', 'logistics', 'building-planner', 'technology-planner', 'ship-planner', 'upgrade-queue',
 ]);
 export const trafficSource = source => TRAFFIC_SOURCES.has(source) ? source : 'background-maintenance';

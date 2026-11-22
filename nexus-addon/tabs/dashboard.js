@@ -266,7 +266,7 @@ function attentionCard(d) {
   card.appendChild(gear);
   const chips = el('div', 'ov-chips');
   for (const it of items) {
-    const chip = el('span', `ov-chip ${it.level === 'error' ? 'bad' : 'warn'}`, it.text);
+    const chip = el('span', `badge ${it.level === 'error' ? 'badge-error' : 'badge-warning'}`, it.text);
     if (it.tip?.length) chip.title = it.tip.join('\n');
     chips.appendChild(chip);
   }
@@ -313,7 +313,7 @@ function planetCard(p, research) {
   title.append(el('div', 'ov-planet-name', p.name),
     el('div', 'ov-dim ov-planet-sub', [p.systemName, p.planetType].filter(Boolean).join(' · ') || 'Unknown system'));
   head.appendChild(title);
-  if (p.isHomeworld || p.isMoon) head.appendChild(el('span', 'ov-badge', p.isMoon ? 'Moon' : 'Homeworld'));
+  if (p.isHomeworld || p.isMoon) head.appendChild(el('span', 'badge badge-success badge-outline', p.isMoon ? 'Moon' : 'Homeworld'));
   card.appendChild(head);
 
   const stats = el('div', 'ov-kv-row');

@@ -25,6 +25,7 @@ export const DEFAULTS = Object.freeze({
   'data.publicGalaxyAutoUpdate': true,
   'general.numberFormat': 'de',
   'general.defaultTab': 'dashboard',
+  'general.tablePageSize': 25,
   'developer.logLevel': 'warn',
   'developer.recording': false,
   'developer.apiWaitRecording': false,
@@ -41,6 +42,10 @@ function sanitize(stored) {
     if (typeof stored[key] === typeof DEFAULTS[key]) out[key] = stored[key];
   }
   if (!['debug', 'info', 'warn', 'error'].includes(out['developer.logLevel'])) out['developer.logLevel'] = DEFAULTS['developer.logLevel'];
+  if (!Number.isSafeInteger(out['general.tablePageSize']) || out['general.tablePageSize'] < 1) {
+    console.warn('[NexusOverseer] Invalid table page size in stored settings; using the default.');
+    out['general.tablePageSize'] = DEFAULTS['general.tablePageSize'];
+  }
   return out;
 }
 
@@ -67,6 +72,10 @@ export function getSetting(key) {
 
 // Only differences from DEFAULTS are stored, so new defaults reach existing users.
 export async function setSettings(values) {
+  if ('general.tablePageSize' in values &&
+      (!Number.isSafeInteger(values['general.tablePageSize']) || values['general.tablePageSize'] < 1)) {
+    throw new Error('Rows per table page must be a positive whole number.');
+  }
   const next = { ...cache, ...values };
   const stored = {};
   for (const key of Object.keys(DEFAULTS)) {

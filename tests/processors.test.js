@@ -1,8 +1,111 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { makeBrowserStub, loadBackground } from './helpers.js';
+import { makeBrowserStub, loadBackground, xenoDigReports } from './helpers.js';
 
 const SHIPS = { 21: { costOre: 100, costSilicates: 50, costHydrogen: 0, costAlloys: 10, rareCosts: { cryo_ice: 5 } } };
+
+test('Xeno digs: full archive, read-state dedupe, rewards, overflow, split losses and rebuild', async () => {
+  const legacy = { id: 'xeno-900101', created_at: '2026-10-01T10:00:00Z',
+    event: 'ruins_survey_complete', loot: { precursor_fragments: 12 }, ships_lost: 0 };
+  const store = makeBrowserStub({ ships: SHIPS, records_cap: 1, xeno_recent_reports: [legacy] });
+  const bg = await loadBackground();
+  const reports = xenoDigReports();
+  assert.equal(await bg.processXenoDigReports(reports, SHIPS), 3);
+  reports[2].isRead = false;
+  assert.equal(await bg.processXenoDigReports(reports, SHIPS), 0);
+
+  assert.equal(store.xeno_recent_reports.length, 1);
+  assert.equal(store.archive_index.xeno.count, 4);
+  assert.deepEqual(store['xeno_archive_2030-01'][0].report, reports[2], 'preserve all original fields');
+  assert.equal(store['xeno_archive_2026-10'][0].id, 'xeno-900101', 'legacy identity stays separate');
+  const totals = store.xeno_totals;
+  assert.equal(totals.missions, 4);
+  assert.equal(totals.digs, 3);
+  assert.equal(totals.successful_digs, 3);
+  assert.equal(totals.silicates, 27332);
+  assert.equal(totals.overflow.silicates, 101284, 'overflow is not delivered income');
+  assert.equal(totals.ships_lost, 18);
+  assert.equal(totals.ships_damaged, 6);
+  assert.equal(totals.excavators_sent, 9);
+  assert.equal(totals.excavators_lost, 0);
+  assert.equal(totals.rounds, 20);
+  assert.equal(totals.careful, 2);
+  assert.equal(totals.fast, 1);
+  assert.deepEqual(totals.artifact_tiers, { rare: 1 });
+  assert.equal(totals.rare.artifact, 1);
+  assert.equal(totals.rare.precursor_fragments, 12);
+  assert.deepEqual(totals.monuments, { support_pillar: 1, celestial_chronometer: 1 });
+  assert.equal(totals.codex_entries, 1);
+  assert.equal(store.xeno_resources_lost.destroyed.ore, 1800);
+  assert.equal(store.xeno_resources_lost.repair.ore, 300);
+  assert.equal(store.xeno_resources_lost.repair.rare.cryo_ice, 15);
+  assert.equal(store.xeno_daily.find(row => row.day === '2030-01-21').silicates, 19565);
+
+  const before = structuredClone({
+    totals: store.xeno_totals, daily: store.xeno_daily, lost: store.xeno_resources_lost,
+  });
+  await bg.rebuildAggregates();
+  assert.deepEqual(store.xeno_totals, before.totals);
+  assert.deepEqual(store.xeno_daily, before.daily);
+  assert.deepEqual(store.xeno_resources_lost, before.lost);
+});
+
+test('Xeno digs archive without ship catalog; later processing backfills valuation and missing result fields', async () => {
+  const store = makeBrowserStub();
+  const bg = await loadBackground();
+  const report = xenoDigReports()[0];
+  const incomplete = structuredClone(report);
+  delete incomplete.report.shipsLost;
+  await bg.processXenoDigReports([incomplete], {});
+  assert.equal(store.xeno_totals.digs, 1);
+  assert.equal(store.xeno_totals.unknown_losses, 1);
+  assert.equal(store.xeno_recent_reports[0].ships_lost, null);
+  await bg.processXenoDigReports([report], {});
+  assert.equal(store.xeno_totals.ships_lost, 11);
+  assert.equal(store.xeno_resources_lost.destroyed.ore, 0);
+  await bg.processXenoDigReports([report], SHIPS);
+  assert.equal(store.xeno_resources_lost.destroyed.ore, 1100);
+  assert.equal(store.xeno_resources_lost.repair.ore, 200);
+  assert.equal(store.archive_index.xeno.count, 1);
+  await assert.rejects(bg.processXenoDigReports([{ id: 1 }], SHIPS), /Invalid Xeno/);
+  const invalid = structuredClone(report);
+  invalid.report.delivered.resources.silicates = -1;
+  await assert.rejects(bg.processXenoDigReports([invalid], SHIPS), /Invalid Xeno loot amount/);
+  assert.equal(store.archive_index.xeno.count, 1);
+});
+
+test('Xeno digs retry a failed storage write without duplicate archive or totals', async () => {
+  const store = makeBrowserStub();
+  const bg = await loadBackground();
+  const originalSet = globalThis.browser.storage.local.set;
+  let failed = false;
+  globalThis.browser.storage.local.set = async patch => {
+    if (patch.xeno_totals && !failed) {
+      failed = true;
+      throw new Error('Storage full');
+    }
+    return originalSet(patch);
+  };
+  await assert.rejects(bg.processXenoDigReports(xenoDigReports(), SHIPS), /Storage full/);
+  assert.equal(store.xeno_totals, undefined);
+  await bg.processXenoDigReports(xenoDigReports(), SHIPS);
+  assert.equal(store.xeno_totals.digs, 3);
+  assert.equal(store.archive_index.xeno.count, 3);
+});
+
+test('Xeno purge removes both history and recents and does not reimport seen reports', async () => {
+  const store = makeBrowserStub({ ships: SHIPS });
+  const bg = await loadBackground();
+  const reports = xenoDigReports().map(report => ({ ...report,
+    createdAt: new Date(Date.now() - 30 * 86400000).toISOString() }));
+  await bg.processXenoDigReports(reports, SHIPS);
+  await bg.purgeOldData(3);
+  assert.equal(store.xeno_recent_reports.length, 0);
+  assert.equal(store.archive_index.xeno.count, 0);
+  await bg.processXenoDigReports(reports, SHIPS);
+  assert.equal(store.xeno_totals.digs, 0);
+  assert.equal(store.archive_index.xeno.count, 0);
+});
 
 function surveyReport(id, day, ore = 100) {
   return {

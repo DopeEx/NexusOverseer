@@ -6,7 +6,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- Xeno campaign and account progress, dig reports and statistics show collected
+  rewards and losses; fleet comparisons help prepare digs.
+- Galaxy Scout shows ancient moon traces and supports filtering by trace.
+
 ### Changed
+- Report and galaxy tables use a configurable number of rows per page
+  (25 by default), with refreshed layouts and clearer status badges.
+- Market offers and trade history have separate views.
 - Full backups keep all saved galaxy data and now stream into a compressed
   `.nexus-backup.gz` file. Manual export shows progress and can be cancelled.
   Import checks the archive before changing existing data and still accepts

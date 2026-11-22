@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFile } from 'node:fs/promises';
 import { attentionItems, missionsCard } from '../nexus-addon/tabs/dashboard.js';
 import { missionProgress } from '../nexus-addon/mission-state.js';
 import { loadBackground, makeBrowserStub } from './helpers.js';
@@ -10,6 +11,13 @@ const returnArrivesAt = '2026-10-19T10:30:00.000Z';
 const nextCycleAt = '2026-10-19T10:10:00.000Z';
 const missionStage = mission => missionProgress(mission).label;
 const missionEvent = mission => missionProgress(mission).event;
+
+test('pirate reports table has a keyboard-accessible scroll region', async () => {
+  const html = await readFile(new URL('../nexus-addon/dashboard.html', import.meta.url), 'utf8');
+  assert.match(html, /class="dashboard-table-scroll explore-military-table-scroll" role="region" aria-label="Pirate reports table" tabindex="0"/);
+  assert.match(html, /id="pr-count" class="dashboard-list-count"/);
+  assert.match(html, /id="xn-dig-context"[^>]*><\/p>\s*<\/div>\s*<\/div>\s*<div id="xn-dig-results" hidden><\/div>/);
+});
 
 test('explicit mission statuses take priority over travel timestamps', () => {
   for (const [status, expected] of [

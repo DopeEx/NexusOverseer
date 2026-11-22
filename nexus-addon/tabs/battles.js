@@ -4,7 +4,7 @@
 // there is no extra background aggregation or storage. Span = recent records.
 
 import {
-  PER_PAGE, fmt, escapeHtml, makeStatCard, store, zoneCell, dayKey,
+  combatOutcomeBadge, fmt, escapeHtml, makeStatCard, paginateStatistics, store, zoneCell, dayKey,
   getWindowRange, getZone,
   computeResourcesLost, combinedLost, emptyResources,
   RESOURCE_WEIGHTS, RARE_WEIGHT, EXTRA_RES_KEYS_UI,
@@ -229,18 +229,10 @@ function collectBattles() {
   return rows;
 }
 
-const OUTCOME_WIN = /won|win|victor|success|defender|survi/i;
-const OUTCOME_LOSS = /lost|loss|defeat|destroy|attacker|fail/i;
 // Expeditions carry no combat flag, so a real fight is inferred from the event
 // wording — hazard/anomaly events that merely damage the fleet are not battles.
 // ponytail: keyword heuristic; a combat event with no combat word slips through.
 const COMBAT_EVENT = /combat|battle|ambush|attack|raid|pirate|hostile|fight|skirmish|enemy/i;
-function outcomeColor(o) {
-  if (OUTCOME_WIN.test(o)) return '#7ed957';
-  if (OUTCOME_LOSS.test(o)) return '#ff6b7a';
-  return '#c0cce0';
-}
-
 // Download the given battle rows as CSV (the current filtered/sorted view).
 function exportBattlesCsv(rows) {
   const fleetStr = list => (list || []).filter(x => x.qty).map(x => `${x.qty}x ${x.name}`).join('; ');
@@ -444,9 +436,8 @@ export function renderBattlesTab() {
 
   // Table.
   const sorted = sortRows(view);
-  const totalPages = Math.max(1, Math.ceil(sorted.length / PER_PAGE));
-  if (battlePage > totalPages) battlePage = totalPages;
-  const slice = sorted.slice((battlePage - 1) * PER_PAGE, battlePage * PER_PAGE);
+  const result = paginateStatistics(sorted, battlePage, 'b-page-info', 'b-btn-prev', 'b-btn-next');
+  battlePage = result.page + 1;
 
   const cols = [
     ['created_at', 'Date'], ['source', 'Source'], ['location', 'Location'], ['zone', 'Zone'],
@@ -456,27 +447,28 @@ export function renderBattlesTab() {
   const htr = document.createElement('tr');
   for (const [k, lbl] of cols) {
     const th = document.createElement('th');
-    th.textContent = lbl + (battleSort.key === k ? (battleSort.dir === -1 ? ' ▼' : ' ▲') : '');
-    th.style.cssText = 'cursor:pointer;text-align:left';
-    th.addEventListener('click', () => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = lbl + (battleSort.key === k ? (battleSort.dir === -1 ? ' ▼' : ' ▲') : '');
+    if (battleSort.key === k) th.setAttribute('aria-sort', battleSort.dir === -1 ? 'descending' : 'ascending');
+    button.addEventListener('click', () => {
       battleSort.dir = battleSort.key === k ? -battleSort.dir : -1;
       battleSort.key = k; renderBattlesTab();
     });
+    th.appendChild(button);
     htr.appendChild(th);
   }
   thead.appendChild(htr);
 
   const tbody = document.getElementById('b-reports-tbody');
-  for (const r of slice) {
+  for (const r of result.rows) {
     const tr = document.createElement('tr');
     tr.style.cursor = 'pointer';
     const tdDate = document.createElement('td'); tdDate.textContent = new Date(r.created_at).toLocaleString();
     const tdSrc = document.createElement('td'); tdSrc.textContent = r.source;
     const tdLoc = document.createElement('td'); tdLoc.textContent = r.location;
     const tdOut = document.createElement('td');
-    const badge = document.createElement('span'); badge.className = 'badge';
-    badge.textContent = String(r.outcome).replace(/_/g, ' '); badge.style.color = outcomeColor(r.outcome);
-    tdOut.appendChild(badge);
+    tdOut.appendChild(combatOutcomeBadge(r.outcome, r.youAttacker !== false));
     tr.append(tdDate, tdSrc, tdLoc, zoneCell(r.zone), tdOut,
       numTd(r.lost), numTd(r.damaged),
       r.killed == null ? numTd(0) : numTd(r.killed),
@@ -519,11 +511,7 @@ export function renderBattlesTab() {
   exportBtn.disabled = !sorted.length;
   exportBtn.onclick = () => exportBattlesCsv(sorted);
   const prev = document.getElementById('b-btn-prev');
-  const info = document.getElementById('b-page-info');
   const next = document.getElementById('b-btn-next');
-  prev.disabled = battlePage <= 1;
-  info.textContent = `Page ${battlePage} / ${totalPages} (${sorted.length} total)`;
-  next.disabled = battlePage >= totalPages;
   prev.onclick = () => { battlePage--; renderBattlesTab(); };
   next.onclick = () => { battlePage++; renderBattlesTab(); };
 }

@@ -5,7 +5,9 @@
 // so "buy" filters on offerResource and "sell" on requestResource. Ratio is
 // received-per-given (offerAmount / requestAmount) — higher is a better deal.
 
-import { ALL_RES_COLORS, applySort, attachSortable, fmt, makeStatCard, marketTradeNet, resourceWeight, setStatusText } from '../common.js';
+import { ALL_RES_COLORS, applySort, attachSortable, fmt, formatBadgeLabel, listBadge, makeStatCard, marketTradeNet, resourceWeight, setStatusText } from '../common.js';
+import { paginate, updatePagination } from '../pagination.js';
+import { getSetting, onSettingsChange } from '../settings.js';
 
 let iconBase = 'https://s0.nexuslegacy.space/images/resources/';
 // All tradable resources, always shown as filter icons (basic first, then exotic).
@@ -45,9 +47,18 @@ const res = s => String(s || '').replace(/_/g, ' ');
 let source = 'market';   // 'market' | 'alliance'
 let history = [];
 let historyUserId = null;
-let historyPage = 1;
+let historyPage = 0;
+let offersPage = 0;
 let historyHubNames = {};
-const HISTORY_PER_PAGE = 20;
+let pageSize = getSetting('general.tablePageSize');
+onSettingsChange(settings => {
+  if (settings['general.tablePageSize'] === pageSize) return;
+  pageSize = settings['general.tablePageSize'];
+  if (inited) {
+    renderHistory();
+    renderMarket();
+  }
+});
 
 function byId(id) {
   return document.getElementById(id);
@@ -57,6 +68,33 @@ function on(id, type, handler) {
   const el = byId(id);
   if (!el) return;
   el.addEventListener(type, handler);
+}
+
+const marketViews = ['offers', 'history'];
+function selectMarketView(view) {
+  for (const name of marketViews) {
+    const selected = name === view;
+    const button = byId(`m-tab-${name}`);
+    button.classList.toggle('active', selected);
+    button.setAttribute('aria-selected', String(selected));
+    button.tabIndex = selected ? 0 : -1;
+    byId(`m-${name}-view`).hidden = !selected;
+  }
+}
+
+for (const [index, view] of marketViews.entries()) {
+  on(`m-tab-${view}`, 'click', () => selectMarketView(view));
+  on(`m-tab-${view}`, 'keydown', event => {
+    let next;
+    if (event.key === 'ArrowRight') next = (index + 1) % marketViews.length;
+    if (event.key === 'ArrowLeft') next = (index + marketViews.length - 1) % marketViews.length;
+    if (event.key === 'Home') next = 0;
+    if (event.key === 'End') next = marketViews.length - 1;
+    if (next === undefined) return;
+    event.preventDefault();
+    byId(`m-tab-${marketViews[next]}`).focus();
+    selectMarketView(marketViews[next]);
+  });
 }
 
 attachSortable('m-head', marketSort, () => renderMarket());
@@ -75,21 +113,24 @@ on('m-source', 'change', e => {
 });
 on('m-history-refresh', 'click', () => loadHistory());
 on('m-history-range', 'change', () => {
-  historyPage = 1;
+  historyPage = 0;
   renderHistory();
 });
 on('m-history-prev', 'click', () => {
-  if (historyPage > 1) {
-    historyPage--;
-    renderHistory();
-  }
+  historyPage--;
+  renderHistory();
 });
 on('m-history-next', 'click', () => {
-  const pages = Math.max(1, Math.ceil(filteredHistory().length / HISTORY_PER_PAGE));
-  if (historyPage < pages) {
-    historyPage++;
-    renderHistory();
-  }
+  historyPage++;
+  renderHistory();
+});
+on('m-offers-prev', 'click', () => {
+  offersPage--;
+  renderMarket();
+});
+on('m-offers-next', 'click', () => {
+  offersPage++;
+  renderMarket();
 });
 
 export async function initMarketTab() {
@@ -148,7 +189,7 @@ async function loadHistory() {
   history = data.trades || [];
   historyHubNames = Object.fromEntries((hubs.hubs || []).map(hub => [hub.id, hub.name]));
   history.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  historyPage = 1;
+  historyPage = 0;
   setStatusText(status, `${history.length} trades`);
   renderHistory();
 }
@@ -156,11 +197,8 @@ async function loadHistory() {
 function renderHistory() {
   const stats = byId('m-profit-stats');
   const flowBox = byId('m-resource-flows');
-  const pageInfo = byId('m-history-page');
-  const prev = byId('m-history-prev');
-  const next = byId('m-history-next');
   const tbody = byId('m-history-tbody');
-  if (!stats || !flowBox || !pageInfo || !prev || !next || !tbody) return;
+  if (!stats || !flowBox || !tbody) return;
 
   const list = filteredHistory();
   const flow = {};
@@ -205,9 +243,9 @@ function renderHistory() {
     flowBox.style.color = '';
     for (const [resource, value] of flowEntries) {
       const chip = document.createElement('span');
-      chip.className = 'market-flow-chip';
+      chip.className = 'badge market-flow-chip';
       const label = document.createElement('span');
-      label.textContent = res(resource);
+      label.textContent = formatBadgeLabel(resource);
       const amount = document.createElement('strong');
       amount.className = value >= 0 ? 'positive' : 'negative';
       amount.textContent = `${value >= 0 ? '+' : ''}${fmt(value)}`;
@@ -216,15 +254,18 @@ function renderHistory() {
     }
   }
 
-  const pages = Math.max(1, Math.ceil(normalized.length / HISTORY_PER_PAGE));
-  historyPage = Math.min(Math.max(1, historyPage), pages);
-  pageInfo.textContent = `Page ${historyPage} / ${pages} (${normalized.length} trades)`;
-  prev.disabled = historyPage <= 1;
-  next.disabled = historyPage >= pages;
+  const result = paginate(normalized, historyPage);
+  historyPage = result.page;
+  updatePagination(result, {
+    count: byId('m-history-count'),
+    controls: byId('m-history-pagination'),
+    previous: byId('m-history-prev'),
+    next: byId('m-history-next'),
+    page: byId('m-history-page'),
+  }, `${result.total} trade${result.total === 1 ? '' : 's'}`);
 
   tbody.textContent = '';
-  const pageRows = normalized.slice((historyPage - 1) * HISTORY_PER_PAGE, historyPage * HISTORY_PER_PAGE);
-  if (!pageRows.length) {
+  if (!result.rows.length) {
     const row = document.createElement('tr');
     const cell = document.createElement('td');
     cell.colSpan = 7;
@@ -235,7 +276,7 @@ function renderHistory() {
     return;
   }
 
-  for (const { trade, net } of pageRows) {
+  for (const { trade, net } of result.rows) {
     const row = document.createElement('tr');
     const fromHub = trade.hubName || historyHubNames[trade.hubId] || (trade.hubId != null ? `Hub ${trade.hubId}` : '—');
     const toHub = trade.buyerHubName || historyHubNames[trade.buyerHubId] || '';
@@ -251,8 +292,11 @@ function renderHistory() {
     ];
     values.forEach((value, index) => {
       const cell = document.createElement('td');
-      cell.textContent = value;
-      if (index === 1) cell.style.color = net.soldByMe ? '#ffc070' : '#79c0ff';
+      if (index === 1) {
+        cell.appendChild(listBadge(value, `${net.soldByMe ? 'badge-warning' : 'badge-info'} badge-outline`));
+      } else {
+        cell.textContent = value;
+      }
       if (index === 6) cell.className = net.oreEquivalent >= 0 ? 'market-profit-positive' : 'market-profit-negative';
       row.appendChild(cell);
     });
@@ -266,7 +310,7 @@ async function loadOrders() {
   const hubCol = byId('m-hub-col');
   if (!status || !hubCol) return;
   setStatusText(status, `Loading ${alliance ? 'alliance trade' : 'market'} orders…`);
-  hubCol.textContent = alliance ? 'System' : 'Hub';
+  hubCol.querySelector('button').textContent = alliance ? 'System' : 'Hub';
 
   const toOrder = (o, hub) => ({
     ...o, hub,
@@ -292,7 +336,7 @@ async function loadOrders() {
   buyFilter.clear(); sellFilter.clear();
   drawIcons('m-buy');
   drawIcons('m-sell');
-  setStatusText(status, `${orders.length} open orders.`);
+  setStatusText(status, '');
   renderMarket();
 }
 
@@ -321,16 +365,23 @@ function drawIcons(id) {
 export function renderMarket() {
   const ratioEl = byId('m-ratio-wanted');
   const tbody = byId('m-tbody');
-  const count = byId('m-count');
-  if (!ratioEl || !tbody || !count) return;
+  if (!ratioEl || !tbody) return;
   const ratioWanted = parseFloat(ratioEl.value);
   const rows = applySort('m-head', orders.filter(o =>
     (!buyFilter.size || buyFilter.has(o.offerResource)) &&
     (!sellFilter.size || sellFilter.has(o.requestResource)) &&
     (isNaN(ratioWanted) || o.ratio >= ratioWanted)), marketSort, 'id');
 
+  const result = paginate(rows, offersPage);
+  offersPage = result.page;
+  updatePagination(result, {
+    count: byId('m-offers-count'),
+    controls: byId('m-offers-pagination'),
+    previous: byId('m-offers-prev'),
+    next: byId('m-offers-next'),
+    page: byId('m-offers-page'),
+  }, `${result.total} order${result.total === 1 ? '' : 's'}`);
   tbody.textContent = '';
-  count.textContent = `${rows.length} orders`;
   if (!rows.length) {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
@@ -340,7 +391,7 @@ export function renderMarket() {
     return;
   }
   const med = pairBaselines(orders);
-  for (const o of rows) {
+  for (const o of result.rows) {
     const tr = document.createElement('tr');
     const n = o.rate >= 100 ? Math.round(o.rate) : Math.round(o.rate * 100) / 100;
     const cells = [

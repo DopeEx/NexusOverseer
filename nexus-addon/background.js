@@ -15,6 +15,8 @@ import { createApiScheduler, retryDelay } from './api-scheduler.js';
 import { createTrafficRecorder, trafficSource } from './api-telemetry.js';
 import { asteroidRow, asteroidMatches, retainMiningFields, visibleAsteroidFields, sameAsteroidSearch } from './galaxy-client.js';
 import { backupToDownloads, cancelBackupDownload } from './backup-download.js';
+import { normalizeXenoReport, xenoTotals } from './xeno-reports.js';
+import { hasClassifiedMissions, xenoSurveyFleetError, xenoSurveyLimitError } from './xeno-moon-search.js';
 
 const recordTraffic = createTrafficRecorder({ enabled: () => getSetting('developer.apiWaitRecording') === true });
 const apiScheduler = createApiScheduler({ storage: browser.storage.session, record: recordTraffic });
@@ -223,7 +225,6 @@ const WORMHOLE_PATH = '/api/fleet/wormhole-runs';
 // system message with subject "Xeno Survey Complete", body text like "Your
 // science team finished the xeno survey. 0 fragments recovered, plus an
 // artifact for your collection." No structured loot/moon/zone data at all.
-const XENO_MESSAGES_PATH = '/api/messages/system';
 const SYSTEM_DEBRIS_PATH = '/api/fleet/system-debris';
 const INTEL_KEEP = 200;
 const ALARM = 'nexus-scrape';
@@ -568,6 +569,8 @@ browser.action.onClicked.addListener(async () => {
   browser.tabs.create({ url: browser.runtime.getURL('dashboard.html') });
 });
 
+const xenoDigDispatches = new Set();
+const xenoSurveyDispatches = new Set();
 const handleRuntimeMessage = async (msg, context = null, options = {}) => {
   if (msg?.type === 'GET_UNIVERSES') return getUniverses();
   if (!options.serverOrigin) await syncGameServer();
@@ -576,6 +579,32 @@ const handleRuntimeMessage = async (msg, context = null, options = {}) => {
   if (msg.type === 'GET_SHIP_DEFS') return getShipDefs(options);
   if (msg.type === 'GET_PLANET_SHIPS') return getPlanetShips(msg.planetId, options);
   if (msg.type === 'GET_MISSIONS') return apiGet('/api/fleet/missions', options);
+  if (msg.type === 'GET_XENO_OVERVIEW') {
+    const overview = await apiGet('/api/xeno', options);
+    if (overview?.error) return overview;
+    let failure;
+    const archive = () => enqueue(async () => {
+      try {
+        const { ships } = await browser.storage.local.get('ships');
+        await processXenoDigReports(overview.reports ?? (overview.hasResearch === false ? [] : undefined), ships || {});
+      } catch (error) {
+        failure = error;
+        throw error;
+      }
+    });
+    if (globalThis.nexusStorage?.withServer) {
+      await globalThis.nexusStorage.withServer(options.serverKey, archive);
+    } else {
+      await archive();
+    }
+    return failure ? { error: `Could not archive Xeno reports: ${failure.message}` } : overview;
+  }
+  if (msg.type === 'GET_XENO_LEADERSHIP') return apiGet('/api/leadership', options);
+  if (msg.type === 'GET_XENO_MOON') {
+    const moonId = Number(msg.moonId);
+    if (!Number.isSafeInteger(moonId) || moonId <= 0) return { error: 'Invalid Xeno moon ID.' };
+    return apiGet(`/api/xeno/moons/${moonId}`, options);
+  }
   if (msg.type === 'GET_PIRATE_CAMPS') return apiGet(PIRATE_CAMPS_PATH, options);
   if (msg.type === 'GET_PIRATE_REPORTS') return apiGet(PIRATES_PATH, options);
   if (msg.type === 'REFRESH_DEBRIS') return refreshDebris();
@@ -637,10 +666,71 @@ const handleRuntimeMessage = async (msg, context = null, options = {}) => {
     }, options);
   }
   if (msg.type === 'SEND_XENO_SURVEY') {
-    return gamePost('/api/fleet/xeno-survey', {
-      sourcePlanetId: msg.sourcePlanetId, targetMoonId: msg.targetMoonId, ships: msg.ships,
-      hangarAssignments: {},
-    }, options);
+    if (!msg.serverKey || msg.serverKey !== options.serverKey) return { error: 'The selected server changed. No survey was sent.' };
+    const fleetError = xenoSurveyFleetError(msg.ships);
+    if (fleetError) return { error: fleetError };
+    if (xenoSurveyDispatches.has(options.serverOrigin)) return { error: 'A survey launch is already in progress.' };
+    xenoSurveyDispatches.add(options.serverOrigin);
+    try {
+      const planetFleet = await getPlanetShips(msg.sourcePlanetId, options);
+      const shipError = xenoSurveyFleetError(msg.ships, planetFleet);
+      if (shipError) return { error: shipError };
+      const missionSnapshot = await apiGet('/api/fleet/missions', options);
+      if (!hasClassifiedMissions(missionSnapshot)) {
+        return { error: `Could not check active surveys: ${missionSnapshot?.error || 'Invalid mission response.'}`,
+          missionCheckFailed: true };
+      }
+      const error = xenoSurveyLimitError(missionSnapshot.missions);
+      if (error) return { error, missionSnapshot, surveyLimitReached: true };
+      const response = await gamePost('/api/fleet/xeno-survey', {
+        sourcePlanetId: msg.sourcePlanetId, targetMoonId: msg.targetMoonId, ships: msg.ships,
+        hangarAssignments: {},
+      }, { ...options, retry429: false });
+      return { ...response, missionSnapshot };
+    } finally {
+      xenoSurveyDispatches.delete(options.serverOrigin);
+    }
+  }
+  if (msg.type === 'SEND_XENO_DIG') {
+    if (!msg.serverKey || msg.serverKey !== options.serverKey) return { error: 'The selected server changed. No dig was sent.' };
+    if (!Number.isSafeInteger(msg.chainId) || !Number.isSafeInteger(msg.comparisonAt)) {
+      return { error: 'The dig comparison identity is missing. No dig was sent.' };
+    }
+    if (xenoDigDispatches.has(options.serverOrigin)) return { error: 'A dig launch is already in progress.' };
+    xenoDigDispatches.add(options.serverOrigin);
+    try {
+      const storage = globalThis.nexusStorage?.forServer?.(options.serverKey) || browser.storage.local;
+      const key = 'xeno_dig_launch_guard';
+      const previous = (await storage.get(key))[key];
+      if (previous?.chainId === msg.chainId && previous.comparisonAt >= msg.comparisonAt) {
+        return { error: 'This comparison has already been used for a launch. Check the game and run a new comparison.' };
+      }
+      await storage.set({ [key]: { chainId: msg.chainId, comparisonAt: msg.comparisonAt } });
+      const saved = (await storage.get('xeno_dig_comparison')).xeno_dig_comparison;
+      const simulation = saved?.at === msg.comparisonAt && saved.serverKey === msg.serverKey
+        && saved.launchSimulation?.entranceId === msg.entrance
+        && saved.launchSimulation.mode === msg.mode
+        && JSON.stringify(saved.launchSimulation.candidate?.fleet) === JSON.stringify(msg.ships)
+        ? saved.launchSimulation : null;
+      const response = await gamePost('/api/xeno/dig', {
+        sourcePlanetId: msg.sourcePlanetId, ships: msg.ships, attachLeader: msg.attachLeader,
+        hangarAssignments: {}, mode: msg.mode, entrance: msg.entrance, hall: false,
+      }, { ...options, retry429: false });
+      if (response?.ok && Number.isSafeInteger(response.data?.missionId) && simulation) {
+        try {
+          const archive = (await storage.get('xeno_dig_missions')).xeno_dig_missions || {};
+          archive[response.data.missionId] = { simulation, comparisonAt: msg.comparisonAt,
+            chainId: msg.chainId, siteMoonId: saved.siteMoonId, leadership: saved.leadership };
+          await storage.set({ xeno_dig_missions: archive });
+        } catch (error) {
+          console.error('[NexusOverseer] Dig simulation archive failed after launch:', error);
+          return { ...response, archiveError: error.message };
+        }
+      }
+      return response;
+    } finally {
+      xenoDigDispatches.delete(options.serverOrigin);
+    }
   }
   if (msg.type === 'GET_PLANETS') return getPlanets(options);
   if (msg.type === 'GET_DASHBOARD_OVERVIEW') return getDashboardOverview({ ...options, polite: msg.polite !== false });
@@ -733,9 +823,10 @@ const handleRuntimeMessage = async (msg, context = null, options = {}) => {
 
 const NETWORK_MESSAGES = new Set([
   'GET_FLEET', 'GET_SHIP_DEFS', 'GET_PLANET_SHIPS', 'GET_MISSIONS', 'GET_PIRATE_CAMPS',
+  'GET_XENO_OVERVIEW', 'GET_XENO_MOON', 'GET_XENO_LEADERSHIP',
   'GET_PIRATE_REPORTS', 'GET_FUEL_ESTIMATE', 'GET_SURVEY_COOLDOWNS', 'GET_SURVEY_REPORTS',
   'SEND_MINE', 'SEND_SURVEY', 'SEND_INVESTIGATE', 'COLLECT_DEBRIS', 'COLLECT_SALVAGE',
-  'SEND_EXPEDITION', 'SEND_SCOUT_CAMP', 'SEND_ATTACK_PIRATES', 'SEND_XENO_SURVEY',
+  'SEND_EXPEDITION', 'SEND_SCOUT_CAMP', 'SEND_ATTACK_PIRATES', 'SEND_XENO_SURVEY', 'SEND_XENO_DIG',
   'GET_PLANETS', 'GET_DASHBOARD_OVERVIEW', 'GET_PLAYER_ALLIANCE_TAG', 'GET_AUTH_ME',
   'GET_ALLIANCE', 'GET_PLAYER_RANK', 'GET_RESOURCES', 'GET_MARKET_ORDERS', 'GET_MARKET_TRADES',
   'GET_ALLIANCE_ORDERS', 'START_RESEARCH', 'GET_SYSTEM_PLANETS', 'GET_ARMS',
@@ -779,6 +870,7 @@ browser.runtime.onMessage.addListener(async (msg, sender) => {
         : msg.type?.includes('PIRATE') ? 'pirates'
           : msg.type?.includes('MARKET') || msg.type === 'GET_ALLIANCE_ORDERS' ? 'market'
             : msg.type === 'START_RESEARCH' ? 'research'
+              : msg.type?.includes('XENO') ? 'xeno'
               : msg.type?.includes('SURVEY') ? 'scouting'
         : msg.type === 'API_REQUEST' ? 'content-tool' : 'background-maintenance')),
     serverOrigin: server?.origin || 'https://s0.nexuslegacy.space',
@@ -838,12 +930,12 @@ browser.runtime.onMessage.addListener(async (msg, sender) => {
   if (msg?.type === 'GALAXY_DELTA' && !sourceServer) return { error: 'Galaxy delta requires a game-tab origin.' };
   // Simulations do not access scoped storage. Pin their origin explicitly so
   // a long scrape cannot hold them behind the storage scope for another server.
-  if (msg?.type === 'SIM_RUN' || msg?.type === 'SIM_BOOTSTRAP') {
+  if (msg?.type === 'SIM_RUN' || msg?.type === 'SIM_JOB' || msg?.type === 'SIM_BOOTSTRAP') {
     const storage = globalThis.nexusStorage;
     const server = sourceServer || await (storage?.getSelectedServer?.() ?? storage?.getActiveServer?.());
     const serverOrigin = server?.origin || 'https://s0.nexuslegacy.space';
-    return msg.type === 'SIM_RUN'
-      ? simulateCombat(msg.attacker, msg.defender, serverOrigin)
+    return msg.type === 'SIM_RUN' || msg.type === 'SIM_JOB'
+      ? simulateCombat(msg.attacker, msg.defender, serverOrigin, msg.type === 'SIM_JOB')
       : apiGet('/api/combat-simulator/bootstrap', { serverOrigin, source: 'simulator' });
   }
   const selectedServer = server;
@@ -1582,8 +1674,9 @@ async function getPlanetShips(planetId, options = {}) {
   if (planetId == null) return { error: 'No planet selected.' };
   try {
     const data = await apiFetch(`/api/planets/${planetId}/fleet`, options);
+    if (!Array.isArray(data?.fleet)) return { error: 'Invalid planet fleet response.' };
     const available = {};
-    for (const f of (data.fleet || [])) {
+    for (const f of data.fleet) {
       const qty = (f.quantity || 0) - (f.damagedQuantity || 0);
       if (qty > 0) available[f.shipDefId] = qty;
     }
@@ -1643,7 +1736,7 @@ function simulationRateLimitError(state) {
   };
 }
 
-async function simulateCombat(attacker, defender, serverOrigin) {
+async function simulateCombat(attacker, defender, serverOrigin, useJob = false) {
   if (!attacker?.fleet?.length) return { error: 'Attacker needs at least one ship.' };
   if (!defender?.fleet?.length && !Object.keys(defender?.planetaryDefense?.levels || {}).length) {
     return { error: 'Defender needs ships, or a planetary defence level.' };
@@ -1653,13 +1746,14 @@ async function simulateCombat(attacker, defender, serverOrigin) {
     queue: Promise.resolve(), interval: SIM_MIN_INTERVAL_MS, successes: 0, nextAt: 0, blockedUntil: 0,
   });
   const state = simulationStates.get(serverOrigin);
-  const run = async () => {
+  const request = async (path, method, body) => {
     if (Date.now() < state.blockedUntil) return simulationRateLimitError(state);
     for (let attempt = 0; ; attempt++) {
       const waitMs = Math.max(state.nextAt, state.blockedUntil) - Date.now();
       if (waitMs > 0) await new Promise(resolve => setTimeout(resolve, waitMs));
-      const response = await gamePost('/api/combat-simulator/simulate', { attacker, defender },
-        { retry429: false, serverOrigin, priority: 'bulk', source: 'simulator' });
+      const response = method === 'POST'
+        ? await gamePost(path, body, { retry429: false, serverOrigin, priority: 'bulk', source: 'simulator' })
+        : await scheduledGameRequest(path, { method, serverOrigin, priority: 'bulk', source: 'simulator' });
       if (response?.status !== 429) {
         if (response?.ok) {
           if (++state.successes >= SIM_RECOVERY_SUCCESSES) {
@@ -1689,13 +1783,37 @@ async function simulateCombat(attacker, defender, serverOrigin) {
         Number.isFinite(resetMs) ? resetMs : 0,
       );
       if (exhausted) {
-        await apiScheduler.observe(serverOrigin, '/api/combat-simulator/simulate', {
+        await apiScheduler.observe(serverOrigin, path, {
           status: 429, rateLimitScope: 'simulator',
           retryAfter: String(Math.ceil((state.blockedUntil - Date.now()) / 1000)),
         });
         return simulationRateLimitError(state);
       }
     }
+  };
+  const run = async () => {
+    if (!useJob) {
+      return request('/api/combat-simulator/simulate', 'POST', { attacker, defender });
+    }
+    const submitted = await request('/api/combat-simulator/jobs', 'POST', { attacker, defender, civilianScreen: true });
+    if (!submitted?.ok) return submitted;
+    const ticket = submitted.data?.ticket;
+    if (typeof ticket !== 'string' || !/^[a-zA-Z0-9._-]+$/.test(ticket)) {
+      return { error: 'The simulator did not return a valid job ticket.' };
+    }
+    for (let attempt = 0; attempt < 30; attempt++) {
+      const response = await request(`/api/combat-simulator/jobs/${ticket}`, 'GET');
+      if (!response?.ok) return { error: response?.error || 'Simulator job status request failed.', status: response?.status };
+      if (response.data?.status === 'complete') {
+        if (!response.data.result?.report) return { error: 'The simulator job did not contain a combat report.' };
+        return { ok: true, data: response.data.result };
+      }
+      if (!['pending', 'running'].includes(response.data?.status)) {
+        return { error: `Simulator job failed or returned an unknown status: ${response.data?.status || 'missing'}.` };
+      }
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    return { error: 'Simulator job did not complete after 30 checks.' };
   };
   const result = state.queue.then(run);
   state.queue = result.then(() => {}, () => {});
@@ -1787,7 +1905,7 @@ async function purgeOldData(days = 3) {
     index[type] = { months: keptMonths, count };
   }
   patch.archive_index = index;
-  const recentKeys = ['recent_reports', 'pirate_recent_reports', 'mining_recent_reports', 'exp_recent_reports'];
+  const recentKeys = ['recent_reports', 'pirate_recent_reports', 'mining_recent_reports', 'exp_recent_reports', 'xeno_recent_reports'];
   const recents = await browser.storage.local.get(recentKeys);
   for (const k of recentKeys) if (Array.isArray(recents[k])) patch[k] = recents[k].filter(keep);
   await browser.storage.local.set(patch);
@@ -2861,7 +2979,7 @@ function parseXenoMessage(body) {
   return loot;
 }
 
-async function processXenoReports(messages) {
+async function processLegacyXenoReports(messages) {
   const xenoMsgs = (messages || []).filter(m => m.subject === 'Xeno Survey Complete');
   if (!xenoMsgs.length) return 0;
 
@@ -2914,6 +3032,54 @@ async function processXenoReports(messages) {
       xeno_recent_reports: recent.slice(0, recordsCap),
     });
   }
+  return added;
+}
+
+async function processXenoDigReports(reports, ships) {
+  if (!Array.isArray(reports)) throw new Error('Xeno overview did not contain a report list.');
+  const records = reports.map(normalizeXenoReport);
+  const stored = await browser.storage.local.get(['xeno_seen_ids', 'xeno_recent_reports', 'records_cap']);
+  const seen = new Set(stored.xeno_seen_ids || []);
+  const index = await getArchiveIndex();
+  const keys = index.xeno.months.map(month => `xeno_archive_${month}`);
+  const shards = keys.length ? await browser.storage.local.get(keys) : {};
+  const patch = {};
+  const byId = new Map([
+    ...(stored.xeno_recent_reports || []),
+    ...Object.values(shards).flat(),
+  ].map(record => [record.id, record]));
+  let added = 0;
+  for (const record of records) {
+    if (seen.has(record.id) && !byId.has(record.id)) continue; // Do not restore purged reports.
+    if (!byId.has(record.id)) added++;
+    byId.set(record.id, record);
+    seen.add(record.id);
+  }
+  const all = [...byId.values()].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  const months = {};
+  for (const record of all) {
+    const month = record.created_at.slice(0, 7);
+    (months[month] ||= []).push(record);
+  }
+  for (const [month, monthRecords] of Object.entries(months)) {
+    const key = `xeno_archive_${month}`;
+    if (JSON.stringify(shards[key]) !== JSON.stringify(monthRecords)) patch[key] = monthRecords;
+  }
+  index.xeno = { months: Object.keys(months).sort(), count: all.length };
+  const lost = emptyLost();
+  for (const record of all) {
+    addLossCost(record.ships_destroyed_raw, ships, lost.destroyed);
+    addLossCost(record.ships_damaged_raw, ships, lost.repair, REPAIR_FACTOR);
+  }
+  const daily = {};
+  for (const record of all) (daily[record.created_at.slice(0, 10)] ||= []).push(record);
+  await browser.storage.local.set({
+    ...patch, archive_index: index, xeno_seen_ids: [...seen],
+    xeno_recent_reports: all.slice(0, resolveRecordsCap(stored.records_cap)),
+    xeno_totals: xenoTotals(all), xeno_resources_lost: lost,
+    xeno_daily: Object.entries(daily).map(([day, rows]) => ({ day, ...xenoTotals(rows) }))
+      .sort((a, b) => a.day.localeCompare(b.day)),
+  });
   return added;
 }
 
@@ -3286,28 +3452,20 @@ async function rebuildAggregates() {
     out.exp_daily = Object.values(daily).sort((a, b) => a.day.localeCompare(b.day));
   }
 
-  // Xeno ruins surveys (full loot map per record — fully rebuildable)
+  // Current digs and preserved legacy Xeno reports.
   {
-    const totals = { ore: 0, silicates: 0, hydrogen: 0, alloys: 0, rare: {}, missions: 0, ships_lost: 0 };
     const lost = emptyLost();
     const daily = {};
     for (const r of xenoRecords) {
-      addResources(totals, r.loot || {});
       addLossCost(r.ships_destroyed_raw, ships, lost.destroyed, 1);
-      totals.missions += 1;
-      totals.ships_lost += r.ships_lost || 0;
-
+      addLossCost(r.ships_damaged_raw, ships, lost.repair, REPAIR_FACTOR);
       const day = r.created_at.slice(0, 10);
-      if (!daily[day]) daily[day] = { day, ore: 0, silicates: 0, hydrogen: 0, missions: 0, ships_lost: 0 };
-      daily[day].ore += r.loot?.ore || 0;
-      daily[day].silicates += r.loot?.silicates || 0;
-      daily[day].hydrogen += r.loot?.hydrogen || 0;
-      daily[day].missions += 1;
-      daily[day].ships_lost += r.ships_lost || 0;
+      (daily[day] ||= []).push(r);
     }
-    out.xeno_totals = totals;
+    out.xeno_totals = xenoTotals(xenoRecords);
     out.xeno_resources_lost = lost;
-    out.xeno_daily = Object.values(daily).sort((a, b) => a.day.localeCompare(b.day));
+    out.xeno_daily = Object.entries(daily).map(([day, rows]) => ({ day, ...xenoTotals(rows) }))
+      .sort((a, b) => a.day.localeCompare(b.day));
   }
 
   await browser.storage.local.set(out);
@@ -3531,7 +3689,7 @@ async function scrapeCurrentUniverse({ allowAutoBackup }) {
     await ensureSchema();
     const planetId = await getHomePlanetId();
     const [shipyardData, reportData, pirateData, spyData, campScoutData,
-           miningData, expeditionData, wormholeData, xenoMessagesData, systemDebrisData, missionsData, researchData, pvpData, zones] = await Promise.all([
+           miningData, expeditionData, wormholeData, xenoData, systemDebrisData, missionsData, researchData, pvpData, zones] = await Promise.all([
       apiFetch(`/api/planets/${planetId}/shipyard`).catch(() => null),   // 403s while ships are on patrol — fall back to cached catalog
       apiFetch(REPORTS_PATH),
       apiFetch(PIRATES_PATH),
@@ -3540,7 +3698,7 @@ async function scrapeCurrentUniverse({ allowAutoBackup }) {
       apiFetch(MINING_PATH).catch(() => ({ reports: [] })),
       apiFetch(EXPEDITION_PATH).catch(() => ({ reports: [] })),
       apiFetch(WORMHOLE_PATH).catch(() => ({ runs: [] })),
-      apiFetch(`${XENO_MESSAGES_PATH}?page=1`).catch(() => ({ notifications: [] })),
+      apiFetch('/api/xeno'),
       apiFetch(SYSTEM_DEBRIS_PATH).catch(() => null),
       apiFetch(MISSIONS_PATH).catch(() => ({ missions: [] })),
       apiFetch(RESEARCH_PATH).catch(() => ({ research: [] })),
@@ -3555,6 +3713,7 @@ async function scrapeCurrentUniverse({ allowAutoBackup }) {
     const { wormhole_classes: wormholeClasses, system_zone_by_id: zoneById } =
       await browser.storage.local.get(['wormhole_classes', 'system_zone_by_id']);
 
+    let xenoArchiveError;
     await enqueue(async () => {
       // Shipyard can 403 (e.g. ships on patrol) — reuse the last-known catalog so
       // the rest of the scrape still runs. Ship defs rarely change.
@@ -3571,7 +3730,12 @@ async function scrapeCurrentUniverse({ allowAutoBackup }) {
       const nPirates = await processPirateReports(pirateData.reports || [], ships, campZones);
       const nMining = await processMiningReports(miningData.reports || [], ships, zones);
       await processExpeditionReports(expeditionData.reports || [], wormholeData.runs || [], ships, zones, wormholeZones, wormholeClasses || {});
-      await processXenoReports(xenoMessagesData.notifications || []);
+      try {
+        await processXenoDigReports(xenoData.reports ?? (xenoData.hasResearch === false ? [] : undefined), ships);
+      } catch (error) {
+        xenoArchiveError = error;
+        throw error;
+      }
       if (systemDebrisData) await processSystemDebris(systemDebrisData.debris || [], zones);
       await browser.storage.local.set({
         research: researchData.research || [],
@@ -3584,6 +3748,7 @@ async function scrapeCurrentUniverse({ allowAutoBackup }) {
       await checkDrift();
       console.log(`[NexusOverseer] Scraped ${nSurveys} surveys, ${nPirates} pirate, ${nMining} mining reports.`);
     });
+    if (xenoArchiveError) throw xenoArchiveError;
     if (allowAutoBackup) await maybeAutoBackup();
     await browser.storage.local.set({
       last_scrape: new Date().toISOString(),
@@ -3617,6 +3782,7 @@ const WATCHED_URLS = [
   'https://*.nexuslegacy.space/api/fleet/expedition-reports*',
   'https://*.nexuslegacy.space/api/fleet/wormhole-runs*',
   'https://*.nexuslegacy.space/api/messages/system*',
+  'https://*.nexuslegacy.space/api/xeno',
   'https://*.nexuslegacy.space/api/fleet/system-debris*',
   'https://*.nexuslegacy.space/api/fleet/missions*',
   'https://*.nexuslegacy.space/api/research*',
@@ -3632,8 +3798,9 @@ browser.webRequest.onCompleted.addListener(
   details => {
     if (details.method !== 'GET') return;
     if (details.tabId === -1) return;                       // our own re-fetches
-    if (details.statusCode < 200 || details.statusCode >= 300) return;
     const url = new URL(details.url);
+    if ((details.statusCode < 200 || details.statusCode >= 300)
+      && !(details.statusCode === 304 && url.pathname === '/api/xeno')) return;
     const server = globalThis.nexusStorage?.serverFromUrl?.(url.href);
     if (!server) return;
     const path = url.pathname;
@@ -3680,7 +3847,12 @@ function routeIntercepted(url, json) {
       return;
     }
     if (url.includes('/messages/system')) {
-      await processXenoReports(json.notifications || []);
+      await processLegacyXenoReports(json.notifications || []);
+      return;
+    }
+    if (new URL(url).pathname === '/api/xeno') {
+      const { ships } = await browser.storage.local.get('ships');
+      await processXenoDigReports(json.reports ?? (json.hasResearch === false ? [] : undefined), ships || {});
       return;
     }
     if (url.includes('/api/fleet/reports')) {   // PvP (distinct from *-reports)
@@ -3728,6 +3900,7 @@ export {
   getMarketTrades,
   processSurveyReports, processPirateReports, processMiningReports,
   processPvpReports,
+  processXenoDigReports,
   processExpeditionReports, processSystemDebris, processSpyReports, rebuildAggregates,
   checkDrift, ensureSchema, appendToArchive, loadArchive,
   systemFromLocation, resolveZone, backfillZones, processMissions,

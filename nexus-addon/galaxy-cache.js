@@ -435,6 +435,13 @@ export function prepareGalaxyBackupEntry(entry, preciseOwnership = false) {
       type: 'colonized', systemId: entry.data.systemId, hasColonies: true,
     } };
   }
+  // Keep backups from the interim trace-fetch implementation restorable.
+  if (typeof entry.key === 'string' && entry.key.startsWith('xeno-trace:')) {
+    const { moonId, trace } = entry.data || {};
+    if (!Number.isSafeInteger(moonId) || moonId <= 0 || entry.key !== `xeno-trace:${moonId}` ||
+        typeof trace !== 'string' || !/^[a-z0-9_-]{1,80}$/i.test(trace)) throw new Error('Invalid Xeno moon trace.');
+    return { serverKey: entry.serverKey, key: entry.key, at: entry.at, data: { moonId, trace } };
+  }
   if (!catalogPath(entry.key)) throw new Error('Invalid galaxy backup key.');
   const group = catalogGroup(entry.key);
   if (!Array.isArray(entry.data?.[group])) throw new Error('Invalid galaxy backup catalog.');

@@ -8,6 +8,8 @@ import { backupGalaxyEntries, clearBackupImportStage, clearBackupStorageStage, c
   restoreGalaxyCache, saveCatalog, saveGalaxyDelta, savePublicGalaxy, saveSystem,
   stageBackupStorage } from '../nexus-addon/galaxy-cache.js';
 import { emptyPublicGalaxy } from '../nexus-addon/galaxy-public.js';
+import { normalizeXenoReport, xenoTotals } from '../nexus-addon/xeno-reports.js';
+import { xenoDigReports } from './helpers.js';
 
 const exportedAt = new Date().toISOString();
 const options = { exportedAt, reason: 'manual', includeGalaxy: true };
@@ -68,7 +70,15 @@ test('a compressed full backup restores multiple universes, public data, deltas 
   publicData.systems = Array.from({ length: 2000 }, (_, i) => ({ id: i + 1, name: `Système ${i + 1} 🌌` }));
   await savePublicGalaxy('beta', publicData, 'a'.repeat(64), at);
   const reports = Array.from({ length: 3000 }, (_, id) => ({ id, text: `Étoile 🌌\n${id}` }));
-  await stageBackupStorage({ records_cap: Infinity, 'nexus_server:beta:archived_reports': reports });
+  const digs = xenoDigReports().map(normalizeXenoReport);
+  const storage = {
+    records_cap: Infinity, 'nexus_server:beta:archived_reports': reports,
+    'nexus_server:s0:xeno_archive_2030-01': digs,
+    'nexus_server:s0:xeno_seen_ids': digs.map(report => report.id),
+    'nexus_server:s0:archive_index': { xeno: { months: ['2030-01'], count: digs.length } },
+    'nexus_server:s0:xeno_totals': xenoTotals(digs),
+  };
+  await stageBackupStorage(storage);
 
   const original = await galaxySnapshot();
   const first = original.find(entry => entry.serverKey === 's0' && entry.key === 'system:1');
@@ -77,7 +87,7 @@ test('a compressed full backup restores multiple universes, public data, deltas 
   await restoreGalaxyCache();
 
   const parsed = await stageBackupArchive(archive);
-  assert.deepEqual(parsed, { data: { records_cap: 0, 'nexus_server:beta:archived_reports': reports }, preserveGalaxy: false, exportedAt });
+  assert.deepEqual(parsed, { data: { ...storage, records_cap: 0 }, preserveGalaxy: false, exportedAt });
   assert.deepEqual(await galaxySnapshot(), [], 'validation does not change the live database');
   await commitBackupImportRows();
   assert.deepEqual(await galaxySnapshot(), original);

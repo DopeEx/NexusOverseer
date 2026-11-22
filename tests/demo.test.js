@@ -5,6 +5,7 @@ import test from 'node:test';
 import { createDemoData, demoResponse, DEMO_NOW } from '../tools/demo/fixtures.js';
 import { createDemoServer } from '../tools/demo/server.js';
 import { validatePublicGalaxy } from '../nexus-addon/galaxy-public.js';
+import { asteroidRow, retainMiningFields } from '../nexus-addon/galaxy-client.js';
 
 test('demo public export includes all synthetic hub and station locations without private or upgraded fields', () => {
   const demo = createDemoData();
@@ -31,8 +32,14 @@ test('demo fixtures are deterministic, fresh and internally consistent', () => {
     assert.equal(Object.values(p.fleet.classes).reduce((a, b) => a + b), p.fleet.total);
   }
   for (const mission of data.responses.GET_MISSIONS.missions) {
-    assert.ok(Date.parse(mission.arrivesAt) > DEMO_NOW);
+    assert.ok(Date.parse(mission.arrivesAt) > DEMO_NOW || ['collecting', 'mining', 'surveying'].includes(mission.status));
   }
+  assert.ok(data.responses.GET_MISSIONS.missions.some(m => m.missionType === 'expedition' && m.status === 'exploring'));
+  assert.ok(data.responses.GET_MISSIONS.missions.some(m => m.missionType === 'xeno_survey' && m.cargo._targetMoonId));
+  assert.ok(data.responses.GET_SURVEY_REPORTS.reports.some(r => !r.investigated && r.anomalyExpiresAt));
+  assert.ok(data.responses.GET_SURVEY_REPORTS.reports.some(r => r.uncollectedLoot && r.salvageExpiresAt));
+  assert.ok(data.storage.recent_reports.every(r => r.event_type && data.systems.some(s => s.name === r.system_name)));
+  assert.equal(data.storage.debris_fields.length, 2);
   for (const field of data.fields) {
     assert.equal(field.zone, data.systems.find(s => s.id === field.systemId).securityZone);
   }
@@ -43,9 +50,29 @@ test('demo fixtures are deterministic, fresh and internally consistent', () => {
   assert.notEqual(createDemoData().storage.recent_reports[0].ore, 0);
 });
 
+test('demo keeps a missing asteroid field visible only while its mining mission is active', () => {
+  const data = createDemoData();
+  const mission = data.responses.GET_MISSIONS.missions.find(item => item.missionType === 'mine');
+  const saved = data.storage.asteroid_scan_results.fields.find(field => field.fieldId === mission.targetFieldId);
+  const system = data.systems.find(item => item.id === mission.targetSystemId);
+  assert.equal(saved.systemId, system.id);
+  assert.equal(saved.missing, true);
+  assert.equal(saved.remaining, null);
+  const response = demoResponse(data, { type: 'GET_SYSTEM_PLANETS', systemId: system.id });
+  assert.ok(!response.asteroidFields.some(field => field.id === saved.fieldId));
+  const observations = new Map([[system.id, {
+    fields: response.asteroidFields.map(field => asteroidRow(field, system)),
+    at: DEMO_NOW,
+  }]]);
+  const retained = retainMiningFields([], [saved], new Set([mission.targetFieldId]), observations);
+  assert.equal(retained[0].missing, true);
+  assert.equal(retained[0].remaining, null);
+  assert.deepEqual(retainMiningFields([], [saved], new Set(), observations), []);
+});
+
 test('demo actions fail explicitly instead of falling through to a game API', () => {
   const data = createDemoData();
-  for (const type of ['SEND_MINE', 'SEND_ATTACK_PIRATES', 'SIM_RUN', 'SCRAPE_NOW', 'UNKNOWN']) {
+  for (const type of ['SEND_MINE', 'SEND_ATTACK_PIRATES', 'SEND_XENO_DIG', 'SIM_RUN', 'SCRAPE_NOW', 'UNKNOWN']) {
     assert.match(demoResponse(data, { type }).error, /No game request was sent/);
   }
   const response = demoResponse(data, { type: 'GET_PLANETS' });
@@ -72,6 +99,52 @@ test('demo galaxy lists reuse collected fictional systems, planets and moons wit
   demoResponse(data, { type: 'CLEAR_GALAXY_CACHE' });
   assert.deepEqual(demoResponse(data, { type: 'GET_GALAXY_SCANS' }), { scans: {} });
 });
+
+test('demo Xeno transit mission resolves a named Ancient moon and trace', () => {
+  const data = createDemoData();
+  const mission = data.responses.GET_MISSIONS.missions.find(m => m.missionType === 'xeno_survey');
+  const system = demoResponse(data, { type: 'GET_SYSTEM_PLANETS', systemId: mission.targetSystemId });
+  const moon = system.moons.find(item => item.id === mission.cargo._targetMoonId);
+  const details = demoResponse(data, { type: 'GET_XENO_MOON', moonId: mission.cargo._targetMoonId });
+
+  assert.equal(moon.name, 'Demo Archive Moon');
+  assert.equal(moon.moonType, 'ancient');
+  assert.equal(details.trace, 'observatory');
+  assert.ok(details.cooldownRemainingSeconds > 0);
+});
+
+test('demo Xeno loot uses the documented Sentinel and Open reward profiles', () => {
+  const data = createDemoData();
+  const { reports } = demoResponse(data, { type: 'GET_XENO_OVERVIEW' });
+  for (const dig of reports.filter(report => report.zone === 'sentinel')) {
+    assert.equal(dig.report.delivered.fragments, 0);
+    assert.ok(Object.keys(dig.report.delivered.resources).every(key => key === 'silicates'));
+    assert.ok(Object.keys(dig.report.overflow.resources).every(key => key === 'silicates'));
+  }
+  const open = reports.find(report => report.zone === 'open');
+  assert.ok(open.report.delivered.resources.alloys > 0);
+  assert.ok(open.report.delivered.fragments > 0);
+  assert.ok(Object.keys(open.report.delivered.resources).every(key => key === 'alloys'));
+});
+
+test('demo archive progress links five credited clues to distinct Ancient moon locations', () => {
+  const data = createDemoData();
+  const { chain } = demoResponse(data, { type: 'GET_XENO_OVERVIEW' });
+  assert.equal(chain.clues.length, 5);
+  assert.equal(new Set(chain.clues.map(clue => clue.systemId)).size, 5);
+  assert.ok(chain.site);
+  assert.equal(chain.sideEntrances.length, 2);
+  for (const clue of chain.clues) {
+    const system = demoResponse(data, { type: 'GET_SYSTEM_PLANETS', systemId: clue.systemId });
+    const moon = system.moons.find(item => item.id === clue.moonId);
+    const details = demoResponse(data, { type: 'GET_XENO_MOON', moonId: clue.moonId });
+    assert.equal(moon.name, clue.moonName);
+    assert.equal(moon.moonType, 'ancient');
+    assert.equal(details.trace, chain.trace);
+    assert.equal(details.zone, chain.zone);
+  }
+});
+
 test('demo map models dense concentric zones, an empty core, spiral arms and limited outer visibility without real account data', () => {
   const data = createDemoData();
   assert.equal(data.systems.length, 6000);

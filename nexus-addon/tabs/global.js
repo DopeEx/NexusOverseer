@@ -31,13 +31,14 @@ export function globalRecords() {
   add('Pirates', store.pirate_recent_reports);
   add('Mining', store.mining_recent_reports);
   const normExp = r => {
-    const o = { created_at: r.created_at, zone: r.zone, ships_destroyed_raw: r.ships_destroyed_raw };
+    const o = { created_at: r.created_at, zone: r.zone, ships_destroyed_raw: r.ships_destroyed_raw,
+      ships_damaged_raw: r.ships_damaged_raw };
     for (const k of GLOBAL_RES_KEYS) o[k] = (r.loot && r.loot[k]) || 0;
     return o;
   };
   add('Expeditions', (store.exp_recent_reports || []).filter(r => r.kind !== 'wormhole'), normExp);
   add('Wormhole', (store.exp_recent_reports || []).filter(r => r.kind === 'wormhole'), normExp);
-  add('Xeno', store.xeno_recent_reports, normExp);
+  add('Xeno', store.xeno_history?.length ? store.xeno_history : store.xeno_recent_reports, normExp);
   add('Debris', store.debris_collection_log, r => {
     const o = { created_at: r.collected_at, zone: r.zone };
     for (const k of GLOBAL_RES_KEYS) o[k] = r[k] || 0;
@@ -111,8 +112,11 @@ export function renderGlobalTab() {
     // Expeditions/Wormhole/Xeno store losses as ships_destroyed_raw arrays,
     // not the shipDefId→qty map computeResourcesLost reads — merge those in.
     const rawLost = computeRawLossCost(recs, ships);
+    const rawRepair = computeRawLossCost(recs, ships, 'ships_damaged_raw', 0.5);
     for (const k of ['ore', 'silicates', 'hydrogen', 'alloys']) lost.destroyed[k] += rawLost[k];
     for (const [k, v] of Object.entries(rawLost.rare)) lost.destroyed.rare[k] = (lost.destroyed.rare[k] || 0) + v;
+    for (const k of ['ore', 'silicates', 'hydrogen', 'alloys']) lost.repair[k] += rawRepair[k];
+    for (const [k, v] of Object.entries(rawRepair.rare)) lost.repair.rare[k] = (lost.repair.rare[k] || 0) + v;
     ops = recs.length;
     bySrc = {};
     for (const w of items) bySrc[w.src] = (bySrc[w.src] || 0) + weightedValue(w.r);

@@ -9,7 +9,8 @@
 import { loadGalaxyScans, getSystemPlanets, asteroidRow, asteroidMatches, retainMiningFields, visibleAsteroidFields, sameAsteroidSearch, reconcileAsteroidRows } from '../galaxy-client.js';
 import { loadFleetTemplates } from './fleets.js';
 import { usedFleetSlots } from '../mission-state.js';
-import { ALL_RES_COLORS, clearAvailStrip, editFleetDialog, fmt, fuelEstimate, missionProgress, rememberSelection, rememberedSelections, renderAvailStrip, setStatusText, ZONE_DEFS, listBadge, zoneBadge, allianceBadge } from '../common.js';
+import { getSetting, onSettingsChange } from '../settings.js';
+import { ALL_RES_COLORS, clearAvailStrip, clipboardCopyButton, editFleetDialog, fmt, formatBadgeLabel, fuelEstimate, missionProgress, rememberSelection, rememberedSelections, renderAvailStrip, setStatusText, ZONE_DEFS, listBadge, zoneBadge, allianceBadge } from '../common.js';
 
 const ICON_BASE = 'https://s0.nexuslegacy.space/images/resources/';
 // asteroid fieldType → resource icon + label
@@ -46,7 +47,12 @@ let afStopRequested = false;
 let afGeneration = 0;
 let afSort = { key: 'distance', dir: 1 };
 let afPage = 1;
-const AF_PER_PAGE = 25;
+let afPageSize = getSetting('general.tablePageSize');
+onSettingsChange(settings => {
+  if (settings['general.tablePageSize'] === afPageSize) return;
+  afPageSize = settings['general.tablePageSize'];
+  if (afInited) renderAsteroids();
+});
 
 export function resetAsteroidsTab() {
   afGeneration++;
@@ -104,10 +110,15 @@ async function restoreCachedAsteroidResults(planetId) {
   afFields = cached.fields;
   afRefMS = cached.referenceSystem;
   afPage = 1;
-  const matchingFields = renderAsteroids();
+  renderAsteroids();
+  const config = readLsConfig();
+  const visible = visibleAsteroidFields(afFields, config, afMiningFieldIds);
+  const exceptions = visible.filter(field => field.missing || field.unconfirmed || !asteroidMatches(field, config)).length;
+  const discovered = afFields.filter(field => !field.missing && !field.unconfirmed).length;
   const ageMinutes = Math.max(0, Math.floor((Date.now() - cached.at) / 60000));
   setStatusText(document.getElementById('af-progress'),
-    `Showing cached${cached.incomplete ? ' incomplete' : ''} scan: ${afFields.length} fields discovered, ${matchingFields} match filters (${ageMinutes} min old).`);
+    `Showing cached${cached.incomplete ? ' incomplete' : ''} scan: ${discovered} fields discovered, ${visible.length - exceptions} match filters` +
+    `${exceptions ? ` + ${exceptions} own mission exception${exceptions === 1 ? '' : 's'}` : ''} (${ageMinutes} min old).`);
   return true;
 }
 
@@ -868,12 +879,13 @@ export function renderAsteroids() {
     return cmp * dir;
   });
 
-  const totalPages = Math.max(1, Math.ceil(rows.length / AF_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(rows.length / afPageSize));
   afPage = Math.min(Math.max(1, afPage), totalPages);
+  document.getElementById('af-pagination').hidden = totalPages <= 1;
   document.getElementById('af-page-info').textContent = `Page ${afPage} / ${totalPages}`;
   document.getElementById('af-btn-prev').disabled = afPage <= 1;
   document.getElementById('af-btn-next').disabled = afPage >= totalPages;
-  const pageRows = rows.slice((afPage - 1) * AF_PER_PAGE, afPage * AF_PER_PAGE);
+  const pageRows = rows.slice((afPage - 1) * afPageSize, afPage * afPageSize);
 
   for (const f of pageRows) {
     let tr = existing.get(f.fieldId);
@@ -884,38 +896,27 @@ export function renderAsteroids() {
       ship.textContent = '🚀';
       ship.className = 'asteroids-fleet-ship';
       tr.children[0].appendChild(ship);
+      const systemMain = document.createElement('span');
+      systemMain.className = 'af-system-main';
       const system = document.createElement('span');
       const note = document.createElement('span');
       note.className = 'af-mission-note';
       const badge = document.createElement('span');
-      badge.className = 'af-mission-badge';
-      badge.style.cssText = 'display:inline-block;margin-left:5px;font-size:0.7rem;padding:1px 5px;border-radius:4px;background:#f0883e22;border:1px solid var(--orange);color:var(--orange);vertical-align:middle;';
-      tr.children[1].append(system, note, badge);
+      badge.className = 'badge badge-warning badge-outline af-mission-badge';
+      systemMain.append(system, badge);
+      tr.children[1].append(systemMain, note);
       tr.children[2].appendChild(listBadge('', 'asteroids-type-badge'));
       tr.children[3].appendChild(document.createElement('span'));
       tr.children[6].appendChild(zoneBadge(f.zone));
-      const fieldId = document.createElement('button');
-      fieldId.type = 'button';
-      fieldId.className = 'asteroids-copy-id';
-      fieldId.textContent = String(f.fieldId);
-      fieldId.title = 'Copy field ID';
-      fieldId.onclick = async () => {
-        try {
-          await navigator.clipboard.writeText(String(f.fieldId));
-          fieldId.title = 'Copied';
-          setStatusText(document.getElementById('af-progress'), `Copied ID ${f.fieldId}`);
-        } catch (error) {
-          console.warn('[NexusOverseer] Copying asteroid field ID failed:', error);
-          fieldId.title = 'Copy failed';
-          setStatusText(document.getElementById('af-progress'), `Copy failed: ${error.message}`);
-        }
-      };
-      tr.children[7].appendChild(fieldId);
+      const fieldId = clipboardCopyButton(String(f.fieldId), {
+        title: 'Copy field ID', copied: `Copied ID ${f.fieldId}`, status: document.getElementById('af-progress'),
+      });
+      tr.children[9].appendChild(fieldId);
       const owner = document.createElement('span');
       const alliance = allianceBadge('');
-      tr.children[8].append(owner, alliance);
-      tr.children[10].className = 'af-fuel';
-      tr.children[10].textContent = '…';
+      tr.children[10].append(owner, alliance);
+      tr.children[8].className = 'af-fuel';
+      tr.children[8].textContent = '…';
     }
     tr.dataset.system = f.systemId;
     tr.dataset.field = f.fieldId;
@@ -931,20 +932,20 @@ export function renderAsteroids() {
     const tag = f.ownerName ? allianceTagCache[f.ownerName] : null;
     const owner = f.ownerName || '—';
     const cells = [
-      f.system, String(f.type).replace(/_/g, ' '),
+      f.system, formatBadgeLabel(f.type),
       f.mult == null ? '—' : `×${f.mult}`,
       content,
       f.leftPct == null ? '—' : `${f.leftPct}%`,
       f.zone,
-      String(f.fieldId),
-      owner,
       f.distance == null ? '—' : String(f.distance),
       '…',   // fuel cost, filled async
+      String(f.fieldId),
+      owner,
       f.rec ? `${f.rec.count}× ${f.rec.name}` : '—',
     ];
     cells.forEach((v, i) => {
       const td = tr.children[i + 1];
-      if (i === 0) setText(td.children[0], v);
+      if (i === 0) setText(td.children[0].children[0], v);
       else if (i === 1) {
         setText(td.children[0], v);
         td.children[0].style.color = TYPE_COLOR[f.type] || 'var(--text-muted)';
@@ -952,29 +953,31 @@ export function renderAsteroids() {
       }
       else if (i === 2) {
         setText(td.children[0], v);
-        td.children[0].className = f.mult == null ? '' : 'finder-badge asteroids-mult-badge';
+        td.children[0].className = f.mult == null ? '' : 'badge asteroids-mult-badge';
       }
       else if (i === 5) {
         zoneBadge(f.zone, td.children[0]);
       }
-      else if (i === 6) setText(td.children[0], v);
-      else if (i === 7) {
+      else if (i === 8) setText(td.children[0], v);
+      else if (i === 9) {
         setText(td.children[0], owner);
-        td.children[0].className = f.ownerName ? 'finder-badge' : '';
+        td.children[0].className = f.ownerName ? 'badge' : '';
         setText(td.children[1], tag ? `[${tag}]` : '');
         td.children[1].hidden = !tag;
       }
-      else if (i !== 9) setText(td, v);
+      else if (i !== 7) setText(td, v);
     });
     const own = afMiningFieldIds.has(f.fieldId);
-    const note = own ? (f.missing ? 'Field no longer present - own mining mission still active'
-        : f.unconfirmed ? 'Field not rechecked - own mining mission still active'
-          : !asteroidMatches(f, config) ? 'Own mining mission - outside filters' : '') : '';
+    const [note, description] = own ? (f.missing
+      ? ['Field missing', 'Field no longer present - own mining mission still active']
+      : f.unconfirmed ? ['Not rechecked', 'Field not rechecked - own mining mission still active']
+        : !asteroidMatches(f, config) ? ['Outside filters', 'Own mining mission - outside filters'] : ['', '']) : ['', ''];
     const label = tr.children[1].children[1];
-    setText(label, note ? ` · ${note}` : '');
+    setText(label, note);
+    label.title = description;
     label.hidden = !note;
     const missions = afMissions.filter(m => m.missionType === 'mine' && m.targetFieldId === f.fieldId);
-    const badge = tr.children[1].children[2];
+    const badge = tr.children[1].children[0].children[1];
     setText(badge, missions.length > 1 ? `⛏ ×${missions.length}` : '⛏');
     badge.hidden = !missions.length;
     badge.style.display = missions.length ? 'inline-block' : 'none';

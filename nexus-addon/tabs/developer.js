@@ -169,10 +169,10 @@ function renderStream(kind) {
     const data = item.data;
     if (kind === 'api') {
       const method = String(data.method || 'API').toUpperCase();
-      const methodColor = { GET: 'get', POST: 'post', PUT: 'put', PATCH: 'put', DELETE: 'delete' }[method] || 'neutral';
-      heading.append(element('span', method, `debug-badge debug-method-${methodColor}`));
+      const tone = { GET: 'badge-success', POST: 'badge-info', PUT: 'badge-warning', PATCH: 'badge-warning', DELETE: 'badge-error' }[method] || '';
+      heading.append(element('span', method, `badge badge-outline ${tone}`.trim()));
     } else if (kind === 'galaxy') {
-      heading.append(element('span', data.payload?.type || 'delta', 'debug-badge debug-method-put'));
+      heading.append(element('span', data.payload?.type || 'delta', 'badge badge-warning badge-outline'));
     }
     const description = kind === 'api'
       ? data.path || (data.truncated ? 'API request (details unavailable in older truncated entry)' : 'API request')
@@ -180,11 +180,11 @@ function renderStream(kind) {
         : kind === 'galaxy' ? `System ID: ${data.payload?.systemId ?? '-'}` : websocketTitle(data);
     heading.append(element('span', description, 'debug-entry-path'));
     if (kind === 'api' && data.status != null) {
-      const category = data.status >= 200 && data.status < 300 ? 'success'
-        : data.status >= 300 && data.status < 400 ? 'redirect' : data.status >= 400 || data.status === 0 ? 'failure' : 'neutral';
-      heading.append(element('span', String(data.status), `debug-badge debug-status-${category}`));
+      const tone = data.status >= 200 && data.status < 300 ? 'badge-success'
+        : data.status >= 300 && data.status < 400 ? 'badge-warning' : data.status >= 400 || data.status === 0 ? 'badge-error' : '';
+      heading.append(element('span', String(data.status), `badge ${tone}`.trim()));
     }
-    if (data.truncated) heading.append(element('span', 'Truncated', 'debug-badge debug-method-put'));
+    if (data.truncated) heading.append(element('span', 'Truncated', 'badge badge-warning'));
     const timestamp = element('time', time(item.timestamp), 'debug-entry-time');
     if (Number.isFinite(item.timestamp)) timestamp.dateTime = new Date(item.timestamp).toISOString();
     heading.append(timestamp, copyButton('Copy entry', item));

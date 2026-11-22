@@ -37,9 +37,10 @@
     <button class="tab main-tab active" data-tab="dashboard"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg><span>Dashboard</span></button>
     <button class="tab main-tab" data-tab="statistics"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg><span>Statistics</span></button>
     <div class="nav-group">Explore</div>
-    <button class="tab main-tab expert-only" data-tab="scouting"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg><span>Scouting</span></button>
+    <button class="tab main-tab" data-tab="scouting"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg><span>Scouting</span></button>
     <button class="tab main-tab" data-tab="asteroids"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 13-8.381 8.38a1 1 0 0 1-3.001-3L11 9.999"/><path d="M15.973 4.027A13 13 0 0 0 5.902 2.373c-1.398.342-1.092 2.158.277 2.601a19.9 19.9 0 0 1 5.822 3.024"/><path d="M16.001 11.999a19.9 19.9 0 0 1 3.024 5.824c.444 1.369 2.26 1.676 2.603.278A13 13 0 0 0 20 8.069"/><path d="M18.352 3.352a1.205 1.205 0 0 0-1.704 0l-5.296 5.296a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l5.296-5.296a1.205 1.205 0 0 0 0-1.704z"/></svg><span>Asteroids</span></button>
-    <button class="tab main-tab expert-only" data-tab="expeditions"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg><span>Expeditions</span></button>
+    <button class="tab main-tab" data-tab="expeditions"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg><span>Expeditions</span></button>
+    <button class="tab main-tab" data-tab="xeno"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18M5.64 5.64l12.72 12.72M18.36 5.64 5.64 18.36"/></svg><span>Xeno</span></button>
     <button class="tab main-tab" data-tab="finder"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span>Galaxy Scout</span></button>
     <div class="nav-group">Military</div>
     <button class="tab main-tab" data-tab="pirates"><svg class="sidebar-link-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12.5 17-.5-1-.5 1h1z"/><path d="M15 22a1 1 0 0 0 1-1v-1a2 2 0 0 0 1.56-3.25 8 8 0 1 0-11.12 0A2 2 0 0 0 8 20v1a1 1 0 0 0 1 1z"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="12" r="1"/></svg><span>Pirates</span></button>
@@ -223,6 +224,9 @@
         <select class="opt-input" data-setting="general.numberFormat">
           <option value="de">German (1.234.567)</option><option value="en">English (1,234,567)</option><option value="compact">Compact (1,2 Mio.)</option>
         </select>
+      </label>
+      <label class="opt-row"><span>Rows per table page</span>
+        <input class="opt-input" data-setting="general.tablePageSize" type="number" min="1" step="1" required />
       </label>
       <label class="opt-row"><span>Open this tab on start</span>
         <select class="opt-input" data-setting="general.defaultTab">
@@ -472,37 +476,39 @@
       </div>
     </div>
 
-    <div class="reports-section statistics-list-panel">
-      <div class="reports-header">
-        <h2>Recent Reports</h2>
-        <div class="pagination">
-          <button id="btn-prev">← Prev</button>
-          <span id="page-info">Page 1</span>
-          <button id="btn-next">Next →</button>
+    <div class="reports-section dashboard-panel explore-military-table-panel">
+      <div class="dashboard-table-scroll explore-military-table-scroll statistics-table-scroll" role="region" aria-label="Survey reports table" tabindex="0">
+        <table>
+          <thead id="reports-head">
+            <tr>
+              <th class="sortable" data-key="created_at"><button type="button">Date</button></th>
+              <th class="sortable" data-key="system_name"><button type="button">System</button></th>
+              <th class="sortable" data-key="zone"><button type="button">Zone</button></th>
+              <th class="sortable" data-key="event_type"><button type="button">Event</button></th>
+              <th class="sortable" data-key="ore"><button type="button">Ore</button></th>
+              <th class="sortable" data-key="hydrogen"><button type="button">Hydrogen</button></th>
+              <th class="sortable" data-key="silicates"><button type="button">Silicates</button></th>
+              <th class="sortable" data-key="alloys"><button type="button">Alloys</button></th>
+              <th class="sortable" data-key="ice"><button type="button">Ice</button></th>
+              <th class="sortable" data-key="quantum_dust"><button type="button">Quantum Dust</button></th>
+              <th class="sortable" data-key="plasma_core"><button type="button">Plasma Core</button></th>
+              <th class="sortable" data-key="dark_matter"><button type="button">Dark Matter</button></th>
+              <th class="sortable" data-key="antimatter"><button type="button">Antimatter</button></th>
+              <th class="sortable" data-key="ships_lost"><button type="button">Ships lost</button></th>
+              <th class="sortable" data-key="ships_damaged"><button type="button">Ships damaged</button></th>
+            </tr>
+          </thead>
+          <tbody id="reports-tbody"></tbody>
+        </table>
+      </div>
+      <div class="table-footer">
+        <span id="page-info-count" class="dashboard-list-count"></span>
+        <div id="page-info-controls" class="table-pagination" hidden>
+          <button id="btn-prev" class="toolbar-button secondary-button" type="button">Previous</button>
+          <span id="page-info" class="dashboard-list-count"></span>
+          <button id="btn-next" class="toolbar-button secondary-button" type="button">Next</button>
         </div>
       </div>
-      <table>
-        <thead id="reports-head">
-          <tr>
-            <th class="sortable" data-key="created_at">Date</th>
-            <th class="sortable" data-key="system_name">System</th>
-            <th class="sortable" data-key="zone">Zone</th>
-            <th class="sortable" data-key="event_type">Event</th>
-            <th class="sortable" data-key="ore">Ore</th>
-            <th class="sortable" data-key="hydrogen">Hydrogen</th>
-            <th class="sortable" data-key="silicates">Silicates</th>
-            <th class="sortable" data-key="alloys">Alloys</th>
-            <th class="sortable" data-key="ice">Ice</th>
-            <th class="sortable" data-key="quantum_dust">Quantum Dust</th>
-            <th class="sortable" data-key="plasma_core">Plasma Core</th>
-            <th class="sortable" data-key="dark_matter">Dark Matter</th>
-            <th class="sortable" data-key="antimatter">Antimatter</th>
-            <th class="sortable" data-key="ships_lost">Ships lost</th>
-            <th class="sortable" data-key="ships_damaged">Ships damaged</th>
-          </tr>
-        </thead>
-        <tbody id="reports-tbody"></tbody>
-      </table>
     </div>
   </div>
 
@@ -528,6 +534,7 @@
       </div>
       <div class="toolbar-row toolbar-row-meta">
         <span id="pc-status" class="toolbar-meta-text"></span>
+        <span id="pr-status" class="toolbar-meta-text" role="status" aria-live="polite"></span>
       </div>
     </div>
     <div class="reports-section mission-panel">
@@ -536,7 +543,7 @@
         <span id="pc-count" class="mission-count"></span>
         <button id="pc-refresh" class="toolbar-button secondary-button">Refresh</button>
       </div>
-      <div class="panel-toolbar pc-auto-box">
+      <div class="panel-toolbar pc-auto-box expert-only">
         <div class="pc-auto-row">
           <input type="checkbox" id="pc-auto" class="m-switch" title="Automate camp scouting">
           <span class="panel-toolbar-label">Automate Scouting</span>
@@ -545,7 +552,7 @@
           </label>
           <span id="pc-auto-status" class="panel-toolbar-status">Status: -</span>
         </div>
-        <div class="pc-auto-row expert-only">
+        <div class="pc-auto-row">
           <input type="checkbox" id="pc-auto-attack" class="m-switch" title="Automate camp attacks">
           <span class="panel-toolbar-label">Automate Attacks</span>
           <label class="panel-toolbar-field" title="Maximum number of attack fleets in flight">Max fleets
@@ -560,29 +567,35 @@
       <div id="pc-list" class="sc-debris-list"></div>
     </div>
 
-    <div class="reports-section mission-panel">
-      <div class="reports-header">
-        <h2>Pirate reports</h2>
-        <span id="pr-count" class="mission-count"></span>
-      </div>
-      <div>
-        <table>
-          <thead>
-            <tr>
-              <th>Time</th>
-              <th>Camp</th>
-              <th>Result</th>
-              <th>Rounds</th>
-              <th>Sent</th>
-              <th>Pirates</th>
-              <th>Own losses</th>
-              <th>Pirate losses</th>
-              <th>Loot</th>
-              <th>Debris</th>
-            </tr>
-          </thead>
-          <tbody id="pr-tbody"></tbody>
-        </table>
+    <div class="reports-section dashboard-list-panel">
+      <div class="dashboard-panel explore-military-table-panel">
+        <div class="dashboard-table-scroll explore-military-table-scroll" role="region" aria-label="Pirate reports table" tabindex="0">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Camp</th>
+                <th>Result</th>
+                <th>Rounds</th>
+                <th>Sent</th>
+                <th>Pirates</th>
+                <th>Own losses</th>
+                <th>Pirate losses</th>
+                <th>Loot</th>
+                <th>Debris</th>
+              </tr>
+            </thead>
+            <tbody id="pr-tbody"></tbody>
+          </table>
+        </div>
+        <div class="table-footer">
+          <span id="pr-count" class="dashboard-list-count"></span>
+          <div id="pr-pagination" class="table-pagination" hidden>
+            <button id="pr-prev" class="toolbar-button secondary-button" type="button">Previous</button>
+            <span id="pr-page" class="dashboard-list-count"></span>
+            <button id="pr-next" class="toolbar-button secondary-button" type="button">Next</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -616,38 +629,40 @@
       </div>
     </div>
 
-    <div class="reports-section statistics-list-panel">
-      <div class="reports-header">
-        <h2>Recent Raids</h2>
-        <div class="pagination">
-          <button id="p-btn-prev">← Prev</button>
-          <span id="p-page-info">Page 1</span>
-          <button id="p-btn-next">Next →</button>
+    <div class="reports-section dashboard-panel explore-military-table-panel">
+      <div class="dashboard-table-scroll explore-military-table-scroll statistics-table-scroll" role="region" aria-label="Pirate raid reports table" tabindex="0">
+        <table>
+          <thead id="p-reports-head">
+            <tr>
+              <th class="sortable" data-key="created_at"><button type="button">Date</button></th>
+              <th class="sortable" data-key="camp_id"><button type="button">Camp</button></th>
+              <th class="sortable" data-key="zone"><button type="button">Zone</button></th>
+              <th class="sortable" data-key="outcome"><button type="button">Outcome</button></th>
+              <th class="sortable" data-key="ore"><button type="button">Ore</button></th>
+              <th class="sortable" data-key="hydrogen"><button type="button">Hydrogen</button></th>
+              <th class="sortable" data-key="silicates"><button type="button">Silicates</button></th>
+              <th class="sortable" data-key="alloys"><button type="button">Alloys</button></th>
+              <th class="sortable" data-key="ice"><button type="button">Ice</button></th>
+              <th class="sortable" data-key="quantum_dust"><button type="button">Quantum Dust</button></th>
+              <th class="sortable" data-key="plasma_core"><button type="button">Plasma Core</button></th>
+              <th class="sortable" data-key="dark_matter"><button type="button">Dark Matter</button></th>
+              <th class="sortable" data-key="antimatter"><button type="button">Antimatter</button></th>
+              <th class="sortable" data-key="ships_lost"><button type="button">Ships destroyed</button></th>
+              <th class="sortable" data-key="ships_damaged"><button type="button">Ships damaged</button></th>
+              <th class="sortable" data-key="pirates_destroyed"><button type="button">Pirates destroyed</button></th>
+            </tr>
+          </thead>
+          <tbody id="p-reports-tbody"></tbody>
+        </table>
+      </div>
+      <div class="table-footer">
+        <span id="p-page-info-count" class="dashboard-list-count"></span>
+        <div id="p-page-info-controls" class="table-pagination" hidden>
+          <button id="p-btn-prev" class="toolbar-button secondary-button" type="button">Previous</button>
+          <span id="p-page-info" class="dashboard-list-count"></span>
+          <button id="p-btn-next" class="toolbar-button secondary-button" type="button">Next</button>
         </div>
       </div>
-      <table>
-        <thead id="p-reports-head">
-          <tr>
-            <th class="sortable" data-key="created_at">Date</th>
-            <th class="sortable" data-key="camp_id">Camp</th>
-            <th class="sortable" data-key="zone">Zone</th>
-            <th class="sortable" data-key="outcome">Outcome</th>
-            <th class="sortable" data-key="ore">Ore</th>
-            <th class="sortable" data-key="hydrogen">Hydrogen</th>
-            <th class="sortable" data-key="silicates">Silicates</th>
-            <th class="sortable" data-key="alloys">Alloys</th>
-            <th class="sortable" data-key="ice">Ice</th>
-            <th class="sortable" data-key="quantum_dust">Quantum Dust</th>
-            <th class="sortable" data-key="plasma_core">Plasma Core</th>
-            <th class="sortable" data-key="dark_matter">Dark Matter</th>
-            <th class="sortable" data-key="antimatter">Antimatter</th>
-            <th class="sortable" data-key="ships_lost">Ships destroyed</th>
-            <th class="sortable" data-key="ships_damaged">Ships damaged</th>
-            <th class="sortable" data-key="pirates_destroyed">Pirates destroyed</th>
-          </tr>
-        </thead>
-        <tbody id="p-reports-tbody"></tbody>
-      </table>
     </div>
   </div>
 
@@ -680,38 +695,40 @@
       </div>
     </div>
 
-    <div class="reports-section statistics-list-panel">
-      <div class="reports-header">
-        <h2>Recent Deliveries</h2>
-        <div class="pagination">
-          <button id="m-btn-prev">← Prev</button>
-          <span id="m-page-info">Page 1</span>
-          <button id="m-btn-next">Next →</button>
+    <div class="reports-section dashboard-panel explore-military-table-panel">
+      <div class="dashboard-table-scroll explore-military-table-scroll statistics-table-scroll" role="region" aria-label="Mining deliveries table" tabindex="0">
+        <table>
+          <thead id="m-reports-head">
+            <tr>
+              <th class="sortable" data-key="created_at"><button type="button">Date</button></th>
+              <th class="sortable" data-key="location"><button type="button">Location</button></th>
+              <th class="sortable" data-key="zone"><button type="button">Zone</button></th>
+              <th class="sortable" data-key="ore"><button type="button">Ore</button></th>
+              <th class="sortable" data-key="silicates"><button type="button">Silicates</button></th>
+              <th class="sortable" data-key="hydrogen"><button type="button">Hydrogen</button></th>
+              <th class="sortable" data-key="alloys"><button type="button">Alloys</button></th>
+              <th class="sortable" data-key="cryo_ice"><button type="button">Cryo-Ice</button></th>
+              <th class="sortable" data-key="quantum_dust"><button type="button">Quantum Dust</button></th>
+              <th class="sortable" data-key="plasma_core"><button type="button">Plasma Core</button></th>
+              <th class="sortable" data-key="dark_matter"><button type="button">Dark Matter</button></th>
+              <th class="sortable" data-key="antimatter"><button type="button">Antimatter</button></th>
+              <th class="sortable" data-key="cycles"><button type="button">Cycles</button></th>
+              <th class="sortable" data-key="drill_breakdowns"><button type="button">Breakdowns</button></th>
+              <th title="Estimated hydrogen fuel for this fleet/trip (POST fuel-estimate)">Fuel cost</th>
+              <th title="Weighted value: mined − breakdown − fuel − ship loss − stolen (ore×1, sil×2, hyd×3, alloys×5, exotics×10)">ROI</th>
+            </tr>
+          </thead>
+          <tbody id="m-reports-tbody"></tbody>
+        </table>
+      </div>
+      <div class="table-footer">
+        <span id="m-page-info-count" class="dashboard-list-count"></span>
+        <div id="m-page-info-controls" class="table-pagination" hidden>
+          <button id="m-btn-prev" class="toolbar-button secondary-button" type="button">Previous</button>
+          <span id="m-page-info" class="dashboard-list-count"></span>
+          <button id="m-btn-next" class="toolbar-button secondary-button" type="button">Next</button>
         </div>
       </div>
-      <table>
-        <thead id="m-reports-head">
-          <tr>
-            <th class="sortable" data-key="created_at">Date</th>
-            <th class="sortable" data-key="location">Location</th>
-            <th class="sortable" data-key="zone">Zone</th>
-            <th class="sortable" data-key="ore">Ore</th>
-            <th class="sortable" data-key="silicates">Silicates</th>
-            <th class="sortable" data-key="hydrogen">Hydrogen</th>
-            <th class="sortable" data-key="alloys">Alloys</th>
-            <th class="sortable" data-key="cryo_ice">Cryo-Ice</th>
-            <th class="sortable" data-key="quantum_dust">Quantum Dust</th>
-            <th class="sortable" data-key="plasma_core">Plasma Core</th>
-            <th class="sortable" data-key="dark_matter">Dark Matter</th>
-            <th class="sortable" data-key="antimatter">Antimatter</th>
-            <th class="sortable" data-key="cycles">Cycles</th>
-            <th class="sortable" data-key="drill_breakdowns">Breakdowns</th>
-            <th title="Estimated hydrogen fuel for this fleet/trip (POST fuel-estimate)">Fuel cost</th>
-            <th title="Weighted value: mined − breakdown − fuel − ship loss − stolen (ore×1, sil×2, hyd×3, alloys×5, exotics×10)">ROI</th>
-          </tr>
-        </thead>
-        <tbody id="m-reports-tbody"></tbody>
-      </table>
     </div>
   </div>
 
@@ -722,6 +739,7 @@
         <span class="toolbar-label">Source</span>
         <select id="battles-source" class="toolbar-select"></select>
       </label>
+      <button id="b-export" class="toolbar-button secondary-button" type="button">Export CSV</button>
     </div>
     <div class="section-label">Combat</div>
     <div class="stats" id="b-stats-combat"></div>
@@ -736,20 +754,21 @@
     <div class="stats" id="b-stats-net"></div>
     </section>
 
-    <div class="reports-section statistics-list-panel">
-      <div class="reports-header">
-        <h2>Recent battles</h2>
-        <button id="b-export" type="button">Export CSV</button>
-        <div class="pagination">
-          <button id="b-btn-prev" type="button">&lt; Prev</button>
-          <span id="b-page-info">Page 1</span>
-          <button id="b-btn-next" type="button">Next &gt;</button>
+    <div class="reports-section dashboard-panel explore-military-table-panel">
+      <div class="dashboard-table-scroll explore-military-table-scroll statistics-table-scroll" role="region" aria-label="Battles table" tabindex="0">
+        <table>
+          <thead id="b-reports-head"></thead>
+          <tbody id="b-reports-tbody"></tbody>
+        </table>
+      </div>
+      <div class="table-footer">
+        <span id="b-page-info-count" class="dashboard-list-count"></span>
+        <div id="b-page-info-controls" class="table-pagination" hidden>
+          <button id="b-btn-prev" class="toolbar-button secondary-button" type="button">Previous</button>
+          <span id="b-page-info" class="dashboard-list-count"></span>
+          <button id="b-btn-next" class="toolbar-button secondary-button" type="button">Next</button>
         </div>
       </div>
-      <table>
-        <thead id="b-reports-head"></thead>
-        <tbody id="b-reports-tbody"></tbody>
-      </table>
     </div>
   </div>
 
@@ -776,46 +795,64 @@
       </div>
     </div>
 
-    <div class="reports-section statistics-list-panel">
-      <div class="reports-header"><h2>Active debris runs</h2></div>
-      <table>
-        <thead>
-          <tr>
-            <th>Fleet</th><th>Target</th><th>Zone</th><th>Status</th>
-            <th>Cargo</th><th>ETA</th>
-          </tr>
-        </thead>
-        <tbody id="d-active-tbody"></tbody>
-      </table>
+    <div class="reports-section dashboard-panel explore-military-table-panel">
+      <div class="dashboard-table-scroll explore-military-table-scroll statistics-table-scroll" role="region" aria-label="Active debris runs table" tabindex="0">
+        <table>
+          <thead>
+            <tr>
+              <th>Fleet</th><th>Target</th><th>Zone</th><th>Status</th>
+              <th>Cargo</th><th>ETA</th>
+            </tr>
+          </thead>
+          <tbody id="d-active-tbody"></tbody>
+        </table>
+      </div>
+      <div class="table-footer">
+        <span id="d-active-page-info-count" class="dashboard-list-count"></span>
+        <div id="d-active-page-info-controls" class="table-pagination" hidden>
+          <button id="d-active-prev" class="toolbar-button secondary-button" type="button">Previous</button>
+          <span id="d-active-page-info" class="dashboard-list-count"></span>
+          <button id="d-active-next" class="toolbar-button secondary-button" type="button">Next</button>
+        </div>
+      </div>
     </div>
 
-    <div class="reports-section statistics-list-panel">
-      <div class="reports-header"><h2>Recent debris collections</h2></div>
-      <table>
-        <thead id="d-collected-head">
-          <tr>
-            <th class="sortable" data-key="collected_at">Recorded</th>
-            <th class="sortable" data-key="system">System</th>
-            <th class="sortable" data-key="zone">Zone</th>
-            <th class="sortable" data-key="ore">Ore</th>
-            <th class="sortable" data-key="silicates">Silicates</th>
-            <th class="sortable" data-key="alloys">Alloys</th>
-            <th class="sortable" data-key="hydrogen">Hydrogen</th>
-            <th class="sortable" data-key="ice">Ice</th>
-            <th class="sortable" data-key="quantum_dust">Quantum Dust</th>
-            <th class="sortable" data-key="plasma_core">Plasma Core</th>
-            <th class="sortable" data-key="dark_matter">Dark Matter</th>
-            <th class="sortable" data-key="antimatter">Antimatter</th>
-          </tr>
-        </thead>
-        <tbody id="d-collected-tbody"></tbody>
-      </table>
+    <div class="reports-section dashboard-panel explore-military-table-panel">
+      <div class="dashboard-table-scroll explore-military-table-scroll statistics-table-scroll" role="region" aria-label="Debris collections table" tabindex="0">
+        <table>
+          <thead id="d-collected-head">
+            <tr>
+              <th class="sortable" data-key="collected_at"><button type="button">Recorded</button></th>
+              <th class="sortable" data-key="system"><button type="button">System</button></th>
+              <th class="sortable" data-key="zone"><button type="button">Zone</button></th>
+              <th class="sortable" data-key="ore"><button type="button">Ore</button></th>
+              <th class="sortable" data-key="silicates"><button type="button">Silicates</button></th>
+              <th class="sortable" data-key="alloys"><button type="button">Alloys</button></th>
+              <th class="sortable" data-key="hydrogen"><button type="button">Hydrogen</button></th>
+              <th class="sortable" data-key="ice"><button type="button">Ice</button></th>
+              <th class="sortable" data-key="quantum_dust"><button type="button">Quantum Dust</button></th>
+              <th class="sortable" data-key="plasma_core"><button type="button">Plasma Core</button></th>
+              <th class="sortable" data-key="dark_matter"><button type="button">Dark Matter</button></th>
+              <th class="sortable" data-key="antimatter"><button type="button">Antimatter</button></th>
+            </tr>
+          </thead>
+          <tbody id="d-collected-tbody"></tbody>
+        </table>
+      </div>
+      <div class="table-footer">
+        <span id="d-collected-page-info-count" class="dashboard-list-count"></span>
+        <div id="d-collected-page-info-controls" class="table-pagination" hidden>
+          <button id="d-collected-prev" class="toolbar-button secondary-button" type="button">Previous</button>
+          <span id="d-collected-page-info" class="dashboard-list-count"></span>
+          <button id="d-collected-next" class="toolbar-button secondary-button" type="button">Next</button>
+        </div>
+      </div>
     </div>
 
   </div>
 
   <div id="expeditions-content" class="expeditions-dashboard statistics-split-layout" style="display:none;">
-    <div class="expert-only">
+    <div>
       <div class="toolbar-panel expeditions-launch-toolbar">
         <label>Launch From
           <select id="e-launch-planet"></select>
@@ -886,36 +923,38 @@
       </div>
     </div>
 
-    <div class="reports-section statistics-list-panel">
-      <div class="reports-header">
-        <h2>Recent Missions</h2>
-        <div class="pagination">
-          <button id="e-btn-prev">← Prev</button>
-          <span id="e-page-info">Page 1</span>
-          <button id="e-btn-next">Next →</button>
+    <div class="reports-section dashboard-panel explore-military-table-panel">
+      <div class="dashboard-table-scroll explore-military-table-scroll statistics-table-scroll" role="region" aria-label="Expedition missions table" tabindex="0">
+        <table>
+          <thead id="e-reports-head">
+            <tr>
+              <th class="sortable" data-key="created_at"><button type="button">Date</button></th>
+              <th class="sortable" data-key="location"><button type="button">Location</button></th>
+              <th class="sortable" data-key="zone"><button type="button">Zone</button></th>
+              <th class="sortable" data-key="event"><button type="button">Event</button></th>
+              <th class="sortable" data-key="ore"><button type="button">Ore</button></th>
+              <th class="sortable" data-key="silicates"><button type="button">Silicates</button></th>
+              <th class="sortable" data-key="hydrogen"><button type="button">Hydrogen</button></th>
+              <th class="sortable" data-key="alloys"><button type="button">Alloys</button></th>
+              <th class="sortable" data-key="ice"><button type="button">Ice</button></th>
+              <th class="sortable" data-key="quantum_dust"><button type="button">Quantum Dust</button></th>
+              <th class="sortable" data-key="plasma_core"><button type="button">Plasma Core</button></th>
+              <th class="sortable" data-key="dark_matter"><button type="button">Dark Matter</button></th>
+              <th class="sortable" data-key="antimatter"><button type="button">Antimatter</button></th>
+              <th class="sortable" data-key="ships_lost"><button type="button">Ships lost</button></th>
+            </tr>
+          </thead>
+          <tbody id="e-reports-tbody"></tbody>
+        </table>
+      </div>
+      <div class="table-footer">
+        <span id="e-page-info-count" class="dashboard-list-count"></span>
+        <div id="e-page-info-controls" class="table-pagination" hidden>
+          <button id="e-btn-prev" class="toolbar-button secondary-button" type="button">Previous</button>
+          <span id="e-page-info" class="dashboard-list-count"></span>
+          <button id="e-btn-next" class="toolbar-button secondary-button" type="button">Next</button>
         </div>
       </div>
-      <table>
-        <thead id="e-reports-head">
-          <tr>
-            <th class="sortable" data-key="created_at">Date</th>
-            <th class="sortable" data-key="location">Location</th>
-            <th class="sortable" data-key="zone">Zone</th>
-            <th class="sortable" data-key="event">Event</th>
-            <th class="sortable" data-key="ore">Ore</th>
-            <th class="sortable" data-key="silicates">Silicates</th>
-            <th class="sortable" data-key="hydrogen">Hydrogen</th>
-            <th class="sortable" data-key="alloys">Alloys</th>
-            <th class="sortable" data-key="ice">Ice</th>
-            <th class="sortable" data-key="quantum_dust">Quantum Dust</th>
-            <th class="sortable" data-key="plasma_core">Plasma Core</th>
-            <th class="sortable" data-key="dark_matter">Dark Matter</th>
-            <th class="sortable" data-key="antimatter">Antimatter</th>
-            <th class="sortable" data-key="ships_lost">Ships lost</th>
-          </tr>
-        </thead>
-        <tbody id="e-reports-tbody"></tbody>
-      </table>
     </div>
   </div>
 
@@ -947,37 +986,39 @@
       </div>
     </div>
 
-    <div class="reports-section statistics-list-panel">
-      <div class="reports-header">
-        <h2>Recent Runs</h2>
-        <div class="pagination">
-          <button id="w-btn-prev">← Prev</button>
-          <span id="w-page-info">Page 1</span>
-          <button id="w-btn-next">Next →</button>
+    <div class="reports-section dashboard-panel explore-military-table-panel">
+      <div class="dashboard-table-scroll explore-military-table-scroll statistics-table-scroll" role="region" aria-label="Wormhole runs table" tabindex="0">
+        <table>
+          <thead id="w-reports-head">
+            <tr>
+              <th class="sortable" data-key="created_at"><button type="button">Date</button></th>
+              <th class="sortable" data-key="wclass"><button type="button">Class</button></th>
+              <th class="sortable" data-key="location"><button type="button">Location</button></th>
+              <th class="sortable" data-key="zone"><button type="button">Zone</button></th>
+              <th class="sortable" data-key="event"><button type="button">Event</button></th>
+              <th class="sortable" data-key="ore"><button type="button">Ore</button></th>
+              <th class="sortable" data-key="silicates"><button type="button">Silicates</button></th>
+              <th class="sortable" data-key="hydrogen"><button type="button">Hydrogen</button></th>
+              <th class="sortable" data-key="alloys"><button type="button">Alloys</button></th>
+              <th class="sortable" data-key="ice"><button type="button">Ice</button></th>
+              <th class="sortable" data-key="quantum_dust"><button type="button">Quantum Dust</button></th>
+              <th class="sortable" data-key="plasma_core"><button type="button">Plasma Core</button></th>
+              <th class="sortable" data-key="dark_matter"><button type="button">Dark Matter</button></th>
+              <th class="sortable" data-key="antimatter"><button type="button">Antimatter</button></th>
+              <th class="sortable" data-key="ships_lost"><button type="button">Ships lost</button></th>
+            </tr>
+          </thead>
+          <tbody id="w-reports-tbody"></tbody>
+        </table>
+      </div>
+      <div class="table-footer">
+        <span id="w-page-info-count" class="dashboard-list-count"></span>
+        <div id="w-page-info-controls" class="table-pagination" hidden>
+          <button id="w-btn-prev" class="toolbar-button secondary-button" type="button">Previous</button>
+          <span id="w-page-info" class="dashboard-list-count"></span>
+          <button id="w-btn-next" class="toolbar-button secondary-button" type="button">Next</button>
         </div>
       </div>
-      <table>
-        <thead id="w-reports-head">
-          <tr>
-            <th class="sortable" data-key="created_at">Date</th>
-            <th class="sortable" data-key="wclass">Class</th>
-            <th class="sortable" data-key="location">Location</th>
-            <th class="sortable" data-key="zone">Zone</th>
-            <th class="sortable" data-key="event">Event</th>
-            <th class="sortable" data-key="ore">Ore</th>
-            <th class="sortable" data-key="silicates">Silicates</th>
-            <th class="sortable" data-key="hydrogen">Hydrogen</th>
-            <th class="sortable" data-key="alloys">Alloys</th>
-            <th class="sortable" data-key="ice">Ice</th>
-            <th class="sortable" data-key="quantum_dust">Quantum Dust</th>
-            <th class="sortable" data-key="plasma_core">Plasma Core</th>
-            <th class="sortable" data-key="dark_matter">Dark Matter</th>
-            <th class="sortable" data-key="antimatter">Antimatter</th>
-            <th class="sortable" data-key="ships_lost">Ships lost</th>
-          </tr>
-        </thead>
-        <tbody id="w-reports-tbody"></tbody>
-      </table>
     </div>
   </div>
 
@@ -992,7 +1033,7 @@
     <section id="f-map-panel" role="tabpanel" aria-labelledby="f-tab-map">
       <div class="finder-view-header">
         <h2>Map</h2>
-        <span class="finder-badge" title="Shows the known galaxy independently of unstarted search filters. Search markers and region highlighting refer to the last started search; Clear search restores the unfiltered galaxy. Opening Galaxy Scout may refresh map and account data; viewing the map does not scan system contents.">Known galaxy</span>
+        <span class="badge" title="Shows the known galaxy independently of unstarted search filters. Search markers and region highlighting refer to the last started search; Clear search restores the unfiltered galaxy. Opening Galaxy Scout may refresh map and account data; viewing the map does not scan system contents.">Known galaxy</span>
         <span id="f-map-status" class="finder-status" role="status" aria-live="polite"></span>
       </div>
       <div class="dashboard-panel finder-map-toolbar">
@@ -1061,7 +1102,7 @@
     <section id="f-search-panel" role="tabpanel" aria-labelledby="f-tab-search" hidden>
     <div class="finder-view-header">
       <h2>Search</h2>
-      <span class="finder-badge" title="Searches saved knowledge and loads missing system contents. Unknown ownership of matching bodies is checked automatically; known ownership is refreshed by normal game observations, targeted background checks after galaxy notifications, or Check result ownership.">Completes missing data</span>
+      <span class="badge" title="Searches saved knowledge and loads missing system contents. Unknown ownership of matching bodies is checked automatically; known ownership is refreshed by normal game observations, targeted background checks after galaxy notifications, or Check result ownership.">Completes missing data</span>
     </div>
     <div class="toolbar-panel finder-toolbar">
       <label class="toolbar-field">Origin
@@ -1118,54 +1159,65 @@
       </details>
     </div>
 
-    <div class="dashboard-panel dashboard-list-panel finder-results-panel">
-      <div class="reports-header">
-        <h2>Matches</h2>
-        <span id="f-match-count" class="finder-match-count dashboard-list-count"></span>
-        <div class="finder-ownership-check">
-          <span id="f-ownership-progress" class="finder-status" role="status" aria-live="polite"></span>
-          <button id="f-check-ownership" class="toolbar-button secondary-button" disabled title="Request current ownership once per system in the base search results, including results hidden by ownership filters">Check result ownership</button>
+    <div class="finder-results-panel">
+      <div class="dashboard-panel dashboard-list-panel">
+        <div class="reports-header">
+          <div class="finder-ownership-check">
+            <span id="f-ownership-progress" class="finder-status" role="status" aria-live="polite"></span>
+            <button id="f-check-ownership" class="toolbar-button secondary-button" disabled title="Request current ownership once per system in the base search results, including results hidden by ownership filters">Check result ownership</button>
+          </div>
+        </div>
+        <div class="finder-actions finder-results-filters">
+          <label class="toolbar-field">Last known ownership
+            <select id="f-ownership" class="toolbar-select">
+              <option value="" selected>any</option>
+              <option value="unowned">unowned only</option>
+              <option value="owned">owned only</option>
+            </select>
+          </label>
+          <label class="finder-checkbox-field">
+            <input id="f-exclude-mine" type="checkbox" />Exclude mine
+          </label>
+          <span id="f-search-copy-status" class="finder-status" role="status"></span>
         </div>
       </div>
-      <div class="finder-actions finder-results-filters">
-        <label class="toolbar-field">Last known ownership
-          <select id="f-ownership" class="toolbar-select">
-            <option value="" selected>any</option>
-            <option value="unowned">unowned only</option>
-            <option value="owned">owned only</option>
-          </select>
-        </label>
-        <label class="finder-checkbox-field">
-          <input id="f-exclude-mine" type="checkbox" />Exclude mine
-        </label>
-      </div>
-      <div class="finder-directory-scroll dashboard-table-scroll">
-      <table>
-        <thead id="f-results-head">
-          <tr>
-            <th class="sortable" data-key="planet"><button type="button">Planet</button></th>
-            <th class="sortable" data-key="system"><button type="button">System</button></th>
-            <th class="sortable" data-key="sector"><button type="button">Sector</button></th>
-            <th class="sortable" data-key="type"><button type="button">Type</button></th>
-            <th class="sortable" data-key="size"><button type="button">Size</button></th>
-            <th class="sortable" data-key="slots" title="Building-slot capacity; calculated base slots when no explicit capacity is saved. Not unused slots."><button type="button">Slots</button></th>
-            <th class="sortable" data-key="moons"><button type="button">Moons</button></th>
-            <th class="sortable" data-key="zone"><button type="button">Zone</button></th>
-            <th class="sortable" data-key="distance"><button type="button">Distance</button></th>
-            <th class="sortable" data-key="owner"><button type="button">Owner</button></th>
-            <th class="sortable" data-key="alliance"><button type="button">Alliance</button></th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="f-results-tbody"></tbody>
-      </table>
+      <div class="dashboard-panel finder-results-table-panel">
+        <div class="finder-directory-scroll dashboard-table-scroll" role="region" aria-label="Search results table" tabindex="0">
+          <table>
+            <thead id="f-results-head">
+              <tr>
+                <th class="sortable" data-key="planet"><button type="button">Planet</button></th>
+                <th class="sortable" data-key="system"><button type="button">System</button></th>
+                <th class="sortable" data-key="sector"><button type="button">Sector</button></th>
+                <th class="sortable" data-key="type"><button type="button">Type</button></th>
+                <th class="sortable" data-key="size"><button type="button">Size</button></th>
+                <th class="sortable" data-key="slots" title="Building-slot capacity; calculated base slots when no explicit capacity is saved. Not unused slots."><button type="button">Slots</button></th>
+                <th class="sortable" data-key="moons"><button type="button">Moons</button></th>
+                <th class="sortable" data-key="zone"><button type="button">Zone</button></th>
+                <th class="sortable" data-key="distance"><button type="button">Distance</button></th>
+                <th class="sortable" data-key="owner"><button type="button">Owner</button></th>
+                <th class="sortable" data-key="alliance"><button type="button">Alliance</button></th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="f-results-tbody"></tbody>
+          </table>
+        </div>
+        <div class="table-footer">
+          <span id="f-match-count" class="finder-match-count dashboard-list-count"></span>
+          <div id="f-results-pagination" class="table-pagination" hidden>
+            <button id="f-results-prev" class="toolbar-button secondary-button" type="button">Previous</button>
+            <span id="f-results-page" class="dashboard-list-count"></span>
+            <button id="f-results-next" class="toolbar-button secondary-button" type="button">Next</button>
+          </div>
+        </div>
       </div>
     </div>
     </section>
     <section id="f-directory" role="tabpanel" aria-labelledby="f-tab-systems" hidden>
       <div class="finder-view-header">
         <h2 id="f-directory-title">Systems</h2>
-        <span class="finder-badge" title="Filters saved knowledge only; opening or filtering this list sends no system or ownership requests. Knowledge also grows through normal game observations, Search and targeted background checks after galaxy notifications. Unknown values do not satisfy numeric limits.">Saved data</span>
+        <span class="badge" title="Filters saved knowledge only; opening or filtering this list sends no system or ownership requests. Knowledge also grows through normal game observations, Search and targeted background checks after galaxy notifications. Unknown values do not satisfy numeric limits.">Saved data</span>
       </div>
       <div class="toolbar-panel finder-directory-toolbar">
         <label class="toolbar-field">Show
@@ -1193,26 +1245,30 @@
         </label>
         <button id="f-directory-reset" class="toolbar-button secondary-button" type="button">Reset list filters</button>
         <span id="f-directory-summary" class="finder-status" role="status" aria-live="polite"></span>
+        <span id="f-directory-copy-status" class="finder-status" role="status"></span>
         <details id="f-directory-more" class="finder-directory-more">
           <summary>More filters <span id="f-directory-active" class="finder-status"></span></summary>
           <div id="f-directory-extra-fields" class="finder-directory-extra-fields"></div>
         </details>
-      </div>
-      <div class="dashboard-panel">
         <div id="f-directory-scope-notice" class="finder-scope-notice" hidden>
           <span role="status" aria-live="polite">Showing search results only</span>
           <button id="f-directory-show-all" type="button">Show all known data</button>
         </div>
-        <div class="finder-directory-scroll">
+      </div>
+      <div class="dashboard-panel finder-directory-panel">
+        <div class="finder-directory-scroll" role="region" aria-label="Galaxy directory table" tabindex="0">
           <table>
             <thead id="f-directory-head"></thead>
             <tbody id="f-directory-body"></tbody>
           </table>
         </div>
-        <div class="finder-directory-toolbar">
-          <button id="f-directory-prev" class="toolbar-button secondary-button" type="button">Previous</button>
-          <span id="f-directory-page" class="finder-status"></span>
-          <button id="f-directory-next" class="toolbar-button secondary-button" type="button">Next</button>
+        <div class="finder-directory-toolbar finder-directory-footer table-footer">
+          <span id="f-directory-count" class="finder-status" hidden></span>
+          <div id="f-directory-pagination" class="finder-directory-pagination table-pagination" hidden>
+            <button id="f-directory-prev" class="toolbar-button secondary-button" type="button">Previous</button>
+            <span id="f-directory-page" class="finder-status"></span>
+            <button id="f-directory-next" class="toolbar-button secondary-button" type="button">Next</button>
+          </div>
         </div>
       </div>
     </section>
@@ -1220,7 +1276,7 @@
       <div class="finder-system-header">
         <div class="finder-view-header">
           <h2 id="f-system-title">System overview</h2>
-          <span class="finder-badge" title="Saved knowledge only. Missing sections are unknown, not empty; ownership and asteroid resources may be outdated. Opening this overview does not request game data.">Saved data</span>
+          <span class="badge" title="Saved knowledge only. Missing sections are unknown, not empty; ownership and asteroid resources may be outdated. Opening this overview does not request game data.">Saved data</span>
         </div>
         <button id="f-system-close" class="toolbar-button secondary-button" type="button" autofocus>Close</button>
       </div>
@@ -1258,6 +1314,14 @@
         <button id="ls-search" class="asteroids-action-button" title="Repeat the scan every 5 minutes with these filters. Field data is reused for up to 15 minutes.">Auto Scan</button>
         <span id="af-slots" title="Fleet slots in use"></span>
       </div>
+      <div class="dashboard-list-status asteroids-search-status">
+        <span class="asteroids-results-status"><span id="af-progress" role="status" aria-live="polite" title="Target counts systems with selected types, or nearby systems in selected zones without a type filter. Checked counts inspected systems; Fields counts matches after all filters. Own mission exceptions are separate."></span><span id="af-api-wait" class="api-search-wait"></span></span>
+        <span class="asteroids-results-status"><span id="ls-status" role="status" aria-live="polite"></span><span id="ls-api-wait" class="api-search-wait"></span></span>
+      </div>
+      <details id="af-search-issues" class="finder-directory-more" hidden>
+        <summary id="af-search-issues-summary">Search issues</summary>
+        <ul id="af-search-issues-list"></ul>
+      </details>
     </div>
 
     <div class="toolbar-panel asteroids-toolbar" id="af-template">
@@ -1267,45 +1331,38 @@
       <span class="asteroids-template-note">🚀 on a row opens the fleet editor seeded from the ship recommendation. Edit templates in the Fleets tab.</span>
     </div>
 
-    <div class="dashboard-panel dashboard-list-panel asteroids-results-panel">
-      <div class="reports-header">
-        <h2>Asteroid fields</h2>
-        <span id="af-count" class="asteroids-count dashboard-list-count"></span>
-      </div>
-      <div class="dashboard-list-status">
-        <span class="asteroids-results-status"><span id="af-progress" role="status" aria-live="polite" title="Target counts systems with selected types, or nearby systems in selected zones without a type filter. Checked counts inspected systems; Fields counts matches after all filters. Own mission exceptions are separate."></span><span id="af-api-wait" class="api-search-wait"></span></span>
-        <span class="asteroids-results-status"><span id="ls-status" role="status" aria-live="polite"></span><span id="ls-api-wait" class="api-search-wait"></span></span>
-      </div>
-      <details id="af-search-issues" class="finder-directory-more" hidden>
-        <summary id="af-search-issues-summary">Search issues</summary>
-        <ul id="af-search-issues-list"></ul>
-      </details>
+    <div class="asteroids-results-section">
       <div id="af-avail" aria-hidden="true"></div>
-      <div class="dashboard-table-scroll" role="region" aria-label="Asteroid fields table" tabindex="0">
-      <table>
-        <thead id="af-results-head">
-          <tr>
-            <th title="Send mining fleet"></th>
-            <th class="sortable" data-key="system"><button type="button">System</button></th>
-            <th class="sortable" data-key="type"><button type="button">Type</button></th>
-            <th class="sortable" data-key="mult" title="Richness multiplier"><button type="button">Mult.</button></th>
-            <th class="sortable" data-key="remaining" title="Remaining / total resources"><button type="button">Content</button></th>
-            <th class="sortable" data-key="leftPct" title="Percentage of resources still present"><button type="button">Left %</button></th>
-            <th class="sortable" data-key="zone"><button type="button">Zone</button></th>
-            <th class="sortable" data-key="fieldId"><button type="button">Field ID</button></th>
-            <th class="sortable" data-key="ownerName" title="Owner of the Outpost built on this field, if any"><button type="button">Outpost</button></th>
-            <th class="sortable" data-key="distance"><button type="button">Distance</button></th>
-            <th title="Hydrogen to send the selected template here">Fuel Cost</th>
-            <th class="sortable" data-key="recShips" title="Recommended ships to clear the field in 10 mining cycles"><button type="button">Ships Recommendation</button></th>
-          </tr>
-        </thead>
-        <tbody id="af-results-tbody"></tbody>
-      </table>
-      </div>
-      <div class="dashboard-list-footer">
-        <button id="af-btn-prev" class="toolbar-button secondary-button" type="button">Previous</button>
-        <span id="af-page-info" class="dashboard-list-count">Page 1</span>
-        <button id="af-btn-next" class="toolbar-button secondary-button" type="button">Next</button>
+      <div class="dashboard-panel dashboard-list-panel asteroids-results-panel">
+        <div class="dashboard-table-scroll explore-military-table-scroll" role="region" aria-label="Asteroid fields table" tabindex="0">
+          <table>
+            <thead id="af-results-head">
+              <tr>
+                <th title="Send mining fleet"></th>
+                <th class="sortable" data-key="system"><button type="button">System</button></th>
+                <th class="sortable" data-key="type"><button type="button">Type</button></th>
+                <th class="sortable" data-key="mult" title="Richness multiplier"><button type="button">Mult.</button></th>
+                <th class="sortable" data-key="remaining" title="Remaining / total resources"><button type="button">Content</button></th>
+                <th class="sortable" data-key="leftPct" title="Percentage of resources still present"><button type="button">Left %</button></th>
+                <th class="sortable" data-key="zone"><button type="button">Zone</button></th>
+                <th class="sortable" data-key="distance"><button type="button">Distance</button></th>
+                <th title="Hydrogen to send the selected template here">Fuel Cost</th>
+                <th class="sortable" data-key="fieldId"><button type="button">Field ID</button></th>
+                <th class="sortable" data-key="ownerName" title="Owner of the Outpost built on this field, if any"><button type="button">Outpost</button></th>
+                <th class="sortable" data-key="recShips" title="Recommended ships to clear the field in 10 mining cycles"><button type="button">Ships Recommendation</button></th>
+              </tr>
+            </thead>
+            <tbody id="af-results-tbody"></tbody>
+          </table>
+        </div>
+        <div class="table-footer">
+          <span id="af-count" class="asteroids-count dashboard-list-count"></span>
+          <div id="af-pagination" class="table-pagination" hidden>
+            <button id="af-btn-prev" class="toolbar-button secondary-button" type="button">Previous</button>
+            <span id="af-page-info" class="dashboard-list-count">Page 1</span>
+            <button id="af-btn-next" class="toolbar-button secondary-button" type="button">Next</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -1358,7 +1415,7 @@
         <h2>Scans</h2>
         <span id="sc-transit-count" class="sc-transit-count"></span>
       </div>
-      <div class="panel-toolbar">
+      <div class="panel-toolbar expert-only">
         <input type="checkbox" id="sc-auto" class="m-switch" title="Automate scouting">
         <span class="panel-toolbar-label">Automate Scouting</span>
         <label class="panel-toolbar-field" title="Maximum number of scanning fleets">Max fleets
@@ -1374,7 +1431,7 @@
         <h2>Surveys</h2>
         <span id="sc-count" class="sc-count"></span>
       </div>
-      <div class="panel-toolbar">
+      <div class="panel-toolbar expert-only">
         <input type="checkbox" id="sc-investigate-auto" class="m-switch" title="Automate investigation">
         <span class="panel-toolbar-label">Automate Investigation</span>
         <label class="panel-toolbar-field" title="Maximum number of investigation fleets">Max fleets
@@ -1399,7 +1456,7 @@
         </label>
         <button id="sc-debris-hidden" class="sc-hidden-button"></button>
       </div>
-      <div class="panel-toolbar">
+      <div class="panel-toolbar expert-only">
         <input type="checkbox" id="sc-debris-auto" class="m-switch" title="Automate debris collection">
         <span class="panel-toolbar-label">Automate Debris Collection</span>
         <label class="panel-toolbar-field" title="Maximum number of debris collection fleets">Max fleets
@@ -1427,7 +1484,7 @@
         <h2>Salvage</h2>
         <span id="sc-salvage-count" class="sc-count"></span>
       </div>
-      <div class="panel-toolbar">
+      <div class="panel-toolbar expert-only">
         <input type="checkbox" id="sc-salvage-auto" class="m-switch" title="Automate salvage collection">
         <span class="panel-toolbar-label">Automate Salvage Collection</span>
         <label class="panel-toolbar-field" title="Maximum number of salvage fleets">Max fleets
@@ -1452,59 +1509,166 @@
   </div>
 
   <div id="xeno-content" class="xeno-dashboard statistics-split-layout" style="display:none;">
-    <div class="expert-only">
-      <div class="toolbar-panel xeno-launch-toolbar">
-        <label>Survey From
-          <select id="xn-planet"></select>
-        </label>
-        <label>Fleet template
-          <select id="xn-template"></select>
-        </label>
-        <button id="xn-scan" class="toolbar-button primary-button">Launch Ruins Survey</button>
-        <span id="xn-progress" class="xeno-launch-status"></span>
-        <span id="xn-slots" class="xeno-launch-active" title="Fleet slots in use"></span>
+    <div>
+      <div class="toolbar-panel scouting-toolbar-panel xeno-launch-toolbar">
+        <div class="toolbar-row toolbar-row-main">
+          <label class="toolbar-field">
+            <span class="toolbar-label">Survey From</span>
+            <select id="xn-planet" class="toolbar-select"></select>
+          </label>
+          <label class="toolbar-field">
+            <span class="toolbar-label">Fleet template</span>
+            <select id="xn-template" class="toolbar-select"></select>
+          </label>
+          <label id="xn-trace-control" class="toolbar-field" hidden>
+            <span id="xn-trace-label" class="toolbar-label">First archive trace</span>
+            <select id="xn-trace" class="toolbar-select">
+              <option value="">Automatic · nearest available</option>
+              <option value="ruins">Ruins</option>
+              <option value="spire">Spire</option>
+              <option value="observatory">Observatory</option>
+              <option value="necropolis">Necropolis</option>
+            </select>
+          </label>
+          <label id="xn-zone-control" class="toolbar-field" hidden>
+            <span id="xn-zone-label" class="toolbar-label">First archive zone</span>
+            <select id="xn-zone" class="toolbar-select">
+              <option value="">Any zone</option>
+              <option value="sentinel">Sentinel</option>
+              <option value="open">Open</option>
+              <option value="dead">Dead</option>
+            </select>
+          </label>
+          <div class="toolbar-actions">
+            <button id="xn-scan" class="toolbar-button primary-button" disabled>Launch Xeno Survey</button>
+          </div>
+        </div>
+        <div class="toolbar-row toolbar-row-meta">
+          <span id="xn-survey-limit" class="toolbar-meta-text" role="status" aria-live="polite" title="Only Xeno survey fleets count, including returning fleets; dig fleets are excluded"></span>
+          <span id="xn-progress" class="toolbar-meta-text" role="status" aria-live="polite"></span>
+          <span id="xn-active-trace" class="toolbar-meta-text" hidden></span>
+          <span id="xn-slots" class="toolbar-meta-text toolbar-meta-text-right" title="Fleet slots in use"></span>
+        </div>
       </div>
       <div id="xn-avail" class="xeno-availability"></div>
-      <div class="xeno-launch-note">
-        Finds the nearest system with an unowned Ancient moon not already targeted by an in-flight ruins survey,
-        then launches one there with the selected fleet template.
-      </div>
     </div>
 
     <div class="reports-section mission-panel">
       <div class="reports-header">
-        <h2>Ruins survey fleets in transit</h2>
+        <h2>Xeno fleets in transit</h2>
         <span id="xn-transit-count" class="mission-count"></span>
       </div>
+      <p id="xn-dig-launch-status" class="toolbar-meta-text" role="status" aria-live="polite"></p>
       <div id="xn-transit-list" class="sc-transit-list"></div>
     </div>
 
-    <div class="reports-section mission-panel">
+    <div class="reports-section mission-panel xeno-progress-panel xeno-campaign-panel">
       <div class="reports-header">
-        <h2>Moons on cooldown</h2>
-        <span id="xn-cooldown-count" class="mission-count"></span>
+        <h2>Xeno campaign progress</h2>
+        <div id="xn-overview-status" class="xeno-overview-status" role="status" aria-live="polite">Loading…</div>
       </div>
-      <table>
-        <thead>
-          <tr>
-            <th>Moon</th>
-            <th>System</th>
-            <th>Available in</th>
-          </tr>
-        </thead>
-        <tbody id="xn-cooldown-tbody"></tbody>
-      </table>
+      <div id="xn-campaign-context" class="xeno-campaign-context" hidden>
+        <div id="xn-campaign-stats" class="xeno-summary-row"></div>
+        <div id="xn-clue-milestones" class="xeno-clue-milestones" aria-label="Campaign milestones"></div>
+      </div>
+      <p id="xn-campaign-empty" class="mission-empty-state">Loading Xeno campaign…</p>
+      <div id="xn-campaign-layout" class="xeno-campaign-layout" hidden>
+        <section id="xn-overview-archive" class="xeno-progress-details" hidden>
+          <h3>Archive clues</h3>
+          <p class="xeno-section-note"></p>
+          <ol class="xeno-clue-list"></ol>
+        </section>
+        <section id="xn-site-details" class="xeno-progress-details" hidden>
+          <h3>Dig site and entrances</h3>
+          <div class="xeno-site-context">
+            <p id="xn-site-location" class="xeno-site-location"></p>
+            <p id="xn-site-requirements" class="xeno-section-note"></p>
+          </div>
+          <div id="xn-site-entrances" class="xeno-entrance-list"></div>
+        </section>
+      </div>
+    </div>
+
+    <div id="xn-dig-panel" class="reports-section mission-panel xeno-progress-panel" hidden>
+      <div class="reports-header"><h2>Dig fleet comparison</h2></div>
+      <div class="toolbar-row">
+        <label class="toolbar-field">
+          <span class="toolbar-label">Fleet</span>
+          <select id="xn-dig-template" class="toolbar-select">
+            <option value="">Automatic escort comparison</option>
+          </select>
+        </label>
+        <label class="toolbar-field">
+          <span class="toolbar-label">Entrance</span>
+          <select id="xn-dig-entrance" class="toolbar-select">
+            <option value="all">All unlocked entrances</option>
+          </select>
+        </label>
+        <label class="toolbar-field">
+          <span class="toolbar-label">Leadership vessel</span>
+          <select id="xn-dig-leadership" class="toolbar-select">
+            <option value="no">Do not assign</option>
+            <option value="yes">Assign at source planet</option>
+          </select>
+        </label>
+        <label class="toolbar-field">
+          <span class="toolbar-label">Dig mode</span>
+          <select id="xn-dig-mode" class="toolbar-select">
+            <option value="careful">Careful</option>
+            <option value="fast">Fast</option>
+          </select>
+        </label>
+        <button id="xn-dig-simulate" class="toolbar-button primary-button" type="button">Compare fleets</button>
+      </div>
+      <div class="xeno-progress-details">
+        <p>Uses the survey source planet. Automatic comparison tests up to five single-type escorts; choose a template to compare a mixed fleet. Results and tunnel mass are estimates, not a guarantee. The archive hall is not supported yet.</p>
+        <p id="xn-dig-status" role="status" aria-live="polite"></p>
+        <p id="xn-dig-context"></p>
+      </div>
+    </div>
+    <div id="xn-dig-results" hidden></div>
+
+    <div class="reports-section mission-panel xeno-progress-panel xeno-account-panel">
+      <div class="reports-header">
+        <h2>Xeno account progress</h2>
+      </div>
+      <div id="xn-overview-stats" class="xeno-summary-row"></div>
+      <div id="xn-account-details" class="xeno-progress-details xeno-account-details" hidden>
+        <section>
+          <h3>Codex</h3>
+          <div id="xn-overview-codex" class="xeno-codex-grid"></div>
+        </section>
+        <section>
+          <div class="xeno-section-heading">
+            <h3>Monuments</h3>
+            <span id="xn-monument-count" class="badge" title="Reported account collection; twelve monument types">Unknown</span>
+          </div>
+          <div id="xn-overview-monuments" class="xeno-monument-grid"></div>
+        </section>
+        <section>
+          <h3>Dig reports</h3>
+          <div id="xn-overview-reports"></div>
+        </section>
+      </div>
     </div>
 
   </div>
 
   <div id="xeno-stats-content" class="statistics-dashboard statistics-split-layout" style="display:none;">
     <section class="statistics-summary-panel">
-    <div class="section-label">Loot collected — ruins surveys</div>
+    <div class="section-label">Delivered Xeno loot</div>
     <div class="stats" id="xn-stats-collected"></div>
 
-    <div class="section-label">Ships lost (build cost)</div>
+    <div class="section-label">Dig results and fleet</div>
+    <div class="stats" id="xn-stats-results"></div>
+    <div class="section-label">Artifact tiers, monuments and Codex rewards</div>
+    <div class="stats" id="xn-stats-rewards"></div>
+    <div class="section-label">Overflow — not delivered, excluded from income</div>
+    <div class="stats" id="xn-stats-overflow"></div>
+    <div class="section-label">Ships destroyed (build cost)</div>
     <div class="stats" id="xn-stats-lost"></div>
+    <div class="section-label">Ships damaged (repair cost: 50% of build cost)</div>
+    <div class="stats" id="xn-stats-repair"></div>
     </section>
 
     <div class="charts">
@@ -1518,25 +1682,38 @@
       </div>
     </div>
 
-    <div class="reports-section statistics-list-panel">
-      <div class="reports-header">
-        <h2>Ruins survey reports</h2>
-        <div class="pagination">
-          <button id="xn-report-btn-prev">← Prev</button>
-          <span id="xn-report-page-info">Page 1</span>
-          <button id="xn-report-btn-next">Next →</button>
+    <div class="reports-section dashboard-panel explore-military-table-panel">
+      <div class="dashboard-table-scroll explore-military-table-scroll statistics-table-scroll" role="region" aria-label="Xeno reports table" tabindex="0">
+        <table>
+          <thead id="xn-reports-head">
+            <tr>
+              <th class="sortable" data-key="created_at"><button type="button">Date</button></th>
+              <th class="sortable" data-key="location"><button type="button">Site / System</button></th>
+              <th class="sortable" data-key="zone"><button type="button">Zone</button></th>
+              <th class="sortable" data-key="trace"><button type="button">Channel</button></th>
+              <th class="sortable" data-key="entrance"><button type="button">Entrance</button></th>
+              <th class="sortable" data-key="mode"><button type="button">Mode</button></th>
+              <th class="sortable" data-key="event"><button type="button">Outcome</button></th>
+              <th class="sortable" data-key="silicates"><button type="button">Silicates</button></th>
+              <th class="sortable" data-key="alloys"><button type="button">Alloys</button></th>
+              <th class="sortable" data-key="precursor_fragments"><button type="button" title="Delivered Precursor Fragments">Fragments</button></th>
+              <th class="sortable" data-key="artifact"><button type="button">Artifacts</button></th>
+              <th class="sortable" data-key="monument_copies"><button type="button" title="Monument blueprint copies awarded by this dig">Monuments</button></th>
+              <th class="sortable" data-key="codex_count"><button type="button" title="Codex entries awarded by this dig">Codex</button></th>
+              <th class="sortable" data-key="total_losses"><button type="button" title="Destroyed ships, including lost Excavators; damaged ships are excluded">Ships lost</button></th>
+            </tr>
+          </thead>
+          <tbody id="xn-reports-tbody"></tbody>
+        </table>
+      </div>
+      <div class="table-footer">
+        <span id="xn-report-page-info-count" class="dashboard-list-count"></span>
+        <div id="xn-report-page-info-controls" class="table-pagination" hidden>
+          <button id="xn-report-btn-prev" class="toolbar-button secondary-button" type="button">Previous</button>
+          <span id="xn-report-page-info" class="dashboard-list-count"></span>
+          <button id="xn-report-btn-next" class="toolbar-button secondary-button" type="button">Next</button>
         </div>
       </div>
-      <table>
-        <thead id="xn-reports-head">
-          <tr>
-            <th class="sortable" data-key="created_at">Date</th>
-            <th class="sortable" data-key="precursor_fragments">Precursor Fragments</th>
-            <th class="sortable" data-key="artifact">Artifacts</th>
-          </tr>
-        </thead>
-        <tbody id="xn-reports-tbody"></tbody>
-      </table>
     </div>
   </div>
 
@@ -1565,6 +1742,11 @@
   </div>
 
   <div id="market-content" class="market-dashboard" style="display:none;">
+    <div class="subtabs show options-subtabs" role="tablist" aria-label="Market">
+      <button class="tab subtab active" id="m-tab-offers" type="button" role="tab" aria-selected="true" aria-controls="m-offers-view">Market</button>
+      <button class="tab subtab" id="m-tab-history" type="button" role="tab" aria-selected="false" aria-controls="m-history-view" tabindex="-1">Trade History</button>
+    </div>
+    <section id="m-offers-view" role="tabpanel" aria-labelledby="m-tab-offers">
     <div class="toolbar-panel market-toolbar">
       <div class="market-top-row">
         <div class="m-filter">
@@ -1594,8 +1776,45 @@
           <span id="m-sell" class="res-icons"></span>
         </div>
       </div>
+      <div class="market-toolbar-details">
+        <span id="m-count" role="status" aria-live="polite"></span>
+        <span class="market-deal-legend">
+          Deal vs market average:
+          <span class="market-deal-above">above</span>
+          <span class="market-deal-below">below</span>
+          <span class="market-deal-note">deeper shade = further from the pair average (worst 5% ignored)</span>
+        </span>
+      </div>
     </div>
 
+    <div class="dashboard-panel dashboard-list-panel explore-military-table-panel market-offers-panel">
+      <div class="dashboard-table-scroll explore-military-table-scroll" role="region" aria-label="Market offers table" tabindex="0">
+        <table>
+          <thead id="m-head">
+            <tr>
+              <th class="sortable" data-key="hub" id="m-hub-col"><button type="button">Hub</button></th>
+              <th class="sortable" data-key="username"><button type="button">Seller</button></th>
+              <th class="sortable" data-key="offerResource"><button type="button">Offering</button></th>
+              <th class="sortable" data-key="requestResource"><button type="button">For</button></th>
+              <th class="sortable" data-key="rate" title="Cost of one unit of the offered resource"><button type="button">Rate</button></th>
+              <th class="sortable" data-key="ratio" title="Received per unit paid — higher is a better deal"><button type="button">Ratio</button></th>
+            </tr>
+          </thead>
+          <tbody id="m-tbody"></tbody>
+        </table>
+      </div>
+      <div class="table-footer">
+        <span id="m-offers-count" class="dashboard-list-count"></span>
+        <div id="m-offers-pagination" class="table-pagination" hidden>
+          <button id="m-offers-prev" class="toolbar-button secondary-button" type="button">Previous</button>
+          <span id="m-offers-page" class="dashboard-list-count"></span>
+          <button id="m-offers-next" class="toolbar-button secondary-button" type="button">Next</button>
+        </div>
+      </div>
+    </div>
+    </section>
+
+    <section id="m-history-view" role="tabpanel" aria-labelledby="m-tab-history" hidden>
     <section class="market-profit-panel dashboard-panel">
       <div class="reports-header">
         <div>
@@ -1603,15 +1822,15 @@
           <p class="market-profit-note">Each trade subtracts the market fee from the received amount before valuation.</p>
         </div>
         <div class="market-profit-actions">
-          <label for="m-history-range">Range</label>
-          <select id="m-history-range">
+          <label class="toolbar-label" for="m-history-range">Range</label>
+          <select id="m-history-range" class="toolbar-select">
             <option value="all">All history</option>
             <option value="30">Last 30 days</option>
             <option value="7">Last 7 days</option>
             <option value="1">Today</option>
           </select>
-          <button id="m-history-refresh">Refresh history</button>
-          <span id="m-history-progress"></span>
+          <button id="m-history-refresh" class="toolbar-button secondary-button" type="button">Refresh history</button>
+          <span id="m-history-progress" role="status" aria-live="polite"></span>
         </div>
       </div>
       <div id="m-profit-stats" class="stats"></div>
@@ -1623,7 +1842,10 @@
         <h3>Net resource flow</h3>
         <div id="m-resource-flows" class="market-flow-grid"></div>
       </div>
-      <div class="market-history-table-wrap">
+    </section>
+
+    <div class="dashboard-panel dashboard-list-panel explore-military-table-panel market-history-panel">
+      <div class="dashboard-table-scroll explore-military-table-scroll market-history-table-wrap" role="region" aria-label="Market trade history table" tabindex="0">
         <table>
           <thead>
             <tr>
@@ -1639,38 +1861,17 @@
           <tbody id="m-history-tbody"></tbody>
         </table>
       </div>
-      <div class="pagination market-history-pagination">
-        <button id="m-history-prev">← Prev</button>
-        <span id="m-history-page">Page 1 / 1</span>
-        <button id="m-history-next">Next →</button>
+      <div class="table-footer">
+        <span id="m-history-count" class="dashboard-list-count"></span>
+        <div id="m-history-pagination" class="table-pagination" hidden>
+          <button id="m-history-prev" class="toolbar-button secondary-button" type="button">Previous</button>
+          <span id="m-history-page" class="dashboard-list-count"></span>
+          <button id="m-history-next" class="toolbar-button secondary-button" type="button">Next</button>
+        </div>
       </div>
-    </section>
-
-    <div class="reports-section statistics-list-panel market-offers-panel">
-      <div class="reports-header">
-        <h2>Open offers</h2>
-        <span id="m-count" class="market-count"></span>
-        <span class="market-deal-legend">
-          Deal vs market average:
-          <span class="market-deal-above">above</span>
-          <span class="market-deal-below">below</span>
-          <span class="market-deal-note">deeper shade = further from the pair average (worst 5% ignored)</span>
-        </span>
-      </div>
-      <table>
-        <thead id="m-head">
-          <tr>
-            <th class="sortable" data-key="hub" id="m-hub-col">Hub</th>
-            <th class="sortable" data-key="username">Seller</th>
-            <th class="sortable" data-key="offerResource">Offering</th>
-            <th class="sortable" data-key="requestResource">For</th>
-            <th class="sortable" data-key="rate" title="Cost of one unit of the offered resource">Rate</th>
-            <th class="sortable" data-key="ratio" title="Received per unit paid — higher is a better deal">Ratio</th>
-          </tr>
-        </thead>
-        <tbody id="m-tbody"></tbody>
-      </table>
     </div>
+
+    </section>
   </div>
 
   <div id="techtree-content" class="techtree-dashboard" style="display:none;">

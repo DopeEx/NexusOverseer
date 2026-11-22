@@ -1,6 +1,8 @@
 import hashlib
 import json
 from pathlib import Path
+import posixpath
+import re
 import runpy
 import sys
 import tempfile
@@ -14,6 +16,16 @@ BUILD = runpy.run_path(str(ROOT / 'nexus-addon' / 'build.py'))
 
 
 class ManualBuildTests(unittest.TestCase):
+    def test_packaged_javascript_includes_relative_imports(self):
+        files = set(BUILD['FILES'])
+        for name in sorted(files):
+            if not name.endswith('.js'):
+                continue
+            source = (ROOT / 'nexus-addon' / name).read_text(encoding='utf-8')
+            for imported in re.findall(r'''(?:from\s*|import\s*)['"](\.{1,2}/[^'"]+)['"]''', source):
+                target = posixpath.normpath(posixpath.join(posixpath.dirname(name), imported))
+                self.assertIn(target, files, f'{name} imports unpackaged {target}')
+
     def test_store_payloads_stay_separate_and_manual_hashes_cover_every_file(self):
         build = BUILD['build']
         version = BUILD['read_version']()

@@ -1,12 +1,14 @@
 const WORK_LABEL = {
   survey: 'Surveying', investigate: 'Investigating', collect_debris: 'Collecting',
   collect_salvage: 'Collecting', expedition: 'Exploring', xeno_survey: 'Surveying ruins',
+  xeno_dig: 'Excavating',
   mine: 'Mining', raid: 'Raiding', patrol: 'Patrolling', scout_camp: 'Scouting',
   attack_pirates: 'Attacking',
 };
 const WORK_COLOR = {
   survey: '#3ec6ff', investigate: '#60a5fa', collect_debris: '#2dd4bf',
   collect_salvage: '#8b5cf6', expedition: '#f59e0b', xeno_survey: '#a78bfa',
+  xeno_dig: '#c084fc',
   scout_camp: '#ffc070', attack_pirates: '#ff6b7a',
 };
 const WORK_GRADIENT = {
@@ -16,6 +18,7 @@ const WORK_GRADIENT = {
   collect_salvage: 'linear-gradient(90deg, #8b5cf6 0%, #a78bfa 100%)',
   expedition: 'linear-gradient(90deg, #f59e0b 0%, #ffc070 100%)',
   xeno_survey: 'linear-gradient(90deg, #a78bfa 0%, #c4b5fd 100%)',
+  xeno_dig: 'linear-gradient(90deg, #9333ea 0%, #c084fc 100%)',
 };
 const WORK_STATUS = new Set([
   'surveying', 'investigating', 'collecting', 'exploring', 'mining', 'raiding',
@@ -66,7 +69,8 @@ export function missionProgress(m, now = Date.now()) {
     start = rdep; end = rarr; eventLabel = 'Return';
   } else if (WORK_STATUS.has(status)) {
     if (status === 'on_site') label = WORK_LABEL[type] || 'On site';
-    if (status === 'surveying' && type === 'xeno_survey') label = WORK_LABEL[type];
+    if ((status === 'surveying' || status === 'exploring') && type === 'xeno_survey') label = WORK_LABEL[type];
+    if ((status === 'surveying' || status === 'exploring') && type === 'xeno_dig') label = WORK_LABEL[type];
     color = WORK_COLOR[type] || '#47d4ff';
     gradient = WORK_GRADIENT[type];
     start = arr; end = rdep; eventLabel = 'Departure';
@@ -79,7 +83,7 @@ export function missionProgress(m, now = Date.now()) {
       start = timestamp(cargo._cycleStartedAt);
       end = timestamp(cargo._nextCycleAt) ?? rdep;
       eventLabel = 'Collection update';
-    } else if (status === 'exploring' || (status === 'on_site' && type === 'expedition')) {
+    } else if ((status === 'exploring' && type !== 'xeno_survey' && type !== 'xeno_dig') || (status === 'on_site' && type === 'expedition')) {
       const travelMs = Number(m.travelTime) * 1000;
       start = dep != null && travelMs > 0 ? dep + travelMs : null;
       end = arr; eventLabel = 'Exploration ends';

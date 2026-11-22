@@ -30,6 +30,17 @@ function service(fetcher, legacy = {}) {
 
 beforeEach(async () => { await restoreGalaxyCache(); });
 
+test('interim Xeno trace entries do not prevent restoring galaxy backups', async () => {
+  const at = Date.now();
+  await restoreGalaxyCache({ version: 1, entries: [
+    { serverKey: 's0', key: 'system:1', at, data: contents() },
+    { serverKey: 's0', key: 'xeno-trace:12', at, data: { moonId: 12, trace: 'spire' } },
+  ] });
+  const moon = (await readScans('s0'))[1].data.moons[0];
+  assert.equal(moon.id, 12);
+  assert.equal(moon.trace, undefined);
+});
+
 test('station catalogs persist per universe, coalesce, expire, replace abandoned owners and survive backup', async () => {
   const path = '/api/galaxy/station-index';
   const station = { stationId: 1, stationName: 'Station', systemId: 2, systemName: 'System',

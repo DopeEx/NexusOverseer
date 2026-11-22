@@ -39,6 +39,8 @@ starting it (for example, `$env:PORT = '4174'` in PowerShell).
 - Combat setup and intel imports can be previewed, but **Simulate battle** is
   intentionally unavailable: the demo does not implement the game's calculator.
   Ship definitions, research, costs and fuel estimates are illustrative.
+- Asteroids includes a missing field retained for an active mining mission, even
+  after a new scan, to demonstrate the mission-exception notice.
 - Time is fixed at `2030-04-12T12:00:00Z`, so countdowns and report ranges do not
   expire. Date formatting follows the browser's locale and time zone.
 - The demo covers the eleven regular dashboard tabs listed below.
@@ -53,8 +55,8 @@ sentinel band. The outermost systems have deliberately unknown zones and outline
 visibility. Six fictional market hubs and nine saved system snapshots, including
 allied owners, exercise labels, occupancy markers and local lists immediately.
 
-This layout is visually inspired by a user-supplied game-map screenshot on
-2026-10-20: its dense point cloud, clear central gap, red/amber/green bands, grey
+This layout is visually inspired by a user-supplied game-map screenshot:
+its dense point cloud, clear central gap, red/amber/green bands, grey
 outer points and several hub markers are useful UI test cases. The system count,
 coordinates, arm assignments, zone boundaries and outer visibility are synthetic
 test choices, not measurements or a verified galaxy-generation model. A screenshot
@@ -86,7 +88,7 @@ All eleven regular main tabs are covered:
 | Pirates | `pirates.png` | Camps and battle reports load automatically |
 | Fleets | `fleet-templates.png` | Select Demo - Balanced Mining |
 | Simulator | `combat-simulator.png` | Load my fleet from Aurora, then select the Demo Frontier spy report |
-| Market | `market.png` | Public offers, all trade history |
+| Market | `market.png` | Market subview, public offers |
 | Tech Tree | `tech-tree.png` | All branches; the example research queue is prefilled |
 | Options | `options.png` | Default demo preferences |
 | User Guide | `user-guide.png` | Top of the guide, cropped to the navigation height |

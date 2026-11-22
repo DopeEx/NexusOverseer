@@ -75,12 +75,18 @@ test('processSpyReports reads espionage v2 intel and keeps legacy reports workin
 
 test('mine, investigate and xeno-survey include hangarAssignments', async () => {
   makeBrowserStub();
+  await import(`../nexus-addon/server-storage.js?spy-intel=${crypto.randomUUID()}`);
+  await globalThis.nexusStorage.setActiveServer('s0');
   const requests = [];
   globalThis.browser.alarms.get = async () => null;
   globalThis.browser.tabs.query = async () => [{ id: 42, url: 'https://s0.nexuslegacy.space/' }];
   globalThis.browser.tabs.sendMessage = async (_tabId, message) => {
+    if (message.path === '/api/planets/1/fleet') {
+      return { ok: true, data: { fleet: [{ shipDefId: 2, quantity: 1 }, { shipDefId: 16, quantity: 1 }] } };
+    }
+    if (message.path === '/api/fleet/missions') return { ok: true, data: { missions: [] } };
     requests.push(message);
-    return { ok: true, data: {} };
+    return { ok: true, data: { missionId: 1 } };
   };
 
   await loadBackground();
@@ -88,7 +94,9 @@ test('mine, investigate and xeno-survey include hangarAssignments', async () => 
   const ships = [{ shipDefId: 1, quantity: 1 }];
   await listener({ type: 'SEND_MINE', sourcePlanetId: 1, targetFieldId: 2, ships, miningDuration: 60 });
   await listener({ type: 'SEND_INVESTIGATE', sourcePlanetId: 1, reportId: 2, ships });
-  await listener({ type: 'SEND_XENO_SURVEY', sourcePlanetId: 1, targetMoonId: 2, ships });
+  const result = await listener({ type: 'SEND_XENO_SURVEY', serverKey: 's0', sourcePlanetId: 1, targetMoonId: 2,
+    ships: [{ shipDefId: 2, quantity: 1 }, { shipDefId: 16, quantity: 1 }] });
 
+  assert.equal(result.ok, true);
   assert.deepEqual(requests.map(request => request.body.hangarAssignments), [{}, {}, {}]);
 });

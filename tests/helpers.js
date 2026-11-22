@@ -1,6 +1,29 @@
 // Shared test fixtures and the browser-API stub used to run background.js
 // under node.
 
+export function xenoDigReports() {
+  return [
+    [900101, 900201, '2030-01-19T10:00:00.000Z', 'observatory', 'careful', 7767, 38869, 11, 4, 7, 'celestial_chronometer'],
+    [900102, 900202, '2030-01-21T10:00:00.000Z', 'ruins', 'careful', 9111, 33014, 6, 2, 7, 'support_pillar'],
+    [900103, 900203, '2030-01-21T14:00:00.000Z', 'necropolis', 'fast', 10454, 29401, 1, 0, 6, null],
+  ].map(([id, missionId, createdAt, trace, mode, delivered, overflow, destroyed, damaged, rounds, monument]) => ({
+    id, missionId, createdAt, trace, mode, zone: 'sentinel', entranceTrace: 'spire',
+    hall: false, outcome: 'success', excavatorsSent: 3, excavatorsLost: 0,
+    battleReportId: id + 1000, isRead: true,
+    report: {
+      rounds, fleetLost: false, moonName: 'Archive Moon', systemName: 'Test System',
+      shipsLost: [{ shipDefId: 21, key: 'missile_cruiser', name: 'Missile Cruiser', destroyed, damaged }],
+      delivered: { resources: { silicates: delivered }, fragments: 0, artifactTier: id === 900103 ? 'rare' : null },
+      overflow: { resources: { silicates: overflow }, fragments: 0, artifactTier: null },
+      monument: monument ? { key: monument, copies: 1 } : null,
+      codex: id === 900101 ? { set: 'gaze', entry: 1 } : null,
+      garrison: [{ key: 'xeno_chorus', quantity: 43 }, { key: 'xeno_golem', quantity: 9 }],
+      guardianLosses: [{ key: 'xeno_chorus', lost: 43 }, { key: 'xeno_golem', lost: 9 }],
+      excavatorsRecovered: 0, hallRequested: false,
+    },
+  }));
+}
+
 // Real ship stats from the in-game ship screens (Stats.txt, 2026-06-22).
 const SHIP_DEFS = {
   scout:           { key: 'scout',           name: 'Scout',           hp: 100,    shieldHp: 25,    attack: 15,   weaponType: 'kinetic', armorType: 'light',    shipSize: 'small',  costOre: 194,    costSilicates: 97,     costHydrogen: 0,      costAlloys: 20    },

@@ -2,7 +2,9 @@
 // Loaded first — all other dashboard scripts depend on it.
 
 import { getSetting } from './settings.js';
+import { paginate, updatePagination } from './pagination.js';
 import { missionProgress } from './mission-state.js';
+import { XENO_TRACES } from './galaxy-directory.js';
 export { missionProgress } from './mission-state.js';
 export { usesFleetSlot, usedFleetSlots } from './mission-state.js';
 
@@ -14,19 +16,66 @@ export function setActiveTab(t) { activeTab = t; }
 
 export function listBadge(text, variant = '') {
   const badge = document.createElement('span');
-  badge.className = `finder-badge${variant ? ` ${variant}` : ''}`;
+  badge.className = `badge${variant ? ` ${variant}` : ''}`;
   badge.textContent = text;
   return badge;
 }
 
+export function formatBadgeLabel(value) {
+  const text = value == null || value === '' ? 'unknown' : String(value).replace(/_/g, ' ');
+  return text[0].toUpperCase() + text.slice(1);
+}
+
+export function xenoTraceLabel(trace) {
+  return formatBadgeLabel(trace);
+}
+
+export function xenoTraceBadge(trace) {
+  const variant = XENO_TRACES.includes(trace) ? `finder-trace finder-trace-${trace}` : '';
+  return listBadge(xenoTraceLabel(trace), variant);
+}
+
 export function zoneBadge(zone, badge = listBadge('')) {
-  badge.className = `finder-badge finder-zone-${['sentinel', 'open', 'dead', 'rift'].includes(zone) ? zone : 'unknown'}`;
-  if (badge.textContent !== (zone || 'unknown')) badge.textContent = zone || 'unknown';
+  badge.className = `badge finder-zone-${['sentinel', 'open', 'dead', 'rift'].includes(zone) ? zone : 'unknown'}`;
+  const label = formatBadgeLabel(zone);
+  if (badge.textContent !== label) badge.textContent = label;
   return badge;
 }
 
 export function allianceBadge(tag) {
   return listBadge(`[${tag}]`, 'finder-alliance');
+}
+
+export function combatOutcomeBadge(outcome, youAttacker = true) {
+  const value = String(outcome || 'unknown').toLowerCase();
+  if (value === 'attacker_won' || value === 'defender_won') {
+    const won = (value === 'attacker_won') === youAttacker;
+    return listBadge(won ? 'Victory' : 'Defeat', won ? 'badge-success' : 'badge-error');
+  }
+  if (['won', 'win', 'victory'].includes(value)) return listBadge('Victory', 'badge-success');
+  if (['lost', 'loss', 'defeat'].includes(value)) return listBadge('Defeat', 'badge-error');
+  if (value === 'draw') return listBadge('Draw', 'badge-warning');
+  return listBadge(formatBadgeLabel(value === '—' ? null : outcome));
+}
+
+export function clipboardCopyButton(text, { title, copied, status }) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'clipboard-copy';
+  button.textContent = text;
+  button.title = title;
+  button.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      button.title = 'Copied';
+      setStatusText(status, copied);
+    } catch (error) {
+      console.warn(`[NexusOverseer] ${title} failed:`, error);
+      button.title = 'Copy failed';
+      setStatusText(status, `Copy failed: ${error.message}`);
+    }
+  };
+  return button;
 }
 
 // Message class by wording, so every status line is colored consistently:
@@ -78,8 +127,6 @@ export function appendStatusText(el, text, variant) {
 
 export const setStatusMessage = setStatusText;
 export const appendStatusMessage = appendStatusText;
-
-export const PER_PAGE = 20;
 
 // shipDefId → def ({ name, imageUrl, … }), fetched once and cached.
 let _shipDefs = null;
@@ -1010,12 +1057,12 @@ export const RESOURCE_SERIES = [
 export const SERIES_GETTERS = {};
 for (const d of RESOURCE_SERIES) SERIES_GETTERS[d.field] = r => r[d.field] || 0;
 
-// Resource line chart. Ore/silicates/hydrogen always shown; alloys + exotics
+// Resource line chart. Within the selected resources, ore/silicates/hydrogen always shown; alloys + exotics
 // only when the series actually carries some (avoids a wall of flat-zero lines).
 // `count` = { field, label } adds a report-count line on a secondary y-axis.
-export function makeResourceLineChart(canvasId, series, labelKey, count) {
+export function makeResourceLineChart(canvasId, series, labelKey, count, resources = RESOURCE_SERIES) {
   const ALWAYS = new Set(['ore', 'silicates', 'hydrogen']);
-  const shown = RESOURCE_SERIES.filter(d =>
+  const shown = resources.filter(d =>
     ALWAYS.has(d.field) || series.some(r => (r[d.field] || 0) > 0));
   const datasets = shown.map(d => ({
     label: d.label,
@@ -1106,16 +1153,16 @@ export function computeResourcesLost(reports, ships) {
 // Ship-loss build cost from raw ships_destroyed_raw arrays
 // ([{shipDefId,quantity}] or [{key,lost}]) — the shape expeditions/wormholes/
 // xeno store per-record, as opposed to computeResourcesLost's shipDefId→qty
-// map. Ships destroyed outright (no repair concept for these encounters).
-export function computeRawLossCost(reports, ships) {
+// map. Damaged arrays can use the same valuation with the repair factor.
+export function computeRawLossCost(reports, ships, field = 'ships_destroyed_raw', factor = 1) {
   const out = emptyResources();
   const byKey = {};
   for (const s of Object.values(ships || {})) if (s && s.key) byKey[s.key] = s;
   for (const r of reports) {
-    for (const i of (r.ships_destroyed_raw || [])) {
-      const ship = i.shipDefId != null ? ships[i.shipDefId] : byKey[i.key];
+    for (const i of (r[field] || [])) {
+      const ship = (i.shipDefId != null && ships[i.shipDefId]) || byKey[i.key];
       if (!ship) continue;
-      const q = i.quantity ?? i.lost ?? 1;
+      const q = (i.quantity ?? i.lost ?? 1) * factor;
       out.ore += q * (ship.costOre || 0);
       out.silicates += q * (ship.costSilicates || 0);
       out.hydrogen += q * (ship.costHydrogen || 0);
@@ -1217,18 +1264,26 @@ export function appendRareCards(container, rare, suffix) {
     ));
 }
 
+export function paginateStatistics(reports, page, infoId, prevId, nextId, singular = 'entry', plural = 'entries') {
+  const result = paginate(reports, page - 1);
+  updatePagination(result, {
+    count: document.getElementById(`${infoId}-count`),
+    controls: document.getElementById(`${infoId}-controls`),
+    previous: document.getElementById(prevId),
+    next: document.getElementById(nextId),
+    page: document.getElementById(infoId),
+  }, `${result.total} ${result.total === 1 ? singular : plural}`);
+  return result;
+}
+
 export function renderPagedTable(reports, page, infoId, prevId, nextId, tbodyId, rowFn) {
-  const totalPages = Math.ceil(reports.length / PER_PAGE);
-  const maxPage = Math.max(1, totalPages);
-  const safePage = Math.min(Math.max(1, page), maxPage);
-  document.getElementById(infoId).textContent = `Page ${safePage} / ${maxPage} (${reports.length} total)`;
-  document.getElementById(prevId).disabled = safePage <= 1;
-  document.getElementById(nextId).disabled = safePage >= totalPages;
+  const result = paginateStatistics(reports, page, infoId, prevId, nextId);
   const tbody = document.getElementById(tbodyId);
   tbody.textContent = '';
-  for (const r of reports.slice((safePage - 1) * PER_PAGE, safePage * PER_PAGE)) {
+  for (const r of result.rows) {
     tbody.appendChild(rowFn(r));
   }
+  return result.page + 1;
 }
 
 // Fill a stats container with ore/silicates/hydrogen/alloys + rare cards.
@@ -1380,13 +1435,8 @@ export const ZONE_DEFS = Object.freeze([
   Object.freeze({ key: 'rift', label: 'Rift' }),
 ]);
 export function zoneCell(zone) {
-  const z = zone || 'unknown';
   const td = document.createElement('td');
-  const badge = document.createElement('span');
-  badge.className = 'badge';
-  badge.textContent = z;
-  badge.style.color = ZONE_COLORS[z] || ZONE_COLORS.unknown;
-  td.appendChild(badge);
+  td.appendChild(zoneBadge(zone));
   return td;
 }
 
@@ -1412,10 +1462,13 @@ export function applySort(headId, records, state, tiebreak = 'created_at') {
     const old = th.querySelector('.arrow');
     if (old) old.remove();
     if (th.dataset.key === key) {
+      th.setAttribute('aria-sort', dir === -1 ? 'descending' : 'ascending');
       const arrow = document.createElement('span');
       arrow.className = 'arrow';
       arrow.textContent = dir === -1 ? ' ▼' : ' ▲';
       th.appendChild(arrow);
+    } else {
+      th.removeAttribute('aria-sort');
     }
   });
   return records.slice().sort((a, b) => {

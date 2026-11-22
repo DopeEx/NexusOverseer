@@ -10,6 +10,7 @@
   },
   "scripts": {
     "demo": "node tools/demo/server.js",
+    "demo:watch": "node --watch tools/demo/server.js",
     "test": "node --test",
     "lint": "eslint .",
     "check": "npm run lint && npm test"
