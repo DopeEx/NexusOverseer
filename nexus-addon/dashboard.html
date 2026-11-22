@@ -1742,6 +1742,11 @@
   </div>
 
   <div id="market-content" class="market-dashboard" style="display:none;">
+    <div class="subtabs show options-subtabs" role="tablist" aria-label="Market">
+      <button class="tab subtab active" id="m-tab-offers" type="button" role="tab" aria-selected="true" aria-controls="m-offers-view">Market</button>
+      <button class="tab subtab" id="m-tab-history" type="button" role="tab" aria-selected="false" aria-controls="m-history-view" tabindex="-1">Trade History</button>
+    </div>
+    <section id="m-offers-view" role="tabpanel" aria-labelledby="m-tab-offers">
     <div class="toolbar-panel market-toolbar">
       <div class="market-top-row">
         <div class="m-filter">
@@ -1771,8 +1776,45 @@
           <span id="m-sell" class="res-icons"></span>
         </div>
       </div>
+      <div class="market-toolbar-details">
+        <span id="m-count" role="status" aria-live="polite"></span>
+        <span class="market-deal-legend">
+          Deal vs market average:
+          <span class="market-deal-above">above</span>
+          <span class="market-deal-below">below</span>
+          <span class="market-deal-note">deeper shade = further from the pair average (worst 5% ignored)</span>
+        </span>
+      </div>
     </div>
 
+    <div class="dashboard-panel dashboard-list-panel explore-military-table-panel market-offers-panel">
+      <div class="dashboard-table-scroll explore-military-table-scroll" role="region" aria-label="Market offers table" tabindex="0">
+        <table>
+          <thead id="m-head">
+            <tr>
+              <th class="sortable" data-key="hub" id="m-hub-col"><button type="button">Hub</button></th>
+              <th class="sortable" data-key="username"><button type="button">Seller</button></th>
+              <th class="sortable" data-key="offerResource"><button type="button">Offering</button></th>
+              <th class="sortable" data-key="requestResource"><button type="button">For</button></th>
+              <th class="sortable" data-key="rate" title="Cost of one unit of the offered resource"><button type="button">Rate</button></th>
+              <th class="sortable" data-key="ratio" title="Received per unit paid — higher is a better deal"><button type="button">Ratio</button></th>
+            </tr>
+          </thead>
+          <tbody id="m-tbody"></tbody>
+        </table>
+      </div>
+      <div class="table-footer">
+        <span id="m-offers-count" class="dashboard-list-count"></span>
+        <div id="m-offers-pagination" class="table-pagination" hidden>
+          <button id="m-offers-prev" class="toolbar-button secondary-button" type="button">Previous</button>
+          <span id="m-offers-page" class="dashboard-list-count"></span>
+          <button id="m-offers-next" class="toolbar-button secondary-button" type="button">Next</button>
+        </div>
+      </div>
+    </div>
+    </section>
+
+    <section id="m-history-view" role="tabpanel" aria-labelledby="m-tab-history" hidden>
     <section class="market-profit-panel dashboard-panel">
       <div class="reports-header">
         <div>
@@ -1780,15 +1822,15 @@
           <p class="market-profit-note">Each trade subtracts the market fee from the received amount before valuation.</p>
         </div>
         <div class="market-profit-actions">
-          <label for="m-history-range">Range</label>
-          <select id="m-history-range">
+          <label class="toolbar-label" for="m-history-range">Range</label>
+          <select id="m-history-range" class="toolbar-select">
             <option value="all">All history</option>
             <option value="30">Last 30 days</option>
             <option value="7">Last 7 days</option>
             <option value="1">Today</option>
           </select>
-          <button id="m-history-refresh">Refresh history</button>
-          <span id="m-history-progress"></span>
+          <button id="m-history-refresh" class="toolbar-button secondary-button" type="button">Refresh history</button>
+          <span id="m-history-progress" role="status" aria-live="polite"></span>
         </div>
       </div>
       <div id="m-profit-stats" class="stats"></div>
@@ -1800,7 +1842,10 @@
         <h3>Net resource flow</h3>
         <div id="m-resource-flows" class="market-flow-grid"></div>
       </div>
-      <div class="market-history-table-wrap">
+    </section>
+
+    <div class="dashboard-panel dashboard-list-panel explore-military-table-panel market-history-panel">
+      <div class="dashboard-table-scroll explore-military-table-scroll market-history-table-wrap" role="region" aria-label="Market trade history table" tabindex="0">
         <table>
           <thead>
             <tr>
@@ -1816,38 +1861,17 @@
           <tbody id="m-history-tbody"></tbody>
         </table>
       </div>
-      <div class="pagination market-history-pagination">
-        <button id="m-history-prev">← Prev</button>
-        <span id="m-history-page">Page 1 / 1</span>
-        <button id="m-history-next">Next →</button>
+      <div class="table-footer">
+        <span id="m-history-count" class="dashboard-list-count"></span>
+        <div id="m-history-pagination" class="table-pagination" hidden>
+          <button id="m-history-prev" class="toolbar-button secondary-button" type="button">Previous</button>
+          <span id="m-history-page" class="dashboard-list-count"></span>
+          <button id="m-history-next" class="toolbar-button secondary-button" type="button">Next</button>
+        </div>
       </div>
-    </section>
-
-    <div class="reports-section statistics-list-panel market-offers-panel">
-      <div class="reports-header">
-        <h2>Open offers</h2>
-        <span id="m-count" class="market-count"></span>
-        <span class="market-deal-legend">
-          Deal vs market average:
-          <span class="market-deal-above">above</span>
-          <span class="market-deal-below">below</span>
-          <span class="market-deal-note">deeper shade = further from the pair average (worst 5% ignored)</span>
-        </span>
-      </div>
-      <table>
-        <thead id="m-head">
-          <tr>
-            <th class="sortable" data-key="hub" id="m-hub-col">Hub</th>
-            <th class="sortable" data-key="username">Seller</th>
-            <th class="sortable" data-key="offerResource">Offering</th>
-            <th class="sortable" data-key="requestResource">For</th>
-            <th class="sortable" data-key="rate" title="Cost of one unit of the offered resource">Rate</th>
-            <th class="sortable" data-key="ratio" title="Received per unit paid — higher is a better deal">Ratio</th>
-          </tr>
-        </thead>
-        <tbody id="m-tbody"></tbody>
-      </table>
     </div>
+
+    </section>
   </div>
 
   <div id="techtree-content" class="techtree-dashboard" style="display:none;">

@@ -638,8 +638,7 @@ canvas { max-width: 100%; max-height: 280px; }
 .sim-fleet-card,
 .sim-round-card,
 .statistics-dashboard:not(.statistics-split-layout),
-.statistics-summary-panel,
-.statistics-list-panel {
+.statistics-summary-panel {
   padding: var(--panel-padding);
   border: 1px solid var(--color-panel-border);
   border-radius: var(--radius-panel);
@@ -669,8 +668,7 @@ canvas { max-width: 100%; max-height: 280px; }
   align-self: flex-start;
 }
 
-.statistics-summary-panel,
-.statistics-list-panel {
+.statistics-summary-panel {
   margin-top: 0;
   height: max-content;
   min-height: 0;
@@ -688,37 +686,6 @@ canvas { max-width: 100%; max-height: 280px; }
 
 .statistics-summary-panel > .stats:last-child {
   margin-bottom: 0;
-}
-
-.statistics-list-panel {
-  margin-top: 16px;
-  padding: 16px;
-  min-width: 0;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-}
-
-.statistics-list-panel table {
-  min-width: max-content;
-}
-
-.statistics-list-panel::-webkit-scrollbar {
-  height: 9px;
-}
-
-.statistics-list-panel::-webkit-scrollbar-track {
-  background: var(--bg-raised);
-  border-radius: var(--radius-control);
-}
-
-.statistics-list-panel::-webkit-scrollbar-thumb {
-  background: #31486b;
-  border: 2px solid var(--bg-raised);
-  border-radius: var(--radius-control);
-}
-
-.statistics-list-panel::-webkit-scrollbar-thumb:hover {
-  background: #4c6fa4;
 }
 
 .global-overview-panel {
@@ -883,8 +850,7 @@ canvas { max-width: 100%; max-height: 280px; }
   .dashboard-panel,
   .opt-card,
   .statistics-dashboard:not(.statistics-split-layout),
-  .statistics-summary-panel,
-  .statistics-list-panel {
+  .statistics-summary-panel {
     padding: 12px;
   }
 
