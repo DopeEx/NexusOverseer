@@ -4315,6 +4315,3 @@ body:has(.main-tab[data-tab="finder"].active):has(#f-map-panel:not([hidden])) .a
     border-top: 1px solid rgba(104, 121, 156, 0.28);
   }
 }
-
-.finder-badge { display: inline-block; padding: 2px 6px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--bg-panel); color: var(--text-muted); font-size: 0.72rem; line-height: 1.4; }
-.finder-badge[hidden] { display: none !important; }

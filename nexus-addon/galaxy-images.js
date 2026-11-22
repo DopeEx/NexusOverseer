@@ -13,9 +13,12 @@ export function galaxyImagePath(group, body) {
   return null;
 }
 
-export function appendGalaxyImage(cell, group, body, origin) {
+export function appendGalaxyImage(cell, group, body, origin, label = null) {
   const path = galaxyImagePath(group, body);
-  if (!path || !origin) return;
+  if (!path || !origin) {
+    if (label) { cell.textContent = ''; cell.appendChild(label); }
+    return;
+  }
   const text = cell.textContent;
   cell.textContent = '';
   const content = document.createElement('span');
@@ -38,8 +41,10 @@ export function appendGalaxyImage(cell, group, body, origin) {
     }
   }, { once: true });
   image.src = url;
-  const label = document.createElement('span');
-  label.textContent = text;
+  if (!label) {
+    label = document.createElement('span');
+    label.textContent = text;
+  }
   content.append(image, label);
   cell.appendChild(content);
 }

@@ -1033,7 +1033,7 @@
     <section id="f-map-panel" role="tabpanel" aria-labelledby="f-tab-map">
       <div class="finder-view-header">
         <h2>Map</h2>
-        <span class="finder-badge" title="Shows the known galaxy independently of unstarted search filters. Search markers and region highlighting refer to the last started search; Clear search restores the unfiltered galaxy. Opening Galaxy Scout may refresh map and account data; viewing the map does not scan system contents.">Known galaxy</span>
+        <span class="badge" title="Shows the known galaxy independently of unstarted search filters. Search markers and region highlighting refer to the last started search; Clear search restores the unfiltered galaxy. Opening Galaxy Scout may refresh map and account data; viewing the map does not scan system contents.">Known galaxy</span>
         <span id="f-map-status" class="finder-status" role="status" aria-live="polite"></span>
       </div>
       <div class="dashboard-panel finder-map-toolbar">
@@ -1102,7 +1102,7 @@
     <section id="f-search-panel" role="tabpanel" aria-labelledby="f-tab-search" hidden>
     <div class="finder-view-header">
       <h2>Search</h2>
-      <span class="finder-badge" title="Searches saved knowledge and loads missing system contents. Unknown ownership of matching bodies is checked automatically; known ownership is refreshed by normal game observations, targeted background checks after galaxy notifications, or Check result ownership.">Completes missing data</span>
+      <span class="badge" title="Searches saved knowledge and loads missing system contents. Unknown ownership of matching bodies is checked automatically; known ownership is refreshed by normal game observations, targeted background checks after galaxy notifications, or Check result ownership.">Completes missing data</span>
     </div>
     <div class="toolbar-panel finder-toolbar">
       <label class="toolbar-field">Origin
@@ -1159,54 +1159,65 @@
       </details>
     </div>
 
-    <div class="dashboard-panel dashboard-list-panel finder-results-panel">
-      <div class="reports-header">
-        <h2>Matches</h2>
-        <span id="f-match-count" class="finder-match-count dashboard-list-count"></span>
-        <div class="finder-ownership-check">
-          <span id="f-ownership-progress" class="finder-status" role="status" aria-live="polite"></span>
-          <button id="f-check-ownership" class="toolbar-button secondary-button" disabled title="Request current ownership once per system in the base search results, including results hidden by ownership filters">Check result ownership</button>
+    <div class="finder-results-panel">
+      <div class="dashboard-panel dashboard-list-panel">
+        <div class="reports-header">
+          <div class="finder-ownership-check">
+            <span id="f-ownership-progress" class="finder-status" role="status" aria-live="polite"></span>
+            <button id="f-check-ownership" class="toolbar-button secondary-button" disabled title="Request current ownership once per system in the base search results, including results hidden by ownership filters">Check result ownership</button>
+          </div>
+        </div>
+        <div class="finder-actions finder-results-filters">
+          <label class="toolbar-field">Last known ownership
+            <select id="f-ownership" class="toolbar-select">
+              <option value="" selected>any</option>
+              <option value="unowned">unowned only</option>
+              <option value="owned">owned only</option>
+            </select>
+          </label>
+          <label class="finder-checkbox-field">
+            <input id="f-exclude-mine" type="checkbox" />Exclude mine
+          </label>
+          <span id="f-search-copy-status" class="finder-status" role="status"></span>
         </div>
       </div>
-      <div class="finder-actions finder-results-filters">
-        <label class="toolbar-field">Last known ownership
-          <select id="f-ownership" class="toolbar-select">
-            <option value="" selected>any</option>
-            <option value="unowned">unowned only</option>
-            <option value="owned">owned only</option>
-          </select>
-        </label>
-        <label class="finder-checkbox-field">
-          <input id="f-exclude-mine" type="checkbox" />Exclude mine
-        </label>
-      </div>
-      <div class="finder-directory-scroll dashboard-table-scroll">
-      <table>
-        <thead id="f-results-head">
-          <tr>
-            <th class="sortable" data-key="planet"><button type="button">Planet</button></th>
-            <th class="sortable" data-key="system"><button type="button">System</button></th>
-            <th class="sortable" data-key="sector"><button type="button">Sector</button></th>
-            <th class="sortable" data-key="type"><button type="button">Type</button></th>
-            <th class="sortable" data-key="size"><button type="button">Size</button></th>
-            <th class="sortable" data-key="slots" title="Building-slot capacity; calculated base slots when no explicit capacity is saved. Not unused slots."><button type="button">Slots</button></th>
-            <th class="sortable" data-key="moons"><button type="button">Moons</button></th>
-            <th class="sortable" data-key="zone"><button type="button">Zone</button></th>
-            <th class="sortable" data-key="distance"><button type="button">Distance</button></th>
-            <th class="sortable" data-key="owner"><button type="button">Owner</button></th>
-            <th class="sortable" data-key="alliance"><button type="button">Alliance</button></th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="f-results-tbody"></tbody>
-      </table>
+      <div class="dashboard-panel finder-results-table-panel">
+        <div class="finder-directory-scroll dashboard-table-scroll" role="region" aria-label="Search results table" tabindex="0">
+          <table>
+            <thead id="f-results-head">
+              <tr>
+                <th class="sortable" data-key="planet"><button type="button">Planet</button></th>
+                <th class="sortable" data-key="system"><button type="button">System</button></th>
+                <th class="sortable" data-key="sector"><button type="button">Sector</button></th>
+                <th class="sortable" data-key="type"><button type="button">Type</button></th>
+                <th class="sortable" data-key="size"><button type="button">Size</button></th>
+                <th class="sortable" data-key="slots" title="Building-slot capacity; calculated base slots when no explicit capacity is saved. Not unused slots."><button type="button">Slots</button></th>
+                <th class="sortable" data-key="moons"><button type="button">Moons</button></th>
+                <th class="sortable" data-key="zone"><button type="button">Zone</button></th>
+                <th class="sortable" data-key="distance"><button type="button">Distance</button></th>
+                <th class="sortable" data-key="owner"><button type="button">Owner</button></th>
+                <th class="sortable" data-key="alliance"><button type="button">Alliance</button></th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="f-results-tbody"></tbody>
+          </table>
+        </div>
+        <div class="table-footer">
+          <span id="f-match-count" class="finder-match-count dashboard-list-count"></span>
+          <div id="f-results-pagination" class="table-pagination" hidden>
+            <button id="f-results-prev" class="toolbar-button secondary-button" type="button">Previous</button>
+            <span id="f-results-page" class="dashboard-list-count"></span>
+            <button id="f-results-next" class="toolbar-button secondary-button" type="button">Next</button>
+          </div>
+        </div>
       </div>
     </div>
     </section>
     <section id="f-directory" role="tabpanel" aria-labelledby="f-tab-systems" hidden>
       <div class="finder-view-header">
         <h2 id="f-directory-title">Systems</h2>
-        <span class="finder-badge" title="Filters saved knowledge only; opening or filtering this list sends no system or ownership requests. Knowledge also grows through normal game observations, Search and targeted background checks after galaxy notifications. Unknown values do not satisfy numeric limits.">Saved data</span>
+        <span class="badge" title="Filters saved knowledge only; opening or filtering this list sends no system or ownership requests. Knowledge also grows through normal game observations, Search and targeted background checks after galaxy notifications. Unknown values do not satisfy numeric limits.">Saved data</span>
       </div>
       <div class="toolbar-panel finder-directory-toolbar">
         <label class="toolbar-field">Show
@@ -1234,26 +1245,30 @@
         </label>
         <button id="f-directory-reset" class="toolbar-button secondary-button" type="button">Reset list filters</button>
         <span id="f-directory-summary" class="finder-status" role="status" aria-live="polite"></span>
+        <span id="f-directory-copy-status" class="finder-status" role="status"></span>
         <details id="f-directory-more" class="finder-directory-more">
           <summary>More filters <span id="f-directory-active" class="finder-status"></span></summary>
           <div id="f-directory-extra-fields" class="finder-directory-extra-fields"></div>
         </details>
-      </div>
-      <div class="dashboard-panel">
         <div id="f-directory-scope-notice" class="finder-scope-notice" hidden>
           <span role="status" aria-live="polite">Showing search results only</span>
           <button id="f-directory-show-all" type="button">Show all known data</button>
         </div>
-        <div class="finder-directory-scroll">
+      </div>
+      <div class="dashboard-panel finder-directory-panel">
+        <div class="finder-directory-scroll" role="region" aria-label="Galaxy directory table" tabindex="0">
           <table>
             <thead id="f-directory-head"></thead>
             <tbody id="f-directory-body"></tbody>
           </table>
         </div>
-        <div class="finder-directory-toolbar">
-          <button id="f-directory-prev" class="toolbar-button secondary-button" type="button">Previous</button>
-          <span id="f-directory-page" class="finder-status"></span>
-          <button id="f-directory-next" class="toolbar-button secondary-button" type="button">Next</button>
+        <div class="finder-directory-toolbar finder-directory-footer table-footer">
+          <span id="f-directory-count" class="finder-status" hidden></span>
+          <div id="f-directory-pagination" class="finder-directory-pagination table-pagination" hidden>
+            <button id="f-directory-prev" class="toolbar-button secondary-button" type="button">Previous</button>
+            <span id="f-directory-page" class="finder-status"></span>
+            <button id="f-directory-next" class="toolbar-button secondary-button" type="button">Next</button>
+          </div>
         </div>
       </div>
     </section>
@@ -1261,7 +1276,7 @@
       <div class="finder-system-header">
         <div class="finder-view-header">
           <h2 id="f-system-title">System overview</h2>
-          <span class="finder-badge" title="Saved knowledge only. Missing sections are unknown, not empty; ownership and asteroid resources may be outdated. Opening this overview does not request game data.">Saved data</span>
+          <span class="badge" title="Saved knowledge only. Missing sections are unknown, not empty; ownership and asteroid resources may be outdated. Opening this overview does not request game data.">Saved data</span>
         </div>
         <button id="f-system-close" class="toolbar-button secondary-button" type="button" autofocus>Close</button>
       </div>

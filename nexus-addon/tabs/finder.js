@@ -1,10 +1,12 @@
 // Planet Finder tab: galaxy map, filters, scan loop.
 
-import { cssVar, setStatusText, listBadge, zoneBadge, allianceBadge } from '../common.js';
+import { cssVar, setStatusText, listBadge, formatBadgeLabel, zoneBadge, allianceBadge, clipboardCopyButton, xenoTraceBadge, xenoTraceLabel } from '../common.js';
 import { loadGalaxyScans, getSystemPlanets } from '../galaxy-client.js';
 import { systemCacheFresh, readSavedCatalog } from '../galaxy-cache.js';
-import { buildGalaxyDirectory, DIRECTORY_RANGES, directoryOwner, directoryOwnership, hasKnownOwnership, matchesSearchMoon, moonsByPlanet, parseSectorRange, planetSlots, queryGalaxyDirectory, systemBodyRows } from '../galaxy-directory.js';
+import { ancientMoonTrace, buildGalaxyDirectory, DIRECTORY_RANGES, directoryOwner, directoryOwnership, hasKnownOwnership, matchesSearchMoon, moonsByPlanet, parseSectorRange, planetSlots, queryGalaxyDirectory, systemBodyRows, XENO_TRACES } from '../galaxy-directory.js';
 import { appendGalaxyImage } from '../galaxy-images.js';
+import { getSetting, onSettingsChange } from '../settings.js';
+import { createPaginationFooter, paginate, updatePagination } from '../pagination.js';
 
 // ── Planet Finder tab ──────────────────────────────────────────────────────
 
@@ -56,8 +58,21 @@ const directoryStates = {};
 let overviewSystemId = null;
 let overviewSourceGroup = null;
 let overviewSourceId = null;
+let overviewPages = {};
 let galaxyImageOrigin = null;
 let directoryFilterKey = '';
+let finderResultsPage = 0;
+let finderPageSize = getSetting('general.tablePageSize');
+onSettingsChange(settings => {
+  if (settings['general.tablePageSize'] === finderPageSize) return;
+  finderPageSize = settings['general.tablePageSize'];
+  if (finderInited) {
+    renderFinderResults();
+    if (document.getElementById('f-system-overview').open) {
+      openSystemOverview(overviewSystemId, overviewSourceGroup, overviewSourceId);
+    }
+  }
+});
 const finderViews = ['map', 'search', 'systems', 'planets', 'moons'];
 const isDirectoryView = () => ['systems', 'planets', 'moons'].includes(finderView);
 
@@ -69,12 +84,14 @@ function setToggleState(button, selected) {
 function directoryState() {
   return directoryStates[finderView] ||= {
     text: '', zones: [], types: [], ownership: '', arm: '', origin: '', ranges: {},
-    sector: '', contents: '', moonTypes: [], parentTypes: [], minFreeMoonSlots: '',
+    sector: '', contents: '', moonTypes: [], parentTypes: [], minFreeMoonSlots: '', xenoTrace: '',
     advancedOpen: false, invalidNumbers: [], sort: 'distance', direction: 1, page: 0,
   };
 }
 
 export function resetFinderTab() {
+  setStatusText(document.getElementById('f-search-copy-status'), '');
+  setStatusText(document.getElementById('f-directory-copy-status'), '');
   delete document.getElementById('f-progress').dataset.apiPath;
   document.getElementById('f-api-wait').textContent = '';
   finderGeneration++;
@@ -128,6 +145,7 @@ export function resetFinderTab() {
   document.getElementById('f-clear-search').disabled = true;
   finderArms = null;
   finderHits = [];
+  finderResultsPage = 0;
   finderScans = {};
   document.getElementById('f-search-issues').hidden = true;
   document.getElementById('f-search-issues-list').textContent = '';
@@ -493,6 +511,10 @@ for (const [id, step] of [['prev', -1], ['next', 1]]) {
     directoryState().page += step;
     renderFinderDirectory();
   });
+  document.getElementById(`f-results-${id}`).addEventListener('click', () => {
+    finderResultsPage += step;
+    renderFinderResults();
+  });
 }
 
 function typeBadge(value, group) {
@@ -501,13 +523,13 @@ function typeBadge(value, group) {
   };
   const moonType = MOON_TYPES.includes(value);
   const color = group === 'systems' && Object.hasOwn(types, value) ? types[value] : 'neutral';
-  return listBadge(value == null ? 'unknown' : String(value).replace(/_/g, ' '),
+  return listBadge(formatBadgeLabel(value),
     group === 'moons' && moonType ? `finder-moon-${value}` : `finder-type-${color}`);
 }
 
 function ownershipBadge(status, owner) {
   const badge = document.createElement('span');
-  badge.className = `finder-badge finder-owner-${status}`;
+  badge.className = `badge finder-owner-${status}`;
   badge.textContent = status === 'free' ? 'Free' : status === 'colonized' ? `Colonized · ${owner}` : 'Unknown ownership';
   return badge;
 }
@@ -642,6 +664,9 @@ function drawDirectoryFilters(rows, state) {
       fields.appendChild(input('free-moon-slots', 'Min moon slots', state.minFreeMoonSlots, value => { state.minFreeMoonSlots = value; }, 'number'));
       fields.children[fields.children.length - 1].title = 'At least one known-free moon must individually meet this limit. No requests are made to resolve unknown ownership.';
     }
+    if (finderView === 'moons') {
+      select('xeno-trace', 'Xeno trace', [['', 'Any trace'], ...XENO_TRACES.map(trace => [trace, xenoTraceLabel(trace)])], 'xenoTrace');
+    }
     if (finderView === 'planets' || finderView === 'moons') {
       const field = document.createElement('div');
       field.className = 'toolbar-field finder-filter-type-field';
@@ -664,10 +689,17 @@ function drawDirectoryFilters(rows, state) {
     finderView === 'planets' ? moonTypes : parentTypes,
     finderView === 'planets' ? 'moons' : 'planets', state, finderView === 'planets' ? 'moonTypes' : 'parentTypes');
   const rangeCount = Object.values(state.ranges).filter(range => range.min !== '' && range.min != null || range.max !== '' && range.max != null).length;
-  const extraCount = rangeCount + state.invalidNumbers.length + ['arm', 'origin', 'sector', 'contents', 'minFreeMoonSlots']
+  const extraCount = rangeCount + state.invalidNumbers.length + ['arm', 'origin', 'sector', 'contents', 'minFreeMoonSlots', 'xenoTrace']
     .filter(name => state[name] !== '').length + (state.moonTypes.length ? 1 : 0) + (state.parentTypes.length ? 1 : 0);
   document.getElementById('f-directory-active').textContent = extraCount ? `(${extraCount} active)` : '';
   return extraCount + (state.types.length ? 1 : 0) + (state.zones.length ? 1 : 0) + (state.text.trim() ? 1 : 0) + (state.ownership ? 1 : 0);
+}
+
+function systemCopyButton(name, systemId, statusId) {
+  if (!name || name === `#${systemId}`) return null;
+  return clipboardCopyButton(name, {
+    title: 'Copy system name', copied: `Copied system ${name}`, status: document.getElementById(statusId),
+  });
 }
 
 function renderFinderDirectory() {
@@ -681,7 +713,7 @@ function renderFinderDirectory() {
   }, finderView);
   const filterCount = drawDirectoryFilters(rows, state);
   drawDirectoryZones(state);
-  const result = queryGalaxyDirectory(rows, state);
+  const result = queryGalaxyDirectory(rows, { ...state, pageSize: finderPageSize });
   state.page = result.page;
   const status = scope === 'matches' && !searchSummary
     ? 'No active search. Use Search or select All known data.'
@@ -689,7 +721,7 @@ function renderFinderDirectory() {
   setStatusText(document.getElementById('f-directory-summary'),
     directoryError || result.error || status);
   const columns = finderView === 'systems'
-    ? [['name', 'System'], ['starType', 'Star type'], ['zone', 'Zone'], ['distance', 'Distance'], ['matches', 'Matching planets'], ['coverage', 'Known data']]
+    ? [['name', 'System'], ['starType', 'Star type'], ['zone', 'Zone'], ['distance', 'Distance'], ['matches', 'Matches'], ['coverage', 'Known data']]
     : finderView === 'planets'
       ? [['name', 'Planet'], ['system', 'System'], ['type', 'Type'], ['size', 'Size'], ['slots', 'Slots'], ['moons', 'Moons'], ['zone', 'Zone'], ['distance', 'Distance'], ['owner', 'Owner'], ['alliance', 'Alliance']]
       : [['name', 'Moon'], ['planet', 'Parent planet'], ['system', 'System'], ['type', 'Type'], ['slots', 'Slots'], ['size', 'Size'], ['zone', 'Zone'], ['distance', 'Distance'], ['owner', 'Owner']];
@@ -702,6 +734,10 @@ function renderFinderDirectory() {
     const button = document.createElement('button');
     button.type = 'button';
     button.textContent = label + (state.sort === key ? state.direction === 1 ? ' ↑' : ' ↓' : '');
+    if (finderView === 'systems' && key === 'matches') {
+      button.title = 'Planets matching the last search';
+      button.setAttribute('aria-label', 'Matches: planets matching the last search');
+    }
     button.addEventListener('click', () => {
       state.direction = state.sort === key ? -state.direction : 1;
       state.sort = key;
@@ -727,10 +763,14 @@ function renderFinderDirectory() {
         planetType: finderView === 'planets' ? row.type : undefined,
         moonType: finderView === 'moons' ? row.type : undefined,
         imagePath: row.imagePath,
-      }, galaxyImageOrigin);
+      }, galaxyImageOrigin, finderView === 'systems' ? systemCopyButton(row.system, row.systemId, 'f-directory-copy-status') : null);
       if (key === 'type' || key === 'starType') {
         td.textContent = '';
         td.appendChild(typeBadge(row[key], finderView));
+        if (finderView === 'moons' && row.type === 'ancient') {
+          const trace = ancientMoonTrace(row.id);
+          td.appendChild(xenoTraceBadge(trace));
+        }
       }
       if (key === 'zone') {
         td.textContent = '';
@@ -742,14 +782,19 @@ function renderFinderDirectory() {
         td.appendChild(allianceBadge(row.alliance));
       }
       if (key === 'system' || key === 'planet') td.className = 'finder-parent-reference';
+      if (key === 'system') {
+        const copy = systemCopyButton(row.system, row.systemId, 'f-directory-copy-status');
+        if (copy) { td.textContent = ''; td.appendChild(copy); }
+      }
       if (key === 'coverage') {
         td.textContent = '';
         const coverage = document.createElement('span');
         coverage.className = 'finder-coverage';
         for (const [name, count] of [['Planets', row.planets], ['Moons', row.moons], ['Asteroids', row.asteroids]]) {
           const label = document.createElement('span');
-          label.className = 'finder-badge';
-          label.textContent = `${name}: ${count ?? 'unknown'}`;
+          label.className = 'badge';
+          label.textContent = `${name}: ${count ?? '—'}`;
+          if (count == null) label.setAttribute('aria-label', `${name}: unknown`);
           coverage.appendChild(label);
         }
         td.title = row.coverage;
@@ -780,7 +825,11 @@ function renderFinderDirectory() {
   }
   document.getElementById('f-directory-prev').disabled = result.page === 0;
   document.getElementById('f-directory-next').disabled = result.page >= result.pages - 1;
-  setStatusText(document.getElementById('f-directory-page'), `Page ${result.page + 1}/${result.pages} · ${result.total} entries`);
+  document.getElementById('f-directory-pagination').hidden = result.pages <= 1;
+  const count = document.getElementById('f-directory-count');
+  count.hidden = false;
+  setStatusText(count, `${result.total} ${result.total === 1 ? 'entry' : 'entries'}`);
+  setStatusText(document.getElementById('f-directory-page'), `Page ${result.page + 1}/${result.pages}`);
 }
 
 function directoryActions(systemId, sourceGroup, bodyId) {
@@ -789,7 +838,8 @@ function directoryActions(systemId, sourceGroup, bodyId) {
   const show = document.createElement('button');
   show.type = 'button';
   show.className = 'toolbar-button secondary-button';
-  show.textContent = 'Show on map';
+  show.textContent = 'Map';
+  show.setAttribute('aria-label', 'Show on map');
   show.disabled = !galaxySystems?.some(system => system.id === systemId);
   show.addEventListener('click', event => {
     event.stopPropagation?.();
@@ -800,7 +850,8 @@ function directoryActions(systemId, sourceGroup, bodyId) {
   const overview = document.createElement('button');
   overview.type = 'button';
   overview.className = 'toolbar-button secondary-button';
-  overview.textContent = 'System overview';
+  overview.textContent = 'Overview';
+  overview.setAttribute('aria-label', 'System overview');
   overview.addEventListener('click', event => {
     event.stopPropagation?.();
     openSystemOverview(systemId, sourceGroup, bodyId);
@@ -880,7 +931,11 @@ function updateOverviewColonyState() {
     : 'Saved system-level state; not a current planet ownership check.';
 }
 
-function openSystemOverview(systemId, sourceGroup = null, sourceId = null) {
+function openSystemOverview(systemId, sourceGroup = null, sourceId = null, focusPage = null) {
+  const dialog = document.getElementById('f-system-overview');
+  if (!dialog.open || systemId !== overviewSystemId || sourceGroup !== overviewSourceGroup || sourceId !== overviewSourceId) {
+    overviewPages = {};
+  }
   overviewSystemId = systemId;
   overviewSourceGroup = sourceGroup;
   overviewSourceId = sourceId;
@@ -908,6 +963,7 @@ function openSystemOverview(systemId, sourceGroup = null, sourceId = null) {
   const body = document.getElementById('f-system-body');
   body.textContent = '';
   let selectedRow;
+  let pageFocus;
   const groups = [
     ['bodies', 'Planets and moons', []],
     ['asteroidFields', 'Asteroid fields', [
@@ -922,11 +978,6 @@ function openSystemOverview(systemId, sourceGroup = null, sourceId = null) {
       : (data[group] || []).map(item => ({ group, item }));
     const section = document.createElement('section');
     section.className = 'finder-system-section';
-    const heading = document.createElement('h3');
-    heading.textContent = group === 'bodies'
-      ? `Planets (${data.planets?.length ?? 'unknown'}) · Moons (${data.moons?.length ?? 'unknown'})`
-      : `${label} (${Array.isArray(data[group]) ? data[group].length : 'unknown'})`;
-    section.appendChild(heading);
     const at = data._galaxyCache?.times?.[group];
     const ownershipAt = data._galaxyCache?.ownership?.[group];
     const stamp = document.createElement('p');
@@ -937,6 +988,9 @@ function openSystemOverview(systemId, sourceGroup = null, sourceId = null) {
       return `${section}: Data observed: ${observed ? new Date(observed).toLocaleString() : 'unknown'} · Ownership checked: ${checked ? new Date(checked).toLocaleString() : 'unknown'}`;
     }).join(' · ') : `Data observed: ${at ? new Date(at).toLocaleString() : 'unknown'}` +
       (group === 'asteroidFields' ? '' : ` · Ownership checked: ${ownershipAt ? new Date(ownershipAt).toLocaleString() : 'unknown'}`);
+    stamp.textContent = (group === 'bodies'
+      ? `Planets: ${data.planets?.length ?? 'unknown'} · Moons: ${data.moons?.length ?? 'unknown'}`
+      : `${label}: ${Array.isArray(data[group]) ? data[group].length : 'unknown'}`) + ` · ${stamp.textContent}`;
     if (data._galaxyCache?.publicSource) stamp.textContent += ' · Includes public base data; not a visibility or ownership observation.';
     section.appendChild(stamp);
     if (group === 'bodies') {
@@ -952,149 +1006,180 @@ function openSystemOverview(systemId, sourceGroup = null, sourceId = null) {
       const message = document.createElement('p');
       message.textContent = Array.isArray(data[group]) ? `No ${label.toLowerCase()} in saved data.` : `${label} have not been collected.`;
       section.appendChild(message);
-    } else if (group === 'bodies' && entries.length) {
-      const scroll = document.createElement('div');
-      scroll.className = 'finder-system-list-scroll';
-      scroll.tabIndex = 0;
-      scroll.setAttribute('aria-label', 'Planets and moons; scroll horizontally for all columns');
-      const list = document.createElement('div');
-      list.className = 'finder-system-list';
-      list.setAttribute('role', 'table');
-      list.setAttribute('aria-label', 'Saved planets and moons');
-      const labels = ['Body', 'Type', 'Size', 'Slots', 'Orbit', 'Moons', 'ID', 'Ownership / Alliance'];
-      const headings = document.createElement('div');
-      headings.className = 'finder-body-columns';
-      headings.setAttribute('role', 'row');
-      for (const label of labels) {
-        const cell = document.createElement('span');
-        cell.textContent = label;
-        cell.setAttribute('role', 'columnheader');
-        headings.appendChild(cell);
+    } else if (entries.length) {
+      if (overviewPages[group] == null) {
+        const selectedIndex = entries.findIndex(entry => entry.group === sourceGroup && entry.item.id === sourceId);
+        overviewPages[group] = selectedIndex < 0 ? 0 : Math.floor(selectedIndex / finderPageSize);
       }
-      list.appendChild(headings);
-      scroll.appendChild(list);
-      section.appendChild(scroll);
-      const planets = new Map();
-      for (const entry of entries) {
-        const { item } = entry;
-        const isMoon = entry.group === 'moons';
-        let container;
-        if (isMoon) {
-          container = planets.get(entry.parent);
-          if (!container) {
+      const result = paginate(entries, overviewPages[group]);
+      overviewPages[group] = result.page;
+      const panel = document.createElement('div');
+      panel.className = 'finder-system-table-panel';
+      section.appendChild(panel);
+      if (group === 'bodies') {
+        const scroll = document.createElement('div');
+        scroll.className = 'finder-system-list-scroll';
+        scroll.tabIndex = 0;
+        scroll.setAttribute('aria-label', 'Planets and moons; scroll horizontally for all columns');
+        const list = document.createElement('div');
+        list.className = 'finder-system-list';
+        list.setAttribute('role', 'table');
+        list.setAttribute('aria-label', 'Saved planets and moons');
+        const labels = ['Body', 'Type', 'Size', 'Slots', 'Orbit', 'Moons', 'ID', 'Ownership / Alliance'];
+        const headings = document.createElement('div');
+        headings.className = 'finder-body-columns';
+        headings.setAttribute('role', 'row');
+        for (const label of labels) {
+          const cell = document.createElement('span');
+          cell.textContent = label;
+          cell.setAttribute('role', 'columnheader');
+          headings.appendChild(cell);
+        }
+        list.appendChild(headings);
+        scroll.appendChild(list);
+        panel.appendChild(scroll);
+        const planets = new Map();
+        for (const entry of result.rows) {
+          const { item } = entry;
+          const isMoon = entry.group === 'moons';
+          let container;
+          if (isMoon) {
+            container = planets.get(entry.parent);
+            if (!container) {
+              container = document.createElement('section');
+              container.className = 'finder-planet-group';
+              container.setAttribute('role', 'rowgroup');
+              const missing = document.createElement('h4');
+              const parent = data.planets?.find(planet => planet.id === entry.parent);
+              missing.textContent = parent
+                ? `Parent planet ${parent.name || `#${parent.id}`} (continued)`
+                : `Parent planet #${entry.parent ?? '?'} not collected`;
+              container.appendChild(missing);
+              planets.set(entry.parent, container);
+              list.appendChild(container);
+            }
+          } else {
             container = document.createElement('section');
             container.className = 'finder-planet-group';
             container.setAttribute('role', 'rowgroup');
-            const missing = document.createElement('h4');
-            missing.textContent = `Parent planet #${entry.parent ?? '?'} not collected`;
-            container.appendChild(missing);
-            planets.set(entry.parent, container);
+            planets.set(item.id, container);
             list.appendChild(container);
           }
-        } else {
-          container = document.createElement('section');
-          container.className = 'finder-planet-group';
-          container.setAttribute('role', 'rowgroup');
-          planets.set(item.id, container);
-          list.appendChild(container);
+          const card = document.createElement('article');
+          card.className = `finder-body-card${isMoon ? ' finder-system-moon' : ''}`;
+          card.setAttribute('role', 'row');
+          card.dataset.bodyId = String(item.id);
+          card.dataset.bodyGroup = entry.group;
+          if (entry.group === sourceGroup && item.id === sourceId) {
+            card.className += ' finder-system-selected';
+            card.setAttribute('aria-current', 'true');
+            card.title = 'Opened from this entry';
+            selectedRow = card;
+          }
+          const header = document.createElement('div');
+          header.className = 'finder-body-header';
+          header.setAttribute('role', 'presentation');
+          const name = document.createElement(isMoon ? 'h5' : 'h4');
+          name.setAttribute('role', 'cell');
+          name.title = isMoon ? `Moon of planet #${entry.parent ?? 'unknown'}` : 'Planet';
+          name.textContent = item.name || `${isMoon ? 'Moon' : 'Planet'} #${item.id}`;
+          appendGalaxyImage(name, entry.group, item, galaxyImageOrigin);
+          const type = document.createElement('span');
+          type.setAttribute('role', 'cell');
+          type.appendChild(typeBadge(isMoon ? item.moonType : item.planetType, entry.group));
+          header.append(name, type);
+          card.appendChild(header);
+          const facts = document.createElement('div');
+          facts.className = 'finder-body-facts';
+          facts.setAttribute('role', 'presentation');
+          const values = [
+            ['Size', item.size], ['Slots', isMoon ? item.buildingSlots : planetSlots(item)],
+            ['Orbit', item.position == null ? null : `#${item.position}`],
+            ['Moons', isMoon ? '—' : Array.isArray(data.moons)
+              ? (children.get(item.id) || []).length : null],
+            ['ID', item.id],
+          ];
+          for (const [label, value] of values) {
+            const fact = document.createElement('span');
+            fact.textContent = value == null ? '—' : String(value);
+            fact.setAttribute('role', 'cell');
+            fact.setAttribute('aria-label', `${label}: ${value ?? 'unknown'}`);
+            fact.title = `${label}: ${value ?? 'unknown'}`;
+            if (label === 'Slots' && !isMoon) fact.title += ' · Building-slot capacity; calculated base slots when no explicit capacity is saved. Not unused slots.';
+            facts.appendChild(fact);
+          }
+          card.appendChild(facts);
+          const status = document.createElement('div');
+          status.className = 'finder-body-status';
+          status.setAttribute('role', 'cell');
+          const badge = ownershipBadge(directoryOwnership(item), directoryOwner(item));
+          const checked = data._galaxyCache?.ownership?.[entry.group];
+          badge.title = checked ? `Ownership last checked: ${new Date(checked).toLocaleString()}` : 'Ownership has not been verified.';
+          status.appendChild(badge);
+          if (item.ownerAllianceTag) {
+            status.appendChild(allianceBadge(item.ownerAllianceTag));
+          }
+          card.appendChild(status);
+          container.appendChild(card);
         }
-        const card = document.createElement('article');
-        card.className = `finder-body-card${isMoon ? ' finder-system-moon' : ''}`;
-        card.setAttribute('role', 'row');
-        card.dataset.bodyId = String(item.id);
-        card.dataset.bodyGroup = entry.group;
-        if (entry.group === sourceGroup && item.id === sourceId) {
-          card.className += ' finder-system-selected';
-          card.setAttribute('aria-current', 'true');
-          card.title = 'Opened from this entry';
-          selectedRow = card;
+      } else {
+        const scroll = document.createElement('div');
+        scroll.className = 'finder-directory-scroll';
+        scroll.tabIndex = 0;
+        scroll.setAttribute('role', 'region');
+        scroll.setAttribute('aria-label', 'Asteroid fields; scroll horizontally for all columns');
+        const table = document.createElement('table');
+        const head = document.createElement('thead');
+        const header = document.createElement('tr');
+        for (const [, name] of columns) {
+          const th = document.createElement('th');
+          th.textContent = name;
+          header.appendChild(th);
         }
-        const header = document.createElement('div');
-        header.className = 'finder-body-header';
-        header.setAttribute('role', 'presentation');
-        const name = document.createElement(isMoon ? 'h5' : 'h4');
-        name.setAttribute('role', 'cell');
-        name.title = isMoon ? `Moon of planet #${entry.parent ?? 'unknown'}` : 'Planet';
-        name.textContent = item.name || `${isMoon ? 'Moon' : 'Planet'} #${item.id}`;
-        appendGalaxyImage(name, entry.group, item, galaxyImageOrigin);
-        const type = document.createElement('span');
-        type.setAttribute('role', 'cell');
-        type.appendChild(typeBadge(isMoon ? item.moonType : item.planetType, entry.group));
-        header.append(name, type);
-        card.appendChild(header);
-        const facts = document.createElement('div');
-        facts.className = 'finder-body-facts';
-        facts.setAttribute('role', 'presentation');
-        const values = [
-          ['Size', item.size], ['Slots', isMoon ? item.buildingSlots : planetSlots(item)],
-          ['Orbit', item.position == null ? null : `#${item.position}`],
-          ['Moons', isMoon ? '—' : Array.isArray(data.moons)
-            ? (children.get(item.id) || []).length : null],
-          ['ID', item.id],
-        ];
-        for (const [label, value] of values) {
-          const fact = document.createElement('span');
-          fact.textContent = value == null ? '—' : String(value);
-          fact.setAttribute('role', 'cell');
-          fact.setAttribute('aria-label', `${label}: ${value ?? 'unknown'}`);
-          fact.title = `${label}: ${value ?? 'unknown'}`;
-          if (label === 'Slots' && !isMoon) fact.title += ' · Building-slot capacity; calculated base slots when no explicit capacity is saved. Not unused slots.';
-          facts.appendChild(fact);
+        head.appendChild(header);
+        const tbody = document.createElement('tbody');
+        for (const entry of result.rows) {
+          const { item } = entry;
+          const row = document.createElement('tr');
+          if (entry.group === sourceGroup && item.id === sourceId) {
+            row.className += ' finder-system-selected';
+            row.setAttribute('aria-current', 'true');
+            row.title = 'Opened from this entry';
+            selectedRow = row;
+          }
+          for (const [key] of columns) {
+            const cell = document.createElement('td');
+            const value = typeof key === 'function' ? key(item) : item[key];
+            cell.textContent = value == null ? '—' : String(value).replace(/_/g, ' ');
+            row.appendChild(cell);
+          }
+          tbody.appendChild(row);
         }
-        card.appendChild(facts);
-        const status = document.createElement('div');
-        status.className = 'finder-body-status';
-        status.setAttribute('role', 'cell');
-        const badge = ownershipBadge(directoryOwnership(item), directoryOwner(item));
-        const checked = data._galaxyCache?.ownership?.[entry.group];
-        badge.title = checked ? `Ownership last checked: ${new Date(checked).toLocaleString()}` : 'Ownership has not been verified.';
-        status.appendChild(badge);
-        if (item.ownerAllianceTag) {
-          status.appendChild(allianceBadge(item.ownerAllianceTag));
-        }
-        card.appendChild(status);
-        container.appendChild(card);
+        table.append(head, tbody);
+        scroll.appendChild(table);
+        panel.appendChild(scroll);
       }
-    } else if (entries.length) {
-      const scroll = document.createElement('div');
-      scroll.className = 'finder-directory-scroll';
-      const table = document.createElement('table');
-      const head = document.createElement('thead');
-      const header = document.createElement('tr');
-      for (const [, name] of columns) {
-        const th = document.createElement('th');
-        th.textContent = name;
-        header.appendChild(th);
+      const countLabel = group === 'bodies'
+        ? (result.total === 1 ? 'saved body' : 'saved bodies')
+        : (result.total === 1 ? 'asteroid field' : 'asteroid fields');
+      const footer = createPaginationFooter(result,
+        `${result.total} ${countLabel}`, page => {
+          overviewPages[group] = page;
+          openSystemOverview(systemId, sourceGroup, sourceId, { group, next: page > result.page });
+        });
+      panel.appendChild(footer);
+      if (focusPage?.group === group) {
+        const buttons = footer.children[1].children;
+        pageFocus = buttons[focusPage.next ? 2 : 0];
+        if (pageFocus.disabled) pageFocus = buttons[focusPage.next ? 0 : 2];
       }
-      head.appendChild(header);
-      const tbody = document.createElement('tbody');
-      for (const entry of entries) {
-        const { item } = entry;
-        const row = document.createElement('tr');
-        if (entry.group === sourceGroup && item.id === sourceId) {
-          row.className += ' finder-system-selected';
-          row.setAttribute('aria-current', 'true');
-          row.title = 'Opened from this entry';
-          selectedRow = row;
-        }
-        for (const [key] of columns) {
-          const cell = document.createElement('td');
-          const value = typeof key === 'function' ? key(item) : item[key];
-          cell.textContent = value == null ? '—' : String(value).replace(/_/g, ' ');
-          row.appendChild(cell);
-        }
-        tbody.appendChild(row);
-      }
-      table.append(head, tbody);
-      scroll.appendChild(table);
-      section.appendChild(scroll);
     }
     body.appendChild(section);
   }
   document.getElementById('f-system-map').disabled = !system;
-  const dialog = document.getElementById('f-system-overview');
   if (!dialog.open) dialog.showModal();
   selectedRow?.scrollIntoView({ block: 'nearest' });
+  if (pageFocus && !pageFocus.disabled) pageFocus.focus();
 }
 
 export function systemDistance(s) {
@@ -1820,6 +1905,7 @@ document.getElementById('f-search').addEventListener('click', async function () 
   const types = [...searchTypes.types];
   const moonTypes = [...searchTypes.moonTypes];
   const zones = new Set(finderZones);
+  finderResultsPage = 0;
   const generation = ++finderGeneration;
   const config = {
     types, moonTypes, minSize, minMoons, minMoonSlots, minPlanetSlots, maxDistance, zones: [...zones],
@@ -2070,6 +2156,7 @@ function updateResultOwnership(systemId, data, hits = finderHits.filter(hit => h
 
 for (const id of ['f-ownership', 'f-exclude-mine']) {
   document.getElementById(id).addEventListener('change', () => {
+    finderResultsPage = 0;
     renderFinderResults();
     drawGalaxyMap();
     return storeLastSearch();
@@ -2083,6 +2170,7 @@ document.getElementById('f-results-head').addEventListener('click', e => {
   if (!th) return;
   const key = th.dataset.key;
   finderSort = { key, dir: finderSort.key === key ? -finderSort.dir : -1 };
+  finderResultsPage = 0;
   renderFinderResults();
   return storeLastSearch();
 });
@@ -2142,7 +2230,16 @@ export function renderFinderResults() {
     else cmp = String(va).localeCompare(String(vb));
     return cmp * dir || b.size - a.size;
   });
-  for (const h of sorted) {
+  const result = paginate(sorted, finderResultsPage);
+  finderResultsPage = result.page;
+  updatePagination(result, {
+    count: document.getElementById('f-match-count'),
+    controls: document.getElementById('f-results-pagination'),
+    previous: document.getElementById('f-results-prev'),
+    next: document.getElementById('f-results-next'),
+    page: document.getElementById('f-results-page'),
+  }, `${visible.length} shown / ${finderHits.length} matching planets`);
+  for (const h of result.rows) {
     const tr = document.createElement('tr');
     const cells = [h.planet, h.system, String(h.sector), String(h.type ?? '—').replace(/_/g, ' '),
                    String(h.size), (h.slots == null ? '—' : String(h.slots)),
@@ -2156,7 +2253,11 @@ export function renderFinderResults() {
       else if (i === 7) td.appendChild(zoneBadge(h.zone));
       else td.textContent = v;
       if (i === 0) appendGalaxyImage(td, 'planets', { planetType: h.type }, galaxyImageOrigin);
-      if (i === 1) td.className = 'finder-parent-reference';
+      if (i === 1) {
+        td.className = 'finder-parent-reference';
+        const copy = systemCopyButton(h.system, h.systemId, 'f-search-copy-status');
+        if (copy) { td.textContent = ''; td.appendChild(copy); }
+      }
       if (i === 3) {
         td.textContent = '';
         td.appendChild(typeBadge(h.type, 'planets'));

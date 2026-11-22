@@ -228,6 +228,73 @@ test('public-only planets produce local search matches without scanning or treat
   assert.match(h.el('f-system-body').textContent, /Ownership checked: unknown/);
 });
 
+test('Scout list and search system names copy the exact in-game label', async t => {
+  const systems = [{ id: 1, name: 'Demo System', armId: 1, sectorId: 1,
+    x: 10, y: 20, visibility: 'full', securityZone: 'open', starType: 'orange' }];
+  const h = await harness({}, { systems });
+  const copied = [];
+  const previous = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+  Object.defineProperty(navigator, 'clipboard', { configurable: true,
+    value: { writeText: async value => { copied.push(value); } } });
+  t.after(() => {
+    if (previous) Object.defineProperty(navigator, 'clipboard', previous);
+    else delete navigator.clipboard;
+  });
+  for (const [view, column] of [['systems', 0], ['planets', 1], ['moons', 2]]) {
+    await h.finder.selectFinderView(view);
+    const cells = h.el('f-directory-body').children.map(row => row.children[column]);
+    const cell = cells.find(cell => cell.textContent === 'Demo System');
+    const button = view === 'systems' ? cell.children[0].children[1] : cell.children[0];
+    assert.equal(button.type, 'button');
+    assert.equal(button.title, 'Copy system name');
+    await button.onclick();
+    assert.equal(h.el('f-directory-copy-status').textContent, 'Copied system Demo System');
+    const unknown = cells.find(cell => cell.textContent === '#2');
+    if (unknown) assert.equal(unknown.children.length, 0);
+  }
+  await h.finder.selectFinderView('search');
+  await h.el('f-search').fire();
+  const searchButton = h.el('f-results-tbody').children[0].children[1].children[0];
+  await searchButton.onclick();
+  assert.deepEqual(copied, Array(4).fill('Demo System'));
+  navigator.clipboard.writeText = async () => { throw new Error('Clipboard unavailable'); };
+  await searchButton.onclick();
+  assert.equal(h.el('f-search-copy-status').textContent, 'Copy failed: Clipboard unavailable');
+});
+
+test('Moons displays and filters Xeno traces from saved moon IDs without game requests', async () => {
+  const ids = [900001, 900000, 900002, 900004, 900018];
+  const publicData = { ...emptyPublicGalaxy('s0'), systems: [{
+    id: 5, name: 'Shared System', x: 50, y: 100, armId: 1, sectorId: 5, securityZone: 'open',
+    planets: [{ id: 51, planetType: 'terra' }],
+    moons: ids.map(id => ({ id, planetId: 51, moonType: id === 900018 ? 'barren' : 'ancient' })),
+  }] };
+  const h = await harness({}, { publicData });
+  const before = h.calls.length;
+  await h.finder.selectFinderView('moons');
+  h.el('f-directory-filter').value = 'Shared System';
+  await h.el('f-directory-filter').fire('input');
+  const badges = new Map(h.el('f-directory-body').children.map(row =>
+    [row.children[0].textContent, row.children[3].children[1]?.textContent]));
+  assert.deepEqual(ids.map(id => badges.get(`Moon #${id}`)),
+    ['Ruins', 'Spire', 'Observatory', 'Necropolis', undefined]);
+  const setTrace = async value => {
+    const select = h.el('f-directory-xeno-trace');
+    select.value = value;
+    await select.fire('change');
+  };
+  await setTrace('necropolis');
+  const visibleMoons = () => h.el('f-directory-body').children.map(row => row.children[0].textContent);
+  assert.deepEqual(visibleMoons(), ['Moon #900004'], 'a non-ancient moon with the same hash is excluded');
+  assert.match(h.el('f-directory-active').textContent, /1 active/);
+  await setTrace('spire');
+  assert.deepEqual(visibleMoons(), ['Moon #900000']);
+  await h.el('f-directory-reset').fire();
+  assert.equal(h.el('f-directory-xeno-trace').value, '');
+  assert.ok(visibleMoons().includes('Moon #900018'));
+  assert.deepEqual(h.calls.slice(before).map(call => call.type), ['GET_GALAXY_SCANS']);
+});
+
 test('missing public moon slots are resolved only for game-visible systems, never unlocked by imported data', async () => {
   const publicData = { ...emptyPublicGalaxy('s0'), systems: [{
     id: 5, name: 'Shared System', x: 50, y: 100, armId: 1, sectorId: 5,
@@ -1616,7 +1683,7 @@ test('advanced moon filters handle local ownership, parent types and invalid num
   await set('ownership', 'free', 'change');
   await set('slots-min', '7');
   assert.match(h.el('f-directory-summary').textContent, /1 moons$/);
-  assert.equal(h.el('f-directory-body').children[0].children[3].textContent, 'metallic');
+  assert.equal(h.el('f-directory-body').children[0].children[3].textContent, 'Metallic');
   await set('distance-min', '10');
   await set('distance-max', '6');
   assert.match(h.el('f-directory-summary').textContent, /minimum cannot exceed/);
@@ -1735,16 +1802,60 @@ test('system stars appear in the list and overview using saved types without sys
   const image = row.children[0].children[0].children[0];
   assert.equal(image.className, 'finder-body-image finder-star-orange');
   assert.equal(image.src, 'https://s0.nexuslegacy.space/api/images/planets/gas_giant.webp');
-  assert.equal(row.children[1].textContent, 'orange');
+  assert.equal(row.children[1].textContent, 'Orange');
   await row.children.at(-1).children[0].children[1].fire();
   assert.equal(h.el('f-system-title').children[0].children[0].className, 'finder-body-image finder-star-orange');
   assert.match(h.el('f-system-meta').textContent, /Star: orange/);
   const unknown = h.el('f-directory-body').children[3];
-  assert.equal(unknown.children[0].children.length, 0);
+  assert.equal(unknown.children[0].children.length, 1);
+  assert.equal(unknown.children[0].children[0].type, 'button', 'a known name is copyable even without a star image');
   await unknown.children.at(-1).children[0].children[1].fire();
   assert.match(h.el('f-system-meta').textContent, /Star: unknown/);
   assert.equal(h.el('f-system-title').children.length, 0);
   assert.deepEqual(h.requests, []);
+});
+
+test('systems list distinguishes unknown coverage from zero and uses compact actions', async () => {
+  const h = await harness();
+  await h.finder.selectFinderView('systems');
+  const rows = h.el('f-directory-body').children;
+  const firstCoverage = rows[0].children[5];
+  assert.deepEqual(firstCoverage.children[0].children.map(badge => badge.textContent),
+    ['Planets: 2', 'Moons: 6', 'Asteroids: —']);
+  assert.match(firstCoverage.title, /asteroidFields: unknown/);
+  assert.equal(firstCoverage.children[0].children[2].attributes['aria-label'], 'Asteroids: unknown');
+  assert.equal(rows[1].children[5].children[0].children[1].textContent, 'Moons: 0');
+  const actions = rows[0].children.at(-1).children[0].children;
+  assert.deepEqual(actions.map(button => button.textContent), ['Map', 'Overview']);
+  assert.equal(actions[0].attributes['aria-label'], 'Show on map');
+  assert.equal(h.el('f-directory-count').textContent, '4 entries');
+  assert.equal(h.el('f-directory-page').textContent, 'Page 1/1');
+  await h.finder.selectFinderView('planets');
+  assert.equal(h.el('f-directory-count').hidden, false);
+  assert.equal(h.el('f-directory-count').textContent, '5 entries');
+  assert.equal(h.el('f-directory-page').textContent, 'Page 1/1');
+  const planetActions = h.el('f-directory-body').children[0].children.at(-1).children[0].children;
+  assert.deepEqual(planetActions.map(button => button.textContent), ['Map', 'Overview']);
+  assert.equal(planetActions[1].attributes['aria-label'], 'System overview');
+  await h.finder.selectFinderView('moons');
+  assert.equal(h.el('f-directory-count').textContent, '6 entries');
+  assert.deepEqual(h.el('f-directory-body').children[0].children.at(-1).children[0].children.map(button => button.textContent),
+    ['Map', 'Overview']);
+  assert.deepEqual(h.requests, []);
+});
+
+test('systems Matches heading explains the planet count and remains sortable', async () => {
+  const h = await harness();
+  await h.finder.selectFinderView('systems');
+  const header = h.el('f-directory-head').children[0].children[4];
+  const button = header.children[0];
+  assert.equal(button.textContent, 'Matches');
+  assert.equal(button.title, 'Planets matching the last search');
+  assert.equal(button.attributes['aria-label'], 'Matches: planets matching the last search');
+  await button.fire();
+  const sorted = h.el('f-directory-head').children[0].children[4];
+  assert.equal(sorted.attributes['aria-sort'], 'ascending');
+  assert.equal(sorted.children[0].textContent, 'Matches ↑');
 });
 
 test('system overview replaces inline contents with complete cached sections and a map action', async () => {
@@ -1752,14 +1863,15 @@ test('system overview replaces inline contents with complete cached sections and
   await h.el('f-search').fire();
   await h.finder.selectFinderView('systems');
   const overview = h.el('f-directory-body').children[0].children.at(-1).children[0].children[1];
-  assert.equal(overview.textContent, 'System overview');
+  assert.equal(overview.textContent, 'Overview');
+  assert.equal(overview.attributes['aria-label'], 'System overview');
   await overview.fire();
   assert.equal(h.el('f-system-overview').open, true);
   assert.equal(h.el('f-system-title').textContent, 'System overview: Alpha-1');
   const body = h.el('f-system-body').textContent;
-  assert.match(body, /Planets \(2\)/);
-  assert.match(body, /Moons \(6\)/);
-  assert.match(body, /Asteroid fields \(unknown\)/);
+  assert.match(body, /Planets: 2/);
+  assert.match(body, /Moons: 6/);
+  assert.match(body, /Asteroid fields: unknown/);
   assert.match(body, /have not been collected/);
   assert.match(body, /P11/);
   assert.match(body, /Ownership checked:/);
@@ -1796,17 +1908,17 @@ test('system overview includes nonmatching bodies and asteroid resources, distin
   await h.el('f-search').fire();
   await h.finder.selectFinderView('systems');
   await h.el('f-directory-body').children[0].children.at(-1).children[0].children[1].fire();
-  assert.match(h.el('f-system-body').textContent, /Planets \(3\)/);
+  assert.match(h.el('f-system-body').textContent, /Planets: 3/);
   assert.match(h.el('f-system-body').textContent, /Unmatched ice world/);
-  assert.match(h.el('f-system-body').textContent, /Asteroid fields \(1\)/);
+  assert.match(h.el('f-system-body').textContent, /Asteroid fields: 1/);
   assert.match(h.el('f-system-body').textContent, /12345/);
   await h.el('f-system-close').fire();
   h.el('f-directory-scope').value = 'all';
   await h.el('f-directory-scope').fire('change');
   await h.el('f-directory-body').children[1].children.at(-1).children[0].children[1].fire();
-  assert.match(h.el('f-system-body').textContent, /Moons \(0\)/);
+  assert.match(h.el('f-system-body').textContent, /Moons: 0/);
   assert.match(h.el('f-system-body').textContent, /No moons in saved data/);
-  assert.match(h.el('f-system-body').textContent, /Asteroid fields \(unknown\)/);
+  assert.match(h.el('f-system-body').textContent, /Asteroid fields: unknown/);
   assert.deepEqual(h.requests, []);
 });
 
@@ -1844,7 +1956,7 @@ test('compact planet groups contain their own ordered moons, retain orphans and 
   await saveSystem('s0', 1, h.data[1]);
   await h.finder.selectFinderView('systems');
   await h.el('f-directory-body').children[0].children.at(-1).children[0].children[1].fire();
-  const list = h.el('f-system-body').children[0].children.find(child => child.className === 'finder-system-list-scroll').children[0];
+  const list = h.el('f-system-body').children[0].children.find(child => child.className === 'finder-system-table-panel').children[0].children[0];
   assert.equal(list.children[0].children.length, 8);
   assert.equal(list.children[0].children[4].textContent, 'Orbit');
   assert.doesNotMatch(list.children[0].textContent, /Temp|Position/);
@@ -1866,6 +1978,44 @@ test('compact planet groups contain their own ordered moons, retain orphans and 
   assert.match(groups[1].children[1].children[2].textContent, /Free/);
   assert.match(groups[2].children[1].children[2].textContent, /Unknown ownership/);
   assert.match(planet.children[0].children[1].children[0].className, /finder-type-neutral/);
+  assert.deepEqual(h.requests, []);
+});
+
+test('overview pages preserve parent context and open a selected moon on its page', async () => {
+  const h = await harness();
+  h.data[1].planets = [h.data[1].planets[0]];
+  h.data[1].moons = Array.from({ length: 26 }, (_, index) => ({
+    id: 1000 + index, planetId: 11, moonType: 'barren', buildingSlots: 5, userId: null,
+  }));
+  h.data[1].asteroidFields = Array.from({ length: 26 }, (_, index) => ({
+    id: 2000 + index, name: `Field ${index}`, controllerUserId: null,
+  }));
+  await saveSystem('s0', 1, h.data[1]);
+  await h.finder.selectFinderView('systems');
+  await h.el('f-directory-body').children[0].children.at(-1).children[0].children[1].fire();
+  const panel = index => h.el('f-system-body').children[index].children.find(child => child.className === 'finder-system-table-panel');
+  const list = () => panel(0).children[0].children[0];
+  const footer = index => panel(index).children[1];
+  assert.equal(footer(0).children[0].textContent, '27 saved bodies');
+  assert.equal(footer(0).children[1].hidden, false);
+  assert.equal(list().children[1].children.length, 25);
+  await footer(0).children[1].children[2].fire();
+  assert.match(list().textContent, /Parent planet P11 \(continued\)/);
+  assert.doesNotMatch(list().textContent, /not collected/);
+  assert.equal(list().children[1].children.length, 3);
+  assert.equal(footer(1).children[0].textContent, '26 asteroid fields');
+  await footer(1).children[1].children[2].fire();
+  assert.match(panel(1).textContent, /Field 25/);
+  assert.doesNotMatch(panel(1).textContent, /Field 0/);
+
+  await h.el('f-system-close').fire();
+  await h.finder.selectFinderView('moons');
+  await h.el('f-directory-next').fire();
+  await h.el('f-directory-body').children[0].children.at(-1).children[0].children[1].fire();
+  assert.match(list().textContent, /Parent planet P11 \(continued\)/);
+  const selected = list().children[1].children.find(child => child.attributes?.['aria-current'] === 'true');
+  assert.equal(selected.dataset.bodyId, '1025');
+  assert.equal(footer(0).children[1].children[1].textContent, 'Page 2 / 2');
   assert.deepEqual(h.requests, []);
 });
 
@@ -1916,22 +2066,24 @@ test('map search results share directory badges and actions and open the exact p
   assert.equal(row.children[1].className, 'finder-parent-reference');
   assert.equal(row.children[3].children[0].className, 'badge finder-type-neutral');
   assert.equal(row.children[7].children[0].className, 'badge finder-zone-open');
-  assert.equal(row.children[9].children[0].className, 'finder-badge finder-owner-colonized');
+  assert.equal(row.children[9].children[0].className, 'badge finder-owner-colonized');
   assert.match(row.children[9].textContent, /Former owner/);
   const actions = row.children.at(-1).children[0];
   assert.equal(actions.className, 'finder-directory-actions');
-  assert.deepEqual(actions.children.map(button => button.textContent), ['Show on map', 'System overview']);
+  assert.deepEqual(actions.children.map(button => button.textContent), ['Map', 'Overview']);
+  assert.equal(actions.children[0].attributes['aria-label'], 'Show on map');
+  assert.equal(actions.children[1].attributes['aria-label'], 'System overview');
   await actions.children[1].fire();
   assert.equal(h.el('f-system-overview').open, true);
   const sections = h.el('f-system-body').children;
-  const list = sections[0].children.find(child => child.className === 'finder-system-list-scroll').children[0];
+  const list = sections[0].children.find(child => child.className === 'finder-system-table-panel').children[0].children[0];
   const selected = list.children.flatMap(group => group.children).find(card => card.dataset?.bodyId === '11');
   assert.match(selected.className, /finder-system-selected/);
   for (const [ownershipKnown, userId, expected] of [[true, null, 'free'], [false, null, 'unknown']]) {
     Object.assign(h.finder.finderHits[0], { ownershipKnown, userId });
     h.finder.renderFinderResults();
     row = h.el('f-results-tbody').children[0];
-    assert.equal(row.children[9].children[0].className, `finder-badge finder-owner-${expected}`);
+    assert.equal(row.children[9].children[0].className, `badge finder-owner-${expected}`);
   }
   await actions.children[0].fire();
   assert.equal(h.finder.selectedSystemId, 1);
@@ -2488,12 +2640,13 @@ test('galaxy deletion stays in Data with warning only on confirmation, and explo
   assert.doesNotMatch(finder, /id="f-max-size"/);
   assert.match(finder, /Slots on one free moon, not the total/);
   assert.match(finder, /Check result ownership/);
-  assert.ok(finder.indexOf('id="f-check-ownership"') > finder.indexOf('<h2>Matches</h2>'));
+  assert.ok(finder.indexOf('id="f-check-ownership"') < finder.indexOf('finder-results-table-panel'));
   for (const view of ['map', 'search', 'systems', 'planets', 'moons']) {
     assert.match(finder, new RegExp(`id="f-tab-${view}"[^>]*role="tab"`));
   }
   assert.match(finder, /id="f-tab-map"[^>]*aria-selected="true"/);
   assert.match(finder, /id="f-directory"[^>]*hidden/);
+  assert.match(finder, /finder-directory-toolbar[\s\S]*?id="f-directory-scope-notice"[\s\S]*?<\/div>\s*<\/div>\s*<div class="dashboard-panel finder-directory-panel">/);
   const map = finder.slice(finder.indexOf('<section id="f-map-panel"'), finder.indexOf('<section id="f-search-panel"'));
   const search = finder.slice(finder.indexOf('<section id="f-search-panel"'), finder.indexOf('<section id="f-directory"'));
   assert.match(map, /id="f-map"/);
