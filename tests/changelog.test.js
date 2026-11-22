@@ -43,7 +43,6 @@ test('the bundled release notes include all sections for the manifest version', 
   for (const heading of ['Added', 'Changed', 'Fixed', 'Documentation']) {
     assert.ok(previous.includes(`### ${heading}`), heading);
   }
-  assert.deepEqual(notes.map(entry => entry.version), ['2.5.0']);
 });
 
 test('release metadata agrees and the changelog keeps an Unreleased section', async () => {

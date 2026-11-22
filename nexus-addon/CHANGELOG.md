@@ -6,7 +6,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-11-22
+
 ### Added
+- Scouting and Expeditions views are available in the dashboard.
 - Xeno campaign and account progress, dig reports and statistics show collected
   rewards and losses; fleet comparisons help prepare digs.
 - Galaxy Scout shows ancient moon traces and supports filtering by trace.
